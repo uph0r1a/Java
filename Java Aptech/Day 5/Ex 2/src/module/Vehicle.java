@@ -1,6 +1,6 @@
 package module;
 
-public class Vehicle {
+public abstract class Vehicle implements Comparable<Vehicle> {
     private String ID, name, manufacturer;
     private int value;
 
@@ -46,4 +46,11 @@ public class Vehicle {
     public String display() {
         return "\nID: " + ID + "\nName: " + name + "\nManufacturer: " + manufacturer + "\nValue: " + value;
     }
+
+    @Override
+    public int compareTo(Vehicle other){
+        return Integer.compare(this.value, other.value);
+    }
+
+    public abstract double calculateAnnualTax();
 }

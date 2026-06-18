@@ -1,6 +1,6 @@
 package module;
 
-public class Car extends Vehicle {
+public class Car extends Vehicle implements Registrable {
     public enum FUEL_TYPE {
         Gasoline,
         Diesel,
@@ -35,5 +35,29 @@ public class Car extends Vehicle {
     @Override
     public String display() {
         return super.display() + "\nNumber of seat: " + numberOfSeats + "\nFuel type: " + fuelType.toString();
+    }
+
+    @Override
+    public double calculateAnnualTax() {
+        String type = getFuelType().toString().toLowerCase();
+        if (type.equals("gasoline")) {
+            return getValue() * 0.05;
+        } else if (type.equals("diesel")) {
+            return getValue() * 0.06;
+        } else if (type.equals("electric")) {
+            return getValue() * 0.03;
+        }
+        throw new UnsupportedOperationException("Unimplemented method 'calculateAnnualTax'");
+    }
+
+    @Override
+    public String getRegistrationStatus() {
+        String type = getFuelType().toString().toLowerCase();
+        if (type.equals("electric")) {
+            return "Green Vehicle";
+        } else if (type.equals("diesel") || type.equals("gasoline")) {
+            return "Standard Vehicle";
+        }
+        throw new UnsupportedOperationException("Unimplemented method 'getRegistrationStatus'");
     }
 }

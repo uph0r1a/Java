@@ -2,6 +2,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import module.Car;
 import module.Vehicle;
@@ -35,7 +36,7 @@ public class Main {
 
         while (!isExit) {
             System.out.print(
-                    "1. Add a Car\n2. Add a Motorcycle\n3. Display All Vehicles\n4. Search for a Vehicle by ID\n5. Display All Electric Cars\n6. Display All Motorcycles with ABS\n0. Exit\nEnter your choice: ");
+                    "1. Add a Car\n2. Add a Motorcycle\n3. Display All Vehicles\n4. Search for a Vehicle by ID\n5. Display All Electric Cars\n6. Display All Motorcycles with ABS\n7. Sort Vehicles by Value\n0. Exit\nEnter your choice: ");
             int choice = Integer.parseInt(br.readLine());
 
             switch (choice) {
@@ -212,6 +213,9 @@ public class Main {
                             }
                         }
                     }
+                    break;
+                case 7:
+                    Collections.sort(vehicles);
                     break;
                 default:
                     System.out.println("Invalid choice");

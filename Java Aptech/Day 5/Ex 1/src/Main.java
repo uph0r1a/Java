@@ -2,7 +2,10 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import module.DeviceNameComparator;
+import module.Discountable;
 import module.ElectronicDevice;
 import module.Laptop;
 import module.Phone;
@@ -26,7 +29,7 @@ public class Main {
 
         while (!isExit) {
             System.out.print(
-                    "===== ELECTRONIC DEVICE MANAGEMENT =====\n1. Add device\n2. Search device\n3. Phone list with 5G support\n4. Laptop list with RAM >= 16GB\n0. Exit\nEnter your choice: ");
+                    "===== ELECTRONIC DEVICE MANAGEMENT =====\n1. Add device\n2. Search device\n3. Phone list with 5G support\n4. Laptop list with RAM >= 16GB\n5. Display discount prices\n6. Sort devices by name\n0. Exit\nEnter your choice: ");
             int choice = Integer.parseInt(br.readLine());
 
             switch (choice) {
@@ -203,6 +206,27 @@ public class Main {
                                 }
                             }
                         }
+                    }
+                    break;
+                case 5:
+                    for (ElectronicDevice d : device) {
+                        Discountable discountable = (Discountable) d;
+
+                        System.out.println("ID: " + d.getID());
+                        System.out.println("Name: " + d.getName());
+                        System.out.println("Original price: " + d.getPrice());
+                        System.out.println("Discount price: "
+                                + discountable.calculateDiscountPrice());
+                        System.out.println();
+                    }
+                    break;
+                case 6:
+                    Collections.sort(device, new DeviceNameComparator());
+
+                    System.out.println("Device list after sorting:");
+                    for (ElectronicDevice d : device) {
+                        d.displayInfo();
+                        System.out.println();
                     }
                     break;
                 default:

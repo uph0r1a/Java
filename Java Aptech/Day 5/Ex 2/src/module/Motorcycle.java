@@ -1,6 +1,6 @@
 package module;
 
-public class Motorcycle extends Vehicle {
+public class Motorcycle extends Vehicle implements Registrable{
     private double engineCapacity;
     private boolean ABSSupported;
 
@@ -33,4 +33,22 @@ public class Motorcycle extends Vehicle {
                 + (ABSSupported ? "Yes" : "No");
     }
 
+    @Override
+    public double calculateAnnualTax() {
+        if (getEngineCapacity() < 150) {
+            return getValue() * 0.02;
+        } else if (getEngineCapacity() >= 150) {
+            return getValue() * 0.04;
+        }
+        throw new UnsupportedOperationException("Unimplemented method 'calculateAnnualTax'");
+    }
+
+    @Override
+    public String getRegistrationStatus() {
+        if (ABSSupported) {
+            return "Safety Certified";
+        } else {
+            return "Basic Certified";
+        }
+    }
 }
