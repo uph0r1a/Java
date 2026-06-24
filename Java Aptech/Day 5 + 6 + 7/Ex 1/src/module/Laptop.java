@@ -1,8 +1,8 @@
 package module;
 
 public class Laptop extends ElectronicDevice implements Discountable {
-    private double ram;
-    private double screenSize;
+    private final double ram;
+    private final double screenSize;
 
     public Laptop(String ID, String name, String brand, int price,
             double ram, double screenSize) {
@@ -18,13 +18,8 @@ public class Laptop extends ElectronicDevice implements Discountable {
 
     @Override
     public void displayInfo() {
-        System.out.println("Laptop");
-        System.out.println("ID: " + getID());
-        System.out.println("Name: " + getName());
-        System.out.println("Brand: " + getBrand());
-        System.out.println("Price: " + getPrice());
-        System.out.println("RAM: " + ram);
-        System.out.println("Screen size: " + screenSize);
+        System.out.println("Laptop\nID: " + getID() + "\nName: " + getName() + "\nBrand: " + getBrand() + "\nPrice: "
+                + getPrice() + "\nRAM: " + ram + "\nScreen size: " + screenSize);
     }
 
     public double getRam() {

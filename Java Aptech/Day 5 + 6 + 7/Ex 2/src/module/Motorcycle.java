@@ -1,6 +1,6 @@
 package module;
 
-public class Motorcycle extends Vehicle implements Registrable{
+public class Motorcycle extends Vehicle implements Registrable {
     private double engineCapacity;
     private boolean ABSSupported;
 

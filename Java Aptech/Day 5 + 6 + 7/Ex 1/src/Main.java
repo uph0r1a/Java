@@ -2,11 +2,15 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import module.DeviceNameComparator;
+import module.DeviceNotFoundException;
 import module.Discountable;
+import module.DuplicateDeviceIdException;
 import module.ElectronicDevice;
+import module.InvalidBatteryLifeException;
+import module.InvalidPriceException;
+import module.InvalidRamException;
 import module.Laptop;
 import module.Phone;
 
@@ -24,13 +28,19 @@ public class Main {
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 
         List<ElectronicDevice> device = new ArrayList<>();
-
         boolean isExit = false;
 
         while (!isExit) {
             System.out.print(
-                    "===== ELECTRONIC DEVICE MANAGEMENT =====\n1. Add device\n2. Search device\n3. Phone list with 5G support\n4. Laptop list with RAM >= 16GB\n5. Display discount prices\n6. Sort devices by name\n0. Exit\nEnter your choice: ");
-            int choice = Integer.parseInt(br.readLine());
+                    "===== ELECTRONIC DEVICE MANAGEMENT =====\n1. Add device\n2. Search device\n3. Phone list with 5G support\n4. Laptop list with RAM >= 16GB\n5. Display discount prices\n6. Sort devices by name\n7. Statistic\n0. Exit\nEnter your choice: ");
+
+            int choice = -1;
+            try {
+                choice = Integer.parseInt(br.readLine());
+            } catch (NumberFormatException e) {
+                System.out.println("Invalid input");
+                continue;
+            }
 
             switch (choice) {
                 case 0:
@@ -38,18 +48,28 @@ public class Main {
                     break;
                 case 1:
                     System.out.print("Add 1)Laptop or 2)Phone: ");
-                    int addDevice = Integer.parseInt(br.readLine());
+                    int addDevice = 0;
+                    try {
+                        addDevice = Integer.parseInt(br.readLine());
+                    } catch (NumberFormatException e) {
+                        System.out.println("Invalid input");
+                        break;
+                    }
 
                     switch (addDevice) {
                         case 1:
                             System.out.print("Enter ID: ");
-                            String id;
+                            String id = null;
                             while (true) {
-                                id = br.readLine();
-                                if (!validID(device, id)) {
+                                try {
+                                    id = br.readLine();
+                                    if (validID(device, id)) {
+                                        throw new DuplicateDeviceIdException("ID " + id + " already exists");
+                                    }
                                     break;
+                                } catch (DuplicateDeviceIdException e) {
+                                    System.out.print(e.getMessage() + "\nRe-enter ID: ");
                                 }
-                                System.out.print("Invalid ID\nRe-enter ID: ");
                             }
 
                             System.out.print("Enter name: ");
@@ -59,33 +79,51 @@ public class Main {
                             String brand = br.readLine();
 
                             System.out.print("Enter price: ");
-                            int price;
+                            int price = 0;
                             while (true) {
-                                price = Integer.parseInt(br.readLine());
-                                if (price > 0) {
+                                try {
+                                    price = Integer.parseInt(br.readLine());
+                                    if (price <= 0) {
+                                        throw new InvalidPriceException("Price must be greater than 0");
+                                    }
                                     break;
+                                } catch (NumberFormatException e) {
+                                    System.out.print("Invalid input\nRe-enter price: ");
+                                } catch (InvalidPriceException e) {
+                                    System.out.print(e.getMessage() + "\nRe-enter price: ");
                                 }
-                                System.out.print("Price cant be negative\nRe-enter price: ");
                             }
 
                             System.out.print("Enter RAM: ");
-                            double ram;
+                            double ram = 0;
                             while (true) {
-                                ram = Double.parseDouble(br.readLine());
-                                if (ram > 0) {
+                                try {
+                                    ram = Double.parseDouble(br.readLine());
+                                    if (ram <= 0) {
+                                        throw new InvalidRamException("RAM must be greater than 0");
+                                    }
                                     break;
+                                } catch (NumberFormatException e) {
+                                    System.out.print("Invalid input\nRe-enter RAM: ");
+                                } catch (InvalidRamException e) {
+                                    System.out.print(e.getMessage() + "\nRe-enter RAM: ");
                                 }
-                                System.out.print("RAM cant be negative\nRe-enter RAM: ");
                             }
 
                             System.out.print("Enter screen size: ");
-                            double screenSize;
+                            double screenSize = 0;
                             while (true) {
-                                screenSize = Double.parseDouble(br.readLine());
-                                if (screenSize > 0) {
+                                try {
+                                    screenSize = Double.parseDouble(br.readLine());
+                                    if (screenSize <= 0) {
+                                        throw new IllegalArgumentException("Screen size must be greater than 0");
+                                    }
                                     break;
+                                } catch (NumberFormatException e) {
+                                    System.out.print("Invalid input\nRe-enter screen size: ");
+                                } catch (IllegalArgumentException e) {
+                                    System.out.print(e.getMessage() + "\nRe-enter screen size: ");
                                 }
-                                System.out.print("Screen size cant be negative\nRe-enter screen size: ");
                             }
                             device.add(new Laptop(id, name, brand, price, ram, screenSize));
                             System.out.println("Laptop added successful");
@@ -93,11 +131,15 @@ public class Main {
                         case 2:
                             System.out.print("Enter ID: ");
                             while (true) {
-                                id = br.readLine();
-                                if (!validID(device, id)) {
+                                try {
+                                    id = br.readLine();
+                                    if (validID(device, id)) {
+                                        throw new DuplicateDeviceIdException("ID " + id + " already exists");
+                                    }
                                     break;
+                                } catch (DuplicateDeviceIdException e) {
+                                    System.out.print(e.getMessage() + "\nRe-enter ID: ");
                                 }
-                                System.out.print("Invalid ID\nRe-enter ID: ");
                             }
 
                             System.out.print("Enter name: ");
@@ -108,31 +150,47 @@ public class Main {
 
                             System.out.print("Enter price: ");
                             while (true) {
-                                price = Integer.parseInt(br.readLine());
-                                if (price > 0) {
+                                try {
+                                    price = Integer.parseInt(br.readLine());
+                                    if (price <= 0) {
+                                        throw new InvalidPriceException("Price must be greater than 0");
+                                    }
                                     break;
+                                } catch (NumberFormatException e) {
+                                    System.out.print("Invalid input\nRe-enter price: ");
+                                } catch (InvalidPriceException e) {
+                                    System.out.print(e.getMessage() + "\nRe-enter price: ");
                                 }
-                                System.out.print("Price cant be negative\nRe-enter price: ");
                             }
 
                             System.out.print("Enter battery life: ");
-                            double batteryLife;
+                            double batteryLife = 0;
                             while (true) {
-                                batteryLife = Double.parseDouble(br.readLine());
-                                if (batteryLife > 0) {
+                                try {
+                                    batteryLife = Double.parseDouble(br.readLine());
+                                    if (batteryLife <= 0) {
+                                        throw new InvalidBatteryLifeException("Battery life must be greater than 0");
+                                    }
                                     break;
+                                } catch (NumberFormatException e) {
+                                    System.out.print("Invalid input\nRe-enter battery life: ");
+                                } catch (InvalidBatteryLifeException e) {
+                                    System.out.print(e.getMessage() + "\nRe-enter battery life: ");
                                 }
-                                System.out.print("Battery life cant be negative\nRe-enter battery life: ");
                             }
 
-                            int isSupport5G;
+                            int isSupport5G = -1;
                             while (true) {
                                 System.out.print("Is it support 5G 1)Yes 0)No: ");
-                                isSupport5G = Integer.parseInt(br.readLine());
-                                if (isSupport5G == 0 || isSupport5G == 1) {
-                                    break;
+                                try {
+                                    isSupport5G = Integer.parseInt(br.readLine());
+                                    if (isSupport5G == 0 || isSupport5G == 1) {
+                                        break;
+                                    }
+                                    System.out.println("Invalid choice");
+                                } catch (NumberFormatException e) {
+                                    System.out.println("Invalid input");
                                 }
-                                System.out.println("Invalid choice");
                             }
                             device.add(new Phone(id, name, brand, price, batteryLife, isSupport5G == 1));
                             break;
@@ -146,13 +204,17 @@ public class Main {
                         System.out.println("No device exist");
                     } else {
                         System.out.print("Enter ID: ");
-                        String id;
+                        String id = null;
                         while (true) {
-                            id = br.readLine();
-                            if (validID(device, id)) {
+                            try {
+                                id = br.readLine();
+                                if (!validID(device, id)) {
+                                    throw new DeviceNotFoundException("Device with ID " + id + " not found");
+                                }
                                 break;
+                            } catch (DeviceNotFoundException e) {
+                                System.out.print(e.getMessage() + "\nRe-enter ID: ");
                             }
-                            System.out.print("Invalid ID\nRe-enter ID: ");
                         }
 
                         for (ElectronicDevice electronicDevice : device) {
@@ -221,13 +283,20 @@ public class Main {
                     }
                     break;
                 case 6:
-                    Collections.sort(device, new DeviceNameComparator());
+                    device.sort(new DeviceNameComparator());
 
                     System.out.println("Device list after sorting:");
                     for (ElectronicDevice d : device) {
                         d.displayInfo();
                         System.out.println();
                     }
+                    break;
+                case 7:
+                    System.out.println("Total number of devices: "
+                            + ElectronicDevice.DeviceStatistics.totalDevice(device) + "\nTotal number of phones: "
+                            + ElectronicDevice.DeviceStatistics.totalPhone(device) + "\nTotal number of laptops: "
+                            + ElectronicDevice.DeviceStatistics.totalLaptop(device) + "\nAverage price: "
+                            + ElectronicDevice.DeviceStatistics.averagePrice(device));
                     break;
                 default:
                     System.out.println("Invalid choice");

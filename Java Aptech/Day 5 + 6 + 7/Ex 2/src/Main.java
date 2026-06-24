@@ -3,13 +3,37 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import module.Car;
 import module.Vehicle;
 import module.Car.FUEL_TYPE;
 import module.Motorcycle;
+import module.Registrable;
 
 public class Main {
+
+    static class VehicleNameComparator implements Comparator<Vehicle> {
+        @Override
+        public int compare(Vehicle v1, Vehicle v2) {
+            return v1.getName().compareToIgnoreCase(v2.getName());
+        }
+    }
+
+    static class ManufacturerComparator implements Comparator<Vehicle> {
+        @Override
+        public int compare(Vehicle v1, Vehicle v2) {
+            return v1.getManufacturer().compareToIgnoreCase(v2.getManufacturer());
+        }
+    }
+
+    static class AnnualTaxComparator implements Comparator<Vehicle> {
+        @Override
+        public int compare(Vehicle v1, Vehicle v2) {
+            return Double.compare(v2.calculateAnnualTax(), v1.calculateAnnualTax());
+        }
+    }
+
     public static boolean validID(List<Vehicle> vehicles, String ID) {
         for (Vehicle vehicle : vehicles) {
             if (vehicle.getID().equals(ID)) {
@@ -36,7 +60,7 @@ public class Main {
 
         while (!isExit) {
             System.out.print(
-                    "1. Add a Car\n2. Add a Motorcycle\n3. Display All Vehicles\n4. Search for a Vehicle by ID\n5. Display All Electric Cars\n6. Display All Motorcycles with ABS\n7. Sort Vehicles by Value\n0. Exit\nEnter your choice: ");
+                    "1. Add a Car\n2. Add a Motorcycle\n3. Display All Vehicles\n4. Search for a Vehicle by ID\n5. Display All Electric Cars\n6. Display All Motorcycles with ABS\n7. Sort Vehicles by Value\n8. Sort Vehicles by Name\n9. Sort Vehicles by Manufacturer\n10. Sort Vehicles by Annual Tax\n11. Display Vehicle Tax Report\n0. Exit\nEnter your choice: ");
             int choice = Integer.parseInt(br.readLine());
 
             switch (choice) {
@@ -216,6 +240,29 @@ public class Main {
                     break;
                 case 7:
                     Collections.sort(vehicles);
+                    break;
+                case 8:
+                    vehicles.sort(new VehicleNameComparator());
+                    break;
+                case 9:
+                    vehicles.sort(new ManufacturerComparator());
+                    break;
+                case 10:
+                    vehicles.sort(new AnnualTaxComparator());
+                    break;
+                case 11:
+                    if (vehicles.isEmpty()) {
+                        System.out.println("No vehicle exist");
+                    } else {
+                        for (Vehicle vehicle : vehicles) {
+                            String vehicleType = (vehicle instanceof Car) ? "Car" : "Motorcycle";
+                            double annualTax = vehicle.calculateAnnualTax();
+                            String status = ((Registrable) vehicle).getRegistrationStatus();
+                            System.out.println("Vehicle ID: " + vehicle.getID() + "\nVehicle Name: " + vehicle.getName()
+                                    + "\nVehicle Type: " + vehicleType + "\nAnnual Tax: " + annualTax
+                                    + "\nRegistration Status: " + status);
+                        }
+                    }
                     break;
                 default:
                     System.out.println("Invalid choice");

@@ -1,8 +1,8 @@
 package module;
 
 public class Phone extends ElectronicDevice implements Discountable {
-    private double batteryLife;
-    private boolean isSupport5G;
+    private final double batteryLife;
+    private final boolean isSupport5G;
 
     public Phone(String ID, String name, String brand, int price,
             double batteryLife, boolean isSupport5G) {
@@ -18,13 +18,8 @@ public class Phone extends ElectronicDevice implements Discountable {
 
     @Override
     public void displayInfo() {
-        System.out.println("Phone");
-        System.out.println("ID: " + getID());
-        System.out.println("Name: " + getName());
-        System.out.println("Brand: " + getBrand());
-        System.out.println("Price: " + getPrice());
-        System.out.println("Battery life: " + batteryLife);
-        System.out.println("Support 5G: " + (isSupport5G ? "Yes" : "No"));
+        System.out.println("Laptop\nID: " + getID() + "\nName: " + getName() + "\nBrand: " + getBrand() + "\nPrice: "
+                + getPrice() + "\nBattery life: " + batteryLife + "\nSupport 5G: " + (isSupport5G ? "Yes" : "No"));
     }
 
     public double getBatteryLife() {

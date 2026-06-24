@@ -48,7 +48,7 @@ public abstract class Vehicle implements Comparable<Vehicle> {
     }
 
     @Override
-    public int compareTo(Vehicle other){
+    public int compareTo(Vehicle other) {
         return Integer.compare(this.value, other.value);
     }
 
