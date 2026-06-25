@@ -3,12 +3,15 @@ package module;
 public abstract class Vehicle implements Comparable<Vehicle> {
     private String ID, name, manufacturer;
     private int value;
+    private VehicleInsurance insurance;
 
-    public Vehicle(String ID, String name, String manufacturer, int value) {
+    public Vehicle(String ID, String name, String manufacturer, int value,
+            String insuranceProvider, double coverageAmount) {
         this.ID = ID;
         this.name = name;
         this.manufacturer = manufacturer;
         this.value = value;
+        this.insurance = new VehicleInsurance(insuranceProvider, coverageAmount);
     }
 
     public String getID() {
@@ -43,8 +46,14 @@ public abstract class Vehicle implements Comparable<Vehicle> {
         this.value = value;
     }
 
+    public VehicleInsurance getInsurance() {
+        return insurance;
+    }
+
     public String display() {
-        return "\nID: " + ID + "\nName: " + name + "\nManufacturer: " + manufacturer + "\nValue: " + value;
+        return "\nID: " + ID + "\nName: " + name + "\nManufacturer: " + manufacturer + "\nValue: " + value
+                + "\nInsurance Provider: " + insurance.getInsuranceProvider()
+                + "\nCoverage Amount: " + insurance.getCoverageAmount();
     }
 
     @Override
@@ -53,4 +62,57 @@ public abstract class Vehicle implements Comparable<Vehicle> {
     }
 
     public abstract double calculateAnnualTax();
+
+    public class VehicleInsurance {
+        private String insuranceProvider;
+        private double coverageAmount;
+
+        public VehicleInsurance(String insuranceProvider, double coverageAmount) {
+            this.insuranceProvider = insuranceProvider;
+            this.coverageAmount = coverageAmount;
+        }
+
+        public String getInsuranceProvider() {
+            return insuranceProvider;
+        }
+
+        public double getCoverageAmount() {
+            return coverageAmount;
+        }
+    }
+
+    public static class VehicleStatistics {
+        private static int totalVehicles = 0;
+        private static int totalCars = 0;
+        private static int totalMotorcycles = 0;
+        private static double totalVehicleValue = 0;
+
+        public static int getTotalVehicles() {
+            return totalVehicles;
+        }
+
+        public static int getTotalCars() {
+            return totalCars;
+        }
+
+        public static int getTotalMotorcycles() {
+            return totalMotorcycles;
+        }
+
+        public static double getTotalVehicleValue() {
+            return totalVehicleValue;
+        }
+
+        public static void addCar(int value) {
+            totalVehicles++;
+            totalCars++;
+            totalVehicleValue += value;
+        }
+
+        public static void addMotorcycle(int value) {
+            totalVehicles++;
+            totalMotorcycles++;
+            totalVehicleValue += value;
+        }
+    }
 }

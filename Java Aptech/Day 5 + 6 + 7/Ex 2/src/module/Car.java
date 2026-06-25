@@ -10,10 +10,12 @@ public class Car extends Vehicle implements Registrable {
     private int numberOfSeats;
     private FUEL_TYPE fuelType;
 
-    public Car(String iD, String name, String manufacturer, int value, int numberOfSeats, FUEL_TYPE fuelType) {
-        super(iD, name, manufacturer, value);
+    public Car(String iD, String name, String manufacturer, int value, int numberOfSeats, FUEL_TYPE fuelType,
+            String insuranceProvider, double coverageAmount) {
+        super(iD, name, manufacturer, value, insuranceProvider, coverageAmount);
         this.numberOfSeats = numberOfSeats;
         this.fuelType = fuelType;
+        VehicleStatistics.addCar(value);
     }
 
     public int getNumberOfSeats() {

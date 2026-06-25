@@ -6,6 +6,8 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import module.Car;
+import module.DuplicateVehicleIdException;
+import module.InvalidVehicleValueException;
 import module.Vehicle;
 import module.Car.FUEL_TYPE;
 import module.Motorcycle;
@@ -60,8 +62,15 @@ public class Main {
 
         while (!isExit) {
             System.out.print(
-                    "1. Add a Car\n2. Add a Motorcycle\n3. Display All Vehicles\n4. Search for a Vehicle by ID\n5. Display All Electric Cars\n6. Display All Motorcycles with ABS\n7. Sort Vehicles by Value\n8. Sort Vehicles by Name\n9. Sort Vehicles by Manufacturer\n10. Sort Vehicles by Annual Tax\n11. Display Vehicle Tax Report\n0. Exit\nEnter your choice: ");
-            int choice = Integer.parseInt(br.readLine());
+                    "1. Add a Car\n2. Add a Motorcycle\n3. Display All Vehicles\n4. Search for a Vehicle by ID\n5. Display All Electric Cars\n6. Display All Motorcycles with ABS\n7. Sort Vehicles by Value\n8. Sort Vehicles by Name\n9. Sort Vehicles by Manufacturer\n10. Sort Vehicles by Annual Tax\n11. Display Vehicle Tax Report\n12. Display Vehicle Statistics\n0. Exit\nEnter your choice: ");
+
+            int choice = -1;
+            try {
+                choice = Integer.parseInt(br.readLine());
+            } catch (NumberFormatException e) {
+                System.out.println("Invalid input");
+                continue;
+            }
 
             switch (choice) {
                 case 0:
@@ -69,13 +78,17 @@ public class Main {
                     break;
                 case 1:
                     System.out.print("Enter ID: ");
-                    String ID;
+                    String ID = null;
                     while (true) {
-                        ID = br.readLine();
-                        if (!validID(vehicles, ID)) {
+                        try {
+                            ID = br.readLine();
+                            if (validID(vehicles, ID)) {
+                                throw new DuplicateVehicleIdException("Vehicle with ID " + ID + " already exists");
+                            }
                             break;
+                        } catch (DuplicateVehicleIdException e) {
+                            System.out.print(e.getMessage() + "\nRe-enter ID: ");
                         }
-                        System.out.print("Invalid ID\nRe-enter ID: ");
                     }
 
                     System.out.print("Enter name: ");
@@ -85,23 +98,35 @@ public class Main {
                     String manufacturer = br.readLine();
 
                     System.out.print("Enter value: ");
-                    int value;
+                    int value = 0;
                     while (true) {
-                        value = Integer.parseInt(br.readLine());
-                        if (value > 0) {
+                        try {
+                            value = Integer.parseInt(br.readLine());
+                            if (value <= 0) {
+                                throw new InvalidVehicleValueException("Value must be greater than 0");
+                            }
                             break;
+                        } catch (NumberFormatException e) {
+                            System.out.print("Invalid input\nRe-enter value: ");
+                        } catch (InvalidVehicleValueException e) {
+                            System.out.print(e.getMessage() + "\nRe-enter value: ");
                         }
-                        System.out.print("Value cant be negative\nRe-enter value: ");
                     }
 
                     System.out.print("Enter number of seat: ");
-                    int numberOfSeat;
+                    int numberOfSeat = 0;
                     while (true) {
-                        numberOfSeat = Integer.parseInt(br.readLine());
-                        if (numberOfSeat > 0) {
+                        try {
+                            numberOfSeat = Integer.parseInt(br.readLine());
+                            if (numberOfSeat <= 0) {
+                                throw new InvalidVehicleValueException("Number of seat must be greater than 0");
+                            }
                             break;
+                        } catch (NumberFormatException e) {
+                            System.out.print("Invalid input\nRe-enter number of seat: ");
+                        } catch (InvalidVehicleValueException e) {
+                            System.out.print(e.getMessage() + "\nRe-enter number of seat: ");
                         }
-                        System.out.print("Number of seat cant be negative\nRe-enter number of seat: ");
                     }
 
                     System.out.print("Enter fuel type: ");
@@ -123,16 +148,40 @@ public class Main {
                         }
                     }
 
-                    vehicles.add(new Car(ID, name, manufacturer, value, numberOfSeat, selectedFuel));
+                    System.out.print("Enter insurance provider: ");
+                    String insuranceProvider = br.readLine();
+
+                    System.out.print("Enter coverage amount: ");
+                    double coverageAmount = 0;
+                    while (true) {
+                        try {
+                            coverageAmount = Double.parseDouble(br.readLine());
+                            if (coverageAmount <= 0) {
+                                throw new InvalidVehicleValueException("Coverage amount must be greater than 0");
+                            }
+                            break;
+                        } catch (NumberFormatException e) {
+                            System.out.print("Invalid input\nRe-enter coverage amount: ");
+                        } catch (InvalidVehicleValueException e) {
+                            System.out.print(e.getMessage() + "\nRe-enter coverage amount: ");
+                        }
+                    }
+
+                    vehicles.add(new Car(ID, name, manufacturer, value, numberOfSeat, selectedFuel, insuranceProvider,
+                            coverageAmount));
                     break;
                 case 2:
                     System.out.print("Enter ID: ");
                     while (true) {
-                        ID = br.readLine();
-                        if (!validID(vehicles, ID)) {
+                        try {
+                            ID = br.readLine();
+                            if (validID(vehicles, ID)) {
+                                throw new DuplicateVehicleIdException("Vehicle with ID " + ID + " already exists");
+                            }
                             break;
+                        } catch (DuplicateVehicleIdException e) {
+                            System.out.print(e.getMessage() + "\nRe-enter ID: ");
                         }
-                        System.out.print("Invalid ID\nRe-enter ID: ");
                     }
 
                     System.out.print("Enter name: ");
@@ -143,34 +192,70 @@ public class Main {
 
                     System.out.print("Enter value: ");
                     while (true) {
-                        value = Integer.parseInt(br.readLine());
-                        if (value > 0) {
+                        try {
+                            value = Integer.parseInt(br.readLine());
+                            if (value <= 0) {
+                                throw new InvalidVehicleValueException("Value must be greater than 0");
+                            }
                             break;
+                        } catch (NumberFormatException e) {
+                            System.out.print("Invalid input\nRe-enter value: ");
+                        } catch (InvalidVehicleValueException e) {
+                            System.out.print(e.getMessage() + "\nRe-enter value: ");
                         }
-                        System.out.print("Value cant be negative\nRe-enter value: ");
                     }
 
                     System.out.print("Enter engine capacity: ");
-                    double engineCapacity;
+                    double engineCapacity = 0;
                     while (true) {
-                        engineCapacity = Double.parseDouble(br.readLine());
-                        if (engineCapacity > 0) {
+                        try {
+                            engineCapacity = Double.parseDouble(br.readLine());
+                            if (engineCapacity <= 0) {
+                                throw new InvalidVehicleValueException("Engine capacity must be greater than 0");
+                            }
                             break;
+                        } catch (NumberFormatException e) {
+                            System.out.print("Invalid input\nRe-enter engine capacity: ");
+                        } catch (InvalidVehicleValueException e) {
+                            System.out.print(e.getMessage() + "\nRe-enter engine capacity: ");
                         }
-                        System.out.print("Engine capacity cant be negative\nRe-enter engine capacity: ");
                     }
 
                     System.out.print("Enter ABS support 1)Yes 2)No: ");
-                    int ABSSupport;
+                    int ABSSupport = -1;
                     while (true) {
-                        ABSSupport = Integer.parseInt(br.readLine());
-                        if (ABSSupport == 1 || ABSSupport == 2) {
-                            break;
+                        try {
+                            ABSSupport = Integer.parseInt(br.readLine());
+                            if (ABSSupport == 1 || ABSSupport == 2) {
+                                break;
+                            }
+                            System.out.print("Invalid option\nRe-enter ABS support 1)Yes 2)No: ");
+                        } catch (NumberFormatException e) {
+                            System.out.print("Invalid input\nRe-enter ABS support 1)Yes 2)No: ");
                         }
-                        System.out.print("Invalid option\nRe-enter ABS support 1)Yes 2)No: ");
                     }
 
-                    vehicles.add(new Motorcycle(ID, name, manufacturer, value, engineCapacity, ABSSupport == 1));
+                    System.out.print("Enter insurance provider: ");
+                    insuranceProvider = br.readLine();
+
+                    System.out.print("Enter coverage amount: ");
+                    coverageAmount = 0;
+                    while (true) {
+                        try {
+                            coverageAmount = Double.parseDouble(br.readLine());
+                            if (coverageAmount <= 0) {
+                                throw new InvalidVehicleValueException("Coverage amount must be greater than 0");
+                            }
+                            break;
+                        } catch (NumberFormatException e) {
+                            System.out.print("Invalid input\nRe-enter coverage amount: ");
+                        } catch (InvalidVehicleValueException e) {
+                            System.out.print(e.getMessage() + "\nRe-enter coverage amount: ");
+                        }
+                    }
+
+                    vehicles.add(new Motorcycle(ID, name, manufacturer, value, engineCapacity, ABSSupport == 1,
+                            insuranceProvider, coverageAmount));
                     break;
                 case 3:
                     if (vehicles.isEmpty()) {
@@ -263,6 +348,12 @@ public class Main {
                                     + "\nRegistration Status: " + status);
                         }
                     }
+                    break;
+                case 12:
+                    System.out.println("Total Number of Vehicles: " + Vehicle.VehicleStatistics.getTotalVehicles()
+                            + "\nTotal Number of Cars: " + Vehicle.VehicleStatistics.getTotalCars()
+                            + "\nTotal Number of Motorcycles: " + Vehicle.VehicleStatistics.getTotalMotorcycles()
+                            + "\nTotal Vehicle Value: " + Vehicle.VehicleStatistics.getTotalVehicleValue());
                     break;
                 default:
                     System.out.println("Invalid choice");

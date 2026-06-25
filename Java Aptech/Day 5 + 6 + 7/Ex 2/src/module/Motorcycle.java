@@ -5,10 +5,11 @@ public class Motorcycle extends Vehicle implements Registrable {
     private boolean ABSSupported;
 
     public Motorcycle(String iD, String name, String manufacturer, int value, double engineCapacity,
-            boolean ABSSupported) {
-        super(iD, name, manufacturer, value);
+            boolean ABSSupported, String insuranceProvider, double coverageAmount) {
+        super(iD, name, manufacturer, value, insuranceProvider, coverageAmount);
         this.engineCapacity = engineCapacity;
         this.ABSSupported = ABSSupported;
+        VehicleStatistics.addMotorcycle(value);
     }
 
     public double getEngineCapacity() {
