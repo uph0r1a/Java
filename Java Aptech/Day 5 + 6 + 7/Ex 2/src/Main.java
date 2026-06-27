@@ -3,7 +3,6 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 import module.Car;
 import module.DuplicateVehicleIdException;
@@ -14,27 +13,6 @@ import module.Motorcycle;
 import module.Registrable;
 
 public class Main {
-
-    static class VehicleNameComparator implements Comparator<Vehicle> {
-        @Override
-        public int compare(Vehicle v1, Vehicle v2) {
-            return v1.getName().compareToIgnoreCase(v2.getName());
-        }
-    }
-
-    static class ManufacturerComparator implements Comparator<Vehicle> {
-        @Override
-        public int compare(Vehicle v1, Vehicle v2) {
-            return v1.getManufacturer().compareToIgnoreCase(v2.getManufacturer());
-        }
-    }
-
-    static class AnnualTaxComparator implements Comparator<Vehicle> {
-        @Override
-        public int compare(Vehicle v1, Vehicle v2) {
-            return Double.compare(v2.calculateAnnualTax(), v1.calculateAnnualTax());
-        }
-    }
 
     public static boolean validID(List<Vehicle> vehicles, String ID) {
         for (Vehicle vehicle : vehicles) {
@@ -62,7 +40,7 @@ public class Main {
 
         while (!isExit) {
             System.out.print(
-                    "1. Add a Car\n2. Add a Motorcycle\n3. Display All Vehicles\n4. Search for a Vehicle by ID\n5. Display All Electric Cars\n6. Display All Motorcycles with ABS\n7. Sort Vehicles by Value\n8. Sort Vehicles by Name\n9. Sort Vehicles by Manufacturer\n10. Sort Vehicles by Annual Tax\n11. Display Vehicle Tax Report\n12. Display Vehicle Statistics\n0. Exit\nEnter your choice: ");
+                    "1. Add a Car\n2. Add a Motorcycle\n3. Display All Vehicles\n4. Search for a Vehicle by ID\n5. Display All Electric Cars\n6. Display All Motorcycles with ABS\n7. Sort Vehicles by Value\n8. Sort Vehicles by Name\n9. Sort Vehicles by Manufacturer\n10. Sort Vehicles by Annual Tax\n11. Display Vehicle Tax Report\n12. Display Vehicle Statistics\n13. Search Vehicle by Name\n14. Display Vehicles by Manufacturer\n0. Exit\nEnter your choice: ");
 
             int choice = -1;
             try {
@@ -167,8 +145,7 @@ public class Main {
                         }
                     }
 
-                    vehicles.add(new Car(ID, name, manufacturer, value, numberOfSeat, selectedFuel, insuranceProvider,
-                            coverageAmount));
+                    vehicles.add(new Car(ID, name, manufacturer, value, numberOfSeat, selectedFuel, insuranceProvider, coverageAmount));
                     break;
                 case 2:
                     System.out.print("Enter ID: ");
@@ -254,8 +231,7 @@ public class Main {
                         }
                     }
 
-                    vehicles.add(new Motorcycle(ID, name, manufacturer, value, engineCapacity, ABSSupport == 1,
-                            insuranceProvider, coverageAmount));
+                    vehicles.add(new Motorcycle(ID, name, manufacturer, value, engineCapacity, ABSSupport == 1, insuranceProvider, coverageAmount));
                     break;
                 case 3:
                     if (vehicles.isEmpty()) {
@@ -275,65 +251,53 @@ public class Main {
                         System.out.println("No vehicle exist");
                     } else {
                         System.out.print("Enter ID: ");
-                        ID = br.readLine();
+                        String searchID = br.readLine();
 
-                        boolean found = false;
-
-                        for (Vehicle vehicle : vehicles) {
-                            if (vehicle.getID().equals(ID)) {
-                                if (vehicle instanceof Car car) {
-                                    System.out.println("Car" + car.display());
-                                } else if (vehicle instanceof Motorcycle motorcycle) {
-                                    System.out.println("Motorcycle" + motorcycle.display());
-                                }
-
-                                found = true;
-                                break;
-                            }
-                        }
-
-                        if (!found) {
-                            System.out.println("Vehicle not found");
-                        }
+                        vehicles.stream()
+                                .filter(v -> v.getID().equals(searchID))
+                                .findFirst()
+                                .ifPresentOrElse(vehicle -> {
+                                    if (vehicle instanceof Car car) {
+                                        System.out.println("Car" + car.display());
+                                    } else if (vehicle instanceof Motorcycle motorcycle) {
+                                        System.out.println("Motorcycle" + motorcycle.display());
+                                    }
+                                }, () -> System.out.println("Vehicle not found"));
                     }
                     break;
                 case 5:
                     if (vehicles.isEmpty()) {
                         System.out.println("No vehicle exist");
                     } else {
-                        for (Vehicle vehicle : vehicles) {
-                            if (vehicle instanceof Car car) {
-                                if (car.getFuelType() == FUEL_TYPE.Electric) {
-                                    System.out.println("Car" + car.display());
-                                }
-                            }
-                        }
+                        vehicles.stream()
+                                .filter(v -> v instanceof Car)
+                                .map(v -> (Car) v)
+                                .filter(car -> car.getFuelType() == FUEL_TYPE.Electric)
+                                .forEach(car -> System.out.println("Car" + car.display()));
                     }
                     break;
                 case 6:
                     if (vehicles.isEmpty()) {
                         System.out.println("No vehicle exist");
                     } else {
-                        for (Vehicle vehicle : vehicles) {
-                            if (vehicle instanceof Motorcycle motorcycle) {
-                                if (motorcycle.isABSSupported()) {
-                                    System.out.println("Motorcycle" + motorcycle.display());
-                                }
-                            }
-                        }
+                        vehicles.stream()
+                                .filter(v -> v instanceof Motorcycle)
+                                .map(v -> (Motorcycle) v)
+                                .filter(Motorcycle::isABSSupported)
+                                .forEach(moto -> System.out.println("Motorcycle" + moto.display()));
                     }
                     break;
                 case 7:
                     Collections.sort(vehicles);
                     break;
                 case 8:
-                    vehicles.sort(new VehicleNameComparator());
+                    vehicles.sort((v1, v2) -> v1.getName().compareToIgnoreCase(v2.getName()));
                     break;
                 case 9:
-                    vehicles.sort(new ManufacturerComparator());
+                    vehicles.sort((v1, v2) -> v1.getManufacturer().compareToIgnoreCase(v2.getManufacturer()));
                     break;
                 case 10:
-                    vehicles.sort(new AnnualTaxComparator());
+                    vehicles.sort((v1, v2) -> Double.compare(v2.calculateAnnualTax(), v1.calculateAnnualTax()));
                     break;
                 case 11:
                     if (vehicles.isEmpty()) {
@@ -354,6 +318,54 @@ public class Main {
                             + "\nTotal Number of Cars: " + Vehicle.VehicleStatistics.getTotalCars()
                             + "\nTotal Number of Motorcycles: " + Vehicle.VehicleStatistics.getTotalMotorcycles()
                             + "\nTotal Vehicle Value: " + Vehicle.VehicleStatistics.getTotalVehicleValue());
+                    break;
+                case 13:
+                    if (vehicles.isEmpty()) {
+                        System.out.println("No vehicle exist");
+                    } else {
+                        System.out.print("Enter name: ");
+                        String searchName = br.readLine();
+
+                        List<Vehicle> nameResults = vehicles.stream()
+                                .filter(v -> v.getName().equalsIgnoreCase(searchName))
+                                .toList();
+
+                        if (nameResults.isEmpty()) {
+                            System.out.println("Vehicle not found");
+                        } else {
+                            nameResults.forEach(vehicle -> {
+                                if (vehicle instanceof Car car) {
+                                    System.out.println("Car" + car.display());
+                                } else if (vehicle instanceof Motorcycle motorcycle) {
+                                    System.out.println("Motorcycle" + motorcycle.display());
+                                }
+                            });
+                        }
+                    }
+                    break;
+                case 14:
+                    if (vehicles.isEmpty()) {
+                        System.out.println("No vehicle exist");
+                    } else {
+                        System.out.print("Enter manufacturer: ");
+                        String searchMfr = br.readLine();
+
+                        List<Vehicle> mfrResults = vehicles.stream()
+                                .filter(v -> v.getManufacturer().equalsIgnoreCase(searchMfr))
+                                .toList();
+
+                        if (mfrResults.isEmpty()) {
+                            System.out.println("No vehicles found for manufacturer: " + searchMfr);
+                        } else {
+                            mfrResults.forEach(vehicle -> {
+                                if (vehicle instanceof Car car) {
+                                    System.out.println("Car" + car.display());
+                                } else if (vehicle instanceof Motorcycle motorcycle) {
+                                    System.out.println("Motorcycle" + motorcycle.display());
+                                }
+                            });
+                        }
+                    }
                     break;
                 default:
                     System.out.println("Invalid choice");

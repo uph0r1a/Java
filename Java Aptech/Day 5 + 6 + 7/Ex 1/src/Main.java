@@ -3,7 +3,6 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
-import module.DeviceNameComparator;
 import module.DeviceNotFoundException;
 import module.Discountable;
 import module.DuplicateDeviceIdException;
@@ -32,7 +31,7 @@ public class Main {
 
         while (!isExit) {
             System.out.print(
-                    "===== ELECTRONIC DEVICE MANAGEMENT =====\n1. Add device\n2. Search device\n3. Phone list with 5G support\n4. Laptop list with RAM >= 16GB\n5. Display discount prices\n6. Sort devices by name\n7. Statistic\n0. Exit\nEnter your choice: ");
+                    "===== ELECTRONIC DEVICE MANAGEMENT =====\n1. Add device\n2. Search device\n3. Phone list with 5G support\n4. Laptop list with RAM >= 16GB\n5. Display discount prices\n6. Sort devices by name\n7. Statistic\n8. Find device with highest price\n9. Total value of all devices\n10. Find devices by brand\n11. Sort devices by price\n12. Display device names\n0. Exit\nEnter your choice: ");
 
             int choice = -1;
             try {
@@ -240,17 +239,14 @@ public class Main {
                         System.out.println("No device exist");
                     } else {
                         System.out.println("Phone with 5G support: ");
-                        for (ElectronicDevice electronicDevice : device) {
-                            if (electronicDevice instanceof Phone phone) {
-                                if (phone.isSupport5G()) {
-                                    System.out.println("\nID: " + phone.getID() + "\nName: " + phone.getName()
-                                            + "\nBrand: "
-                                            + phone.getBrand() + "\nPrice: " + phone.getPrice() + "\nBattery life: "
-                                            + phone.getBatteryLife() + "\nSupport 5G: "
-                                            + (phone.isSupport5G() ? "Yes" : "No"));
-                                }
-                            }
-                        }
+                        device.stream()
+                                .filter(d -> d instanceof Phone)
+                                .map(d -> (Phone) d)
+                                .filter(Phone::isSupport5G)
+                                .forEach(phone -> System.out.println("\nID: " + phone.getID() + "\nName: "
+                                        + phone.getName() + "\nBrand: " + phone.getBrand() + "\nPrice: "
+                                        + phone.getPrice() + "\nBattery life: " + phone.getBatteryLife()
+                                        + "\nSupport 5G: Yes"));
                     }
                     break;
                 case 4:
@@ -258,16 +254,14 @@ public class Main {
                         System.out.println("No device exist");
                     } else {
                         System.out.println("Laptop with RAM >= 16GB: ");
-                        for (ElectronicDevice electronicDevice : device) {
-                            if (electronicDevice instanceof Laptop laptop) {
-                                if (laptop.getRam() >= 16) {
-                                    System.out.println("\nID: " + laptop.getID() + "\nName: " + laptop.getName()
-                                            + "\nBrand: " + laptop.getBrand() + "\nPrice: " + laptop.getPrice()
-                                            + "\nRAM: "
-                                            + laptop.getRam() + "\nScreen size: " + laptop.getScreenSize());
-                                }
-                            }
-                        }
+                        device.stream()
+                                .filter(d -> d instanceof Laptop)
+                                .map(d -> (Laptop) d)
+                                .filter(laptop -> laptop.getRam() >= 16)
+                                .forEach(laptop -> System.out.println("\nID: " + laptop.getID() + "\nName: "
+                                        + laptop.getName() + "\nBrand: " + laptop.getBrand() + "\nPrice: "
+                                        + laptop.getPrice() + "\nRAM: " + laptop.getRam() + "\nScreen size: "
+                                        + laptop.getScreenSize()));
                     }
                     break;
                 case 5:
@@ -283,7 +277,7 @@ public class Main {
                     }
                     break;
                 case 6:
-                    device.sort(new DeviceNameComparator());
+                    device.sort((d1, d2) -> d1.getName().compareToIgnoreCase(d2.getName()));
 
                     System.out.println("Device list after sorting:");
                     for (ElectronicDevice d : device) {
@@ -297,6 +291,66 @@ public class Main {
                             + ElectronicDevice.DeviceStatistics.totalPhone(device) + "\nTotal number of laptops: "
                             + ElectronicDevice.DeviceStatistics.totalLaptop(device) + "\nAverage price: "
                             + ElectronicDevice.DeviceStatistics.averagePrice(device));
+                    break;
+                case 8:
+                    if (device.isEmpty()) {
+                        System.out.println("No device exist");
+                    } else {
+                        device.stream()
+                                .max((d1, d2) -> Integer.compare(d1.getPrice(), d2.getPrice()))
+                                .ifPresent(d -> {
+                                    System.out.println("Device with highest price:");
+                                    d.displayInfo();
+                                });
+                    }
+                    break;
+                case 9:
+                    if (device.isEmpty()) {
+                        System.out.println("No device exist");
+                    } else {
+                        int totalValue = device.stream()
+                                .mapToInt(ElectronicDevice::getPrice)
+                                .sum();
+                        System.out.println("Total value of all devices: " + totalValue);
+                    }
+                    break;
+                case 10:
+                    if (device.isEmpty()) {
+                        System.out.println("No device exist");
+                    } else {
+                        System.out.print("Enter brand: ");
+                        String searchBrand = br.readLine();
+
+                        List<ElectronicDevice> brandResults = device.stream()
+                                .filter(d -> d.getBrand().equalsIgnoreCase(searchBrand))
+                                .toList();
+
+                        if (brandResults.isEmpty()) {
+                            System.out.println("No device found for brand: " + searchBrand);
+                        } else {
+                            System.out.println("Devices by brand " + searchBrand + ":");
+                            brandResults.forEach(ElectronicDevice::displayInfo);
+                        }
+                    }
+                    break;
+                case 11:
+                    device.sort((d1, d2) -> Integer.compare(d1.getPrice(), d2.getPrice()));
+
+                    System.out.println("Device list sorted by price (ascending):");
+                    for (ElectronicDevice d : device) {
+                        d.displayInfo();
+                        System.out.println();
+                    }
+                    break;
+                case 12:
+                    if (device.isEmpty()) {
+                        System.out.println("No device exist");
+                    } else {
+                        System.out.println("Device names:");
+                        device.stream()
+                                .map(ElectronicDevice::getName)
+                                .forEach(System.out::println);
+                    }
                     break;
                 default:
                     System.out.println("Invalid choice");
