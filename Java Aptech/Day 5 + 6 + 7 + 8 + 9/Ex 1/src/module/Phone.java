@@ -1,12 +1,14 @@
 package module;
 
+import java.time.LocalDate;
+
 public class Phone extends ElectronicDevice implements Discountable {
     private final double batteryLife;
     private final boolean isSupport5G;
 
-    public Phone(String ID, String name, String brand, int price,
-            double batteryLife, boolean isSupport5G) {
-        super(ID, name, brand, price);
+    public Phone(String ID, String name, String brand, int price, double batteryLife, boolean isSupport5G,
+            LocalDate importDate) {
+        super(ID, name, brand, price, importDate);
         this.batteryLife = batteryLife;
         this.isSupport5G = isSupport5G;
     }
@@ -18,8 +20,9 @@ public class Phone extends ElectronicDevice implements Discountable {
 
     @Override
     public void displayInfo() {
-        System.out.println("Laptop\nID: " + getID() + "\nName: " + getName() + "\nBrand: " + getBrand() + "\nPrice: "
-                + getPrice() + "\nBattery life: " + batteryLife + "\nSupport 5G: " + (isSupport5G ? "Yes" : "No"));
+        System.out.println("Phone\nID: " + getID() + "\nName: " + getName() + "\nBrand: " + getBrand() + "\nPrice: "
+                + getPrice() + "\nBattery life: " + batteryLife + "\nSupport 5G: " + (isSupport5G ? "Yes" : "No")
+                + "\nImport date: " + getImportDate());
     }
 
     public double getBatteryLife() {

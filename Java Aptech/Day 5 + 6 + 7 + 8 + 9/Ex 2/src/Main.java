@@ -1,9 +1,13 @@
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import module.Car;
 import module.DuplicateVehicleIdException;
 import module.InvalidVehicleValueException;
@@ -13,6 +17,8 @@ import module.Motorcycle;
 import module.Registrable;
 
 public class Main {
+
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     public static boolean validID(List<Vehicle> vehicles, String ID) {
         for (Vehicle vehicle : vehicles) {
@@ -32,6 +38,39 @@ public class Main {
         return false;
     }
 
+    public static LocalDate readRegistrationDate(BufferedReader br) throws IOException {
+        System.out.print("Enter registration date (yyyy-MM-dd): ");
+        while (true) {
+            String input = br.readLine();
+            try {
+                return LocalDate.parse(input, DATE_FORMATTER);
+            } catch (DateTimeParseException e) {
+                System.out.print(
+                        "Invalid date format. Please enter the date using yyyy-MM-dd.\nRe-enter registration date: ");
+            }
+        }
+    }
+
+    public static void printVehicle(Vehicle vehicle) {
+        if (vehicle instanceof Car car) {
+            System.out.println("Car" + car.display());
+        } else if (vehicle instanceof Motorcycle motorcycle) {
+            System.out.println("Motorcycle" + motorcycle.display());
+        }
+    }
+
+    public static Optional<Vehicle> findVehicleByID(List<Vehicle> vehicles, String searchID) {
+        return vehicles.stream()
+                .filter(v -> v.getID().equals(searchID))
+                .findFirst();
+    }
+
+    public static List<Vehicle> findVehiclesByName(List<Vehicle> vehicles, String searchName) {
+        return vehicles.stream()
+                .filter(v -> v.getName().equalsIgnoreCase(searchName))
+                .toList();
+    }
+
     public static void main(String[] args) throws NumberFormatException, IOException {
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 
@@ -40,7 +79,7 @@ public class Main {
 
         while (!isExit) {
             System.out.print(
-                    "1. Add a Car\n2. Add a Motorcycle\n3. Display All Vehicles\n4. Search for a Vehicle by ID\n5. Display All Electric Cars\n6. Display All Motorcycles with ABS\n7. Sort Vehicles by Value\n8. Sort Vehicles by Name\n9. Sort Vehicles by Manufacturer\n10. Sort Vehicles by Annual Tax\n11. Display Vehicle Tax Report\n12. Display Vehicle Statistics\n13. Search Vehicle by Name\n14. Display Vehicles by Manufacturer\n0. Exit\nEnter your choice: ");
+                    "1. Add a Car\n2. Add a Motorcycle\n3. Display All Vehicles\n4. Search for a Vehicle by ID\n5. Display All Electric Cars\n6. Display All Motorcycles with ABS\n7. Sort Vehicles by Value\n8. Sort Vehicles by Name\n9. Sort Vehicles by Manufacturer\n10. Sort Vehicles by Annual Tax\n11. Display Vehicle Tax Report\n12. Display Vehicle Statistics\n13. Search Vehicle by Name\n14. Display Vehicles by Manufacturer\n15. Display Vehicles Registered Within the Last N Days\n0. Exit\nEnter your choice: ");
 
             int choice = -1;
             try {
@@ -145,7 +184,10 @@ public class Main {
                         }
                     }
 
-                    vehicles.add(new Car(ID, name, manufacturer, value, numberOfSeat, selectedFuel, insuranceProvider, coverageAmount));
+                    LocalDate carRegistrationDate = readRegistrationDate(br);
+
+                    vehicles.add(new Car(ID, name, manufacturer, value, numberOfSeat, selectedFuel, insuranceProvider,
+                            coverageAmount, carRegistrationDate));
                     break;
                 case 2:
                     System.out.print("Enter ID: ");
@@ -231,19 +273,16 @@ public class Main {
                         }
                     }
 
-                    vehicles.add(new Motorcycle(ID, name, manufacturer, value, engineCapacity, ABSSupport == 1, insuranceProvider, coverageAmount));
+                    LocalDate motoRegistrationDate = readRegistrationDate(br);
+
+                    vehicles.add(new Motorcycle(ID, name, manufacturer, value, engineCapacity, ABSSupport == 1,
+                            insuranceProvider, coverageAmount, motoRegistrationDate));
                     break;
                 case 3:
                     if (vehicles.isEmpty()) {
                         System.out.println("No vehicle exist");
                     } else {
-                        for (Vehicle vehicle : vehicles) {
-                            if (vehicle instanceof Car car) {
-                                System.out.println("Car" + car.display());
-                            } else if (vehicle instanceof Motorcycle motorcycle) {
-                                System.out.println("Motorcycle" + motorcycle.display());
-                            }
-                        }
+                        vehicles.forEach(Main::printVehicle);
                     }
                     break;
                 case 4:
@@ -253,16 +292,8 @@ public class Main {
                         System.out.print("Enter ID: ");
                         String searchID = br.readLine();
 
-                        vehicles.stream()
-                                .filter(v -> v.getID().equals(searchID))
-                                .findFirst()
-                                .ifPresentOrElse(vehicle -> {
-                                    if (vehicle instanceof Car car) {
-                                        System.out.println("Car" + car.display());
-                                    } else if (vehicle instanceof Motorcycle motorcycle) {
-                                        System.out.println("Motorcycle" + motorcycle.display());
-                                    }
-                                }, () -> System.out.println("Vehicle not found"));
+                        Optional<Vehicle> foundByID = findVehicleByID(vehicles, searchID);
+                        foundByID.ifPresentOrElse(Main::printVehicle, () -> System.out.println("Vehicle not found"));
                     }
                     break;
                 case 5:
@@ -273,7 +304,7 @@ public class Main {
                                 .filter(v -> v instanceof Car)
                                 .map(v -> (Car) v)
                                 .filter(car -> car.getFuelType() == FUEL_TYPE.Electric)
-                                .forEach(car -> System.out.println("Car" + car.display()));
+                                .forEach(Main::printVehicle);
                     }
                     break;
                 case 6:
@@ -284,7 +315,7 @@ public class Main {
                                 .filter(v -> v instanceof Motorcycle)
                                 .map(v -> (Motorcycle) v)
                                 .filter(Motorcycle::isABSSupported)
-                                .forEach(moto -> System.out.println("Motorcycle" + moto.display()));
+                                .forEach(Main::printVehicle);
                     }
                     break;
                 case 7:
@@ -326,20 +357,12 @@ public class Main {
                         System.out.print("Enter name: ");
                         String searchName = br.readLine();
 
-                        List<Vehicle> nameResults = vehicles.stream()
-                                .filter(v -> v.getName().equalsIgnoreCase(searchName))
-                                .toList();
+                        List<Vehicle> nameResults = findVehiclesByName(vehicles, searchName);
 
                         if (nameResults.isEmpty()) {
                             System.out.println("Vehicle not found");
                         } else {
-                            nameResults.forEach(vehicle -> {
-                                if (vehicle instanceof Car car) {
-                                    System.out.println("Car" + car.display());
-                                } else if (vehicle instanceof Motorcycle motorcycle) {
-                                    System.out.println("Motorcycle" + motorcycle.display());
-                                }
-                            });
+                            nameResults.forEach(Main::printVehicle);
                         }
                     }
                     break;
@@ -357,13 +380,41 @@ public class Main {
                         if (mfrResults.isEmpty()) {
                             System.out.println("No vehicles found for manufacturer: " + searchMfr);
                         } else {
-                            mfrResults.forEach(vehicle -> {
-                                if (vehicle instanceof Car car) {
-                                    System.out.println("Car" + car.display());
-                                } else if (vehicle instanceof Motorcycle motorcycle) {
-                                    System.out.println("Motorcycle" + motorcycle.display());
+                            mfrResults.forEach(Main::printVehicle);
+                        }
+                    }
+                    break;
+                case 15:
+                    if (vehicles.isEmpty()) {
+                        System.out.println("No vehicle exist");
+                    } else {
+                        System.out.print("Enter number of days: ");
+                        int days = -1;
+                        while (true) {
+                            try {
+                                days = Integer.parseInt(br.readLine());
+                                if (days < 0) {
+                                    throw new InvalidVehicleValueException("Number of days must be 0 or greater");
                                 }
-                            });
+                                break;
+                            } catch (NumberFormatException e) {
+                                System.out.print("Invalid input\nRe-enter number of days: ");
+                            } catch (InvalidVehicleValueException e) {
+                                System.out.print(e.getMessage() + "\nRe-enter number of days: ");
+                            }
+                        }
+
+                        LocalDate today = LocalDate.now();
+                        int finalDays = days;
+                        List<Vehicle> recentResults = vehicles.stream()
+                                .filter(v -> !v.getRegistrationDate().isBefore(today.minusDays(finalDays))
+                                        && !v.getRegistrationDate().isAfter(today))
+                                .toList();
+
+                        if (recentResults.isEmpty()) {
+                            System.out.println("No vehicles registered within the last " + days + " day(s)");
+                        } else {
+                            recentResults.forEach(Main::printVehicle);
                         }
                     }
                     break;

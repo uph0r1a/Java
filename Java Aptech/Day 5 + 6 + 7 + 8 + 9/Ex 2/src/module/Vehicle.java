@@ -1,17 +1,21 @@
 package module;
 
+import java.time.LocalDate;
+
 public abstract class Vehicle implements Comparable<Vehicle> {
     private String ID, name, manufacturer;
     private int value;
     private VehicleInsurance insurance;
+    private LocalDate registrationDate;
 
     public Vehicle(String ID, String name, String manufacturer, int value,
-            String insuranceProvider, double coverageAmount) {
+            String insuranceProvider, double coverageAmount, LocalDate registrationDate) {
         this.ID = ID;
         this.name = name;
         this.manufacturer = manufacturer;
         this.value = value;
         this.insurance = new VehicleInsurance(insuranceProvider, coverageAmount);
+        this.registrationDate = registrationDate;
     }
 
     public String getID() {
@@ -50,10 +54,19 @@ public abstract class Vehicle implements Comparable<Vehicle> {
         return insurance;
     }
 
+    public LocalDate getRegistrationDate() {
+        return registrationDate;
+    }
+
+    public void setRegistrationDate(LocalDate registrationDate) {
+        this.registrationDate = registrationDate;
+    }
+
     public String display() {
         return "\nID: " + ID + "\nName: " + name + "\nManufacturer: " + manufacturer + "\nValue: " + value
                 + "\nInsurance Provider: " + insurance.getInsuranceProvider()
-                + "\nCoverage Amount: " + insurance.getCoverageAmount();
+                + "\nCoverage Amount: " + insurance.getCoverageAmount()
+                + "\nRegistration Date: " + registrationDate;
     }
 
     @Override

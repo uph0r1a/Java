@@ -2,9 +2,9 @@ import java.util.Arrays;
 
 public class ex4 {
     static class RetailItem {
-        String description;
-        int unitsOnHand;
-        double price;
+        private String description;
+        private int unitsOnHand;
+        private double price;
 
         public RetailItem(String description, int unitsOnHand, double price) {
             this.description = description;

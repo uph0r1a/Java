@@ -1,7 +1,7 @@
 public class ex2 {
     static class Car {
-        int yearModel, speed;
-        String make;
+        private int yearModel, speed;
+        private String make;
 
         public Car(int yearModel, String make) {
             this.yearModel = yearModel;

@@ -1,9 +1,12 @@
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
-import module.DeviceNotFoundException;
+import java.util.Optional;
 import module.Discountable;
 import module.DuplicateDeviceIdException;
 import module.ElectronicDevice;
@@ -23,6 +26,12 @@ public class Main {
         return false;
     }
 
+    public static Optional<ElectronicDevice> findByID(List<ElectronicDevice> devices, String id) {
+        return devices.stream()
+                .filter(d -> d.getID().equals(id))
+                .findFirst();
+    }
+
     public static void main(String[] args) throws NumberFormatException, IOException {
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 
@@ -31,7 +40,7 @@ public class Main {
 
         while (!isExit) {
             System.out.print(
-                    "===== ELECTRONIC DEVICE MANAGEMENT =====\n1. Add device\n2. Search device\n3. Phone list with 5G support\n4. Laptop list with RAM >= 16GB\n5. Display discount prices\n6. Sort devices by name\n7. Statistic\n8. Find device with highest price\n9. Total value of all devices\n10. Find devices by brand\n11. Sort devices by price\n12. Display device names\n0. Exit\nEnter your choice: ");
+                    "===== ELECTRONIC DEVICE MANAGEMENT =====\n1. Add device\n2. Search device\n3. Phone list with 5G support\n4. Laptop list with RAM >= 16GB\n5. Display discount prices\n6. Sort devices by name\n7. Statistic\n8. Find device with highest price\n9. Total value of all devices\n10. Find devices by brand\n11. Sort devices by price\n12. Display device names\n13. Display devices by import year\n0. Exit\nEnter your choice: ");
 
             int choice = -1;
             try {
@@ -124,7 +133,18 @@ public class Main {
                                     System.out.print(e.getMessage() + "\nRe-enter screen size: ");
                                 }
                             }
-                            device.add(new Laptop(id, name, brand, price, ram, screenSize));
+
+                            System.out.print("Enter import date (yyyy-MM-dd): ");
+                            LocalDate importDate = null;
+                            while (importDate == null) {
+                                try {
+                                    importDate = LocalDate.parse(br.readLine());
+                                } catch (DateTimeParseException e) {
+                                    System.out.print("Invalid format. Use yyyy-MM-dd\nRe-enter import date: ");
+                                }
+                            }
+
+                            device.add(new Laptop(id, name, brand, price, ram, screenSize, importDate));
                             System.out.println("Laptop added successful");
                             break;
                         case 2:
@@ -191,7 +211,18 @@ public class Main {
                                     System.out.println("Invalid input");
                                 }
                             }
-                            device.add(new Phone(id, name, brand, price, batteryLife, isSupport5G == 1));
+
+                            System.out.print("Enter import date (yyyy-MM-dd): ");
+                            importDate = null;
+                            while (importDate == null) {
+                                try {
+                                    importDate = LocalDate.parse(br.readLine());
+                                } catch (DateTimeParseException e) {
+                                    System.out.print("Invalid format. Use yyyy-MM-dd\nRe-enter import date: ");
+                                }
+                            }
+
+                            device.add(new Phone(id, name, brand, price, batteryLife, isSupport5G == 1, importDate));
                             break;
                         default:
                             System.out.println("Invalid choice");
@@ -203,35 +234,11 @@ public class Main {
                         System.out.println("No device exist");
                     } else {
                         System.out.print("Enter ID: ");
-                        String id = null;
-                        while (true) {
-                            try {
-                                id = br.readLine();
-                                if (!validID(device, id)) {
-                                    throw new DeviceNotFoundException("Device with ID " + id + " not found");
-                                }
-                                break;
-                            } catch (DeviceNotFoundException e) {
-                                System.out.print(e.getMessage() + "\nRe-enter ID: ");
-                            }
-                        }
+                        String searchID = br.readLine();
 
-                        for (ElectronicDevice electronicDevice : device) {
-                            if (electronicDevice.getID().equals(id)) {
-                                System.out.println(electronicDevice.getClass().getSimpleName() + "\nID: "
-                                        + electronicDevice.getID() + "\nName: " + electronicDevice.getName()
-                                        + "\nBrand: "
-                                        + electronicDevice.getBrand() + "\nPrice: " + electronicDevice.getPrice());
-                                if (electronicDevice instanceof Laptop laptop) {
-                                    System.out.println(
-                                            "RAM: " + laptop.getRam() + "\nScreen size: " + laptop.getScreenSize());
-                                } else if (electronicDevice instanceof Phone phone) {
-                                    System.out.println("Battery life: " + phone.getBatteryLife() + "\nSupport 5G: "
-                                            + (phone.isSupport5G() ? "Yes" : "No"));
-                                }
-                                break;
-                            }
-                        }
+                        findByID(device, searchID).ifPresentOrElse(
+                                ElectronicDevice::displayInfo,
+                                () -> System.out.println("Device with ID " + searchID + " not found"));
                     }
                     break;
                 case 3:
@@ -240,13 +247,13 @@ public class Main {
                     } else {
                         System.out.println("Phone with 5G support: ");
                         device.stream()
-                                .filter(d -> d instanceof Phone)
-                                .map(d -> (Phone) d)
+                                .filter(Phone.class::isInstance)
+                                .map(Phone.class::cast)
                                 .filter(Phone::isSupport5G)
                                 .forEach(phone -> System.out.println("\nID: " + phone.getID() + "\nName: "
                                         + phone.getName() + "\nBrand: " + phone.getBrand() + "\nPrice: "
                                         + phone.getPrice() + "\nBattery life: " + phone.getBatteryLife()
-                                        + "\nSupport 5G: Yes"));
+                                        + "\nSupport 5G: Yes" + "\nImport date: " + phone.getImportDate()));
                     }
                     break;
                 case 4:
@@ -255,13 +262,13 @@ public class Main {
                     } else {
                         System.out.println("Laptop with RAM >= 16GB: ");
                         device.stream()
-                                .filter(d -> d instanceof Laptop)
-                                .map(d -> (Laptop) d)
+                                .filter(Laptop.class::isInstance)
+                                .map(Laptop.class::cast)
                                 .filter(laptop -> laptop.getRam() >= 16)
                                 .forEach(laptop -> System.out.println("\nID: " + laptop.getID() + "\nName: "
                                         + laptop.getName() + "\nBrand: " + laptop.getBrand() + "\nPrice: "
                                         + laptop.getPrice() + "\nRAM: " + laptop.getRam() + "\nScreen size: "
-                                        + laptop.getScreenSize()));
+                                        + laptop.getScreenSize() + "\nImport date: " + laptop.getImportDate()));
                     }
                     break;
                 case 5:
@@ -277,7 +284,7 @@ public class Main {
                     }
                     break;
                 case 6:
-                    device.sort((d1, d2) -> d1.getName().compareToIgnoreCase(d2.getName()));
+                    device.sort(Comparator.comparing(ElectronicDevice::getName, String.CASE_INSENSITIVE_ORDER));
 
                     System.out.println("Device list after sorting:");
                     for (ElectronicDevice d : device) {
@@ -293,16 +300,14 @@ public class Main {
                             + ElectronicDevice.DeviceStatistics.averagePrice(device));
                     break;
                 case 8:
-                    if (device.isEmpty()) {
-                        System.out.println("No device exist");
-                    } else {
-                        device.stream()
-                                .max((d1, d2) -> Integer.compare(d1.getPrice(), d2.getPrice()))
-                                .ifPresent(d -> {
-                                    System.out.println("Device with highest price:");
-                                    d.displayInfo();
-                                });
-                    }
+                    device.stream()
+                            .max(Comparator.comparingInt(ElectronicDevice::getPrice))
+                            .ifPresentOrElse(
+                                    d -> {
+                                        System.out.println("Device with highest price:");
+                                        d.displayInfo();
+                                    },
+                                    () -> System.out.println("No device exist"));
                     break;
                 case 9:
                     if (device.isEmpty()) {
@@ -334,7 +339,7 @@ public class Main {
                     }
                     break;
                 case 11:
-                    device.sort((d1, d2) -> Integer.compare(d1.getPrice(), d2.getPrice()));
+                    device.sort(Comparator.comparingInt(ElectronicDevice::getPrice));
 
                     System.out.println("Device list sorted by price (ascending):");
                     for (ElectronicDevice d : device) {
@@ -350,6 +355,29 @@ public class Main {
                         device.stream()
                                 .map(ElectronicDevice::getName)
                                 .forEach(System.out::println);
+                    }
+                    break;
+                case 13:
+                    if (device.isEmpty()) {
+                        System.out.println("No device exist");
+                    } else {
+                        System.out.print("Enter year: ");
+                        try {
+                            int year = Integer.parseInt(br.readLine());
+
+                            List<ElectronicDevice> yearResults = device.stream()
+                                    .filter(d -> d.getImportDate().getYear() == year)
+                                    .toList();
+
+                            if (yearResults.isEmpty()) {
+                                System.out.println("No devices imported in " + year);
+                            } else {
+                                System.out.println("Devices imported in " + year + ":");
+                                yearResults.forEach(ElectronicDevice::displayInfo);
+                            }
+                        } catch (NumberFormatException e) {
+                            System.out.println("Invalid year");
+                        }
                     }
                     break;
                 default:

@@ -4,9 +4,9 @@ import java.io.InputStreamReader;
 
 public class ex5 {
     static class Payroll {
-        String name;
-        int IDNumber, numberHour;
-        double payRate;
+        private String name;
+        private int IDNumber, numberHour;
+        private double payRate;
 
         public Payroll(String name, int iDNumber, double payRate, int numberHour) {
             this.name = name;

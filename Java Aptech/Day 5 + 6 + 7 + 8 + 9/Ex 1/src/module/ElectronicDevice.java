@@ -1,16 +1,19 @@
 package module;
 
+import java.time.LocalDate;
 import java.util.List;
 
 public abstract class ElectronicDevice {
     private final String ID, name, brand;
     private final int price;
+    private final LocalDate importDate;
 
-    public ElectronicDevice(String ID, String name, String brand, int price) {
+    public ElectronicDevice(String ID, String name, String brand, int price, LocalDate importDate) {
         this.ID = ID;
         this.name = name;
         this.brand = brand;
         this.price = price;
+        this.importDate = importDate;
     }
 
     public abstract void displayInfo();
@@ -29,6 +32,10 @@ public abstract class ElectronicDevice {
 
     public int getPrice() {
         return price;
+    }
+
+    public LocalDate getImportDate() {
+        return importDate;
     }
 
     public static class DeviceStatistics {

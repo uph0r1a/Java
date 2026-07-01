@@ -1,5 +1,7 @@
 package module;
 
+import java.time.LocalDate;
+
 public class Car extends Vehicle implements Registrable {
     public enum FUEL_TYPE {
         Gasoline,
@@ -11,8 +13,8 @@ public class Car extends Vehicle implements Registrable {
     private FUEL_TYPE fuelType;
 
     public Car(String iD, String name, String manufacturer, int value, int numberOfSeats, FUEL_TYPE fuelType,
-            String insuranceProvider, double coverageAmount) {
-        super(iD, name, manufacturer, value, insuranceProvider, coverageAmount);
+            String insuranceProvider, double coverageAmount, LocalDate registrationDate) {
+        super(iD, name, manufacturer, value, insuranceProvider, coverageAmount, registrationDate);
         this.numberOfSeats = numberOfSeats;
         this.fuelType = fuelType;
         VehicleStatistics.addCar(value);

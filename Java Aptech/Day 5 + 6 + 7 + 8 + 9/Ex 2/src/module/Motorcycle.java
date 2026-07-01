@@ -1,12 +1,14 @@
 package module;
 
+import java.time.LocalDate;
+
 public class Motorcycle extends Vehicle implements Registrable {
     private double engineCapacity;
     private boolean ABSSupported;
 
     public Motorcycle(String iD, String name, String manufacturer, int value, double engineCapacity,
-            boolean ABSSupported, String insuranceProvider, double coverageAmount) {
-        super(iD, name, manufacturer, value, insuranceProvider, coverageAmount);
+            boolean ABSSupported, String insuranceProvider, double coverageAmount, LocalDate registrationDate) {
+        super(iD, name, manufacturer, value, insuranceProvider, coverageAmount, registrationDate);
         this.engineCapacity = engineCapacity;
         this.ABSSupported = ABSSupported;
         VehicleStatistics.addMotorcycle(value);
