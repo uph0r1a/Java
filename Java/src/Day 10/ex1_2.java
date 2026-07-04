@@ -77,6 +77,38 @@ public class ex1_2 {
 
     }
 
+    static class ShiftSupervisor extends Employee {
+        private double annualSalary, annualBonus;
+
+        public ShiftSupervisor(String name, String number, LocalDate date, double annualSalary, double annualBonus) {
+            super(name, number, date);
+            this.annualSalary = annualSalary;
+            this.annualBonus = annualBonus;
+        }
+
+        public double getAnnualSalary() {
+            return annualSalary;
+        }
+
+        public void setAnnualSalary(double annualSalary) {
+            this.annualSalary = annualSalary;
+        }
+
+        public double getAnnualBonus() {
+            return annualBonus;
+        }
+
+        public void setAnnualBonus(double annualBonus) {
+            this.annualBonus = annualBonus;
+        }
+
+        @Override
+        public String toString() {
+            return super.toString() + "\nAnnual salary: " + annualSalary + "\nAnnual bonus: " + annualBonus;
+        }
+
+    }
+
     public static void main(String[] args) throws NumberFormatException, IOException {
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 
@@ -117,7 +149,15 @@ public class ex1_2 {
         System.out.print("Enter hourly pay rate: ");
         double rate = Double.parseDouble(br.readLine());
 
+        System.out.print("Enter annual salary: ");
+        double salary = Double.parseDouble(br.readLine());
+
+        System.out.print("Enter annual production bonus: ");
+        double bonus = Double.parseDouble(br.readLine());
+
         ProductionWorker worker = new ProductionWorker(name, number, date, shift, rate);
-        System.out.println(worker.toString());
+        ShiftSupervisor supervisor = new ShiftSupervisor(name, number, date, salary, bonus);
+
+        System.out.println(worker.toString() + "\n" + supervisor.toString());
     }
 }
