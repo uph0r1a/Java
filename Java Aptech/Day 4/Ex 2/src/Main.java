@@ -9,8 +9,8 @@ import module.Ticket.Status;
 
 public class Main {
     public static boolean validID(List<Ticket> ticket, int id) {
-        for (int i = 0; i < ticket.size(); i++) {
-            if (ticket.get(i).getID() == id) {
+        for (Ticket value : ticket) {
+            if (value.getID() == id) {
                 return true;
             }
         }

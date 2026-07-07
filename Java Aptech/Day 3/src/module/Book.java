@@ -1,9 +1,7 @@
 package module;
 
 public class Book {
-    private String isbn;
-    private String title;
-    private String author;
+    private String isbn, title, author;
     private int yearPublish;
     private double price;
 

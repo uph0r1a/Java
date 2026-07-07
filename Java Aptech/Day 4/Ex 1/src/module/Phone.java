@@ -52,5 +52,4 @@ public class Phone {
     public int getStock() {
         return stock;
     }
-
 }

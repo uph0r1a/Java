@@ -3,8 +3,7 @@ package module;
 import java.time.LocalDate;
 
 public class Laptop extends ElectronicDevice implements Discountable {
-    private final double ram;
-    private final double screenSize;
+    private final double ram, screenSize;
 
     public Laptop(String ID, String name, String brand, int price, double ram, double screenSize,
             LocalDate importDate) {

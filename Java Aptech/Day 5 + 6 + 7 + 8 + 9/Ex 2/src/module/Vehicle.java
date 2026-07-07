@@ -5,7 +5,7 @@ import java.time.LocalDate;
 public abstract class Vehicle implements Comparable<Vehicle> {
     private String ID, name, manufacturer;
     private int value;
-    private VehicleInsurance insurance;
+    private final VehicleInsurance insurance;
     private LocalDate registrationDate;
 
     public Vehicle(String ID, String name, String manufacturer, int value,
@@ -64,8 +64,8 @@ public abstract class Vehicle implements Comparable<Vehicle> {
 
     public String display() {
         return "\nID: " + ID + "\nName: " + name + "\nManufacturer: " + manufacturer + "\nValue: " + value
-                + "\nInsurance Provider: " + insurance.getInsuranceProvider()
-                + "\nCoverage Amount: " + insurance.getCoverageAmount()
+                + "\nInsurance Provider: " + insurance.insuranceProvider()
+                + "\nCoverage Amount: " + insurance.coverageAmount()
                 + "\nRegistration Date: " + registrationDate;
     }
 
@@ -76,28 +76,11 @@ public abstract class Vehicle implements Comparable<Vehicle> {
 
     public abstract double calculateAnnualTax();
 
-    public class VehicleInsurance {
-        private String insuranceProvider;
-        private double coverageAmount;
-
-        public VehicleInsurance(String insuranceProvider, double coverageAmount) {
-            this.insuranceProvider = insuranceProvider;
-            this.coverageAmount = coverageAmount;
-        }
-
-        public String getInsuranceProvider() {
-            return insuranceProvider;
-        }
-
-        public double getCoverageAmount() {
-            return coverageAmount;
-        }
+    public record VehicleInsurance(String insuranceProvider, double coverageAmount) {
     }
 
     public static class VehicleStatistics {
-        private static int totalVehicles = 0;
-        private static int totalCars = 0;
-        private static int totalMotorcycles = 0;
+        private static int totalVehicles = 0, totalCars = 0, totalMotorcycles = 0;
         private static double totalVehicleValue = 0;
 
         public static int getTotalVehicles() {

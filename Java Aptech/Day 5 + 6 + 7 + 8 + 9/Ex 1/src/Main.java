@@ -27,9 +27,7 @@ public class Main {
     }
 
     public static Optional<ElectronicDevice> findByID(List<ElectronicDevice> devices, String id) {
-        return devices.stream()
-                .filter(d -> d.getID().equals(id))
-                .findFirst();
+        return devices.stream().filter(d -> d.getID().equals(id)).findFirst();
     }
 
     public static void main(String[] args) throws NumberFormatException, IOException {
@@ -236,8 +234,7 @@ public class Main {
                         System.out.print("Enter ID: ");
                         String searchID = br.readLine();
 
-                        findByID(device, searchID).ifPresentOrElse(
-                                ElectronicDevice::displayInfo,
+                        findByID(device, searchID).ifPresentOrElse(ElectronicDevice::displayInfo,
                                 () -> System.out.println("Device with ID " + searchID + " not found"));
                     }
                     break;
@@ -246,9 +243,7 @@ public class Main {
                         System.out.println("No device exist");
                     } else {
                         System.out.println("Phone with 5G support: ");
-                        device.stream()
-                                .filter(Phone.class::isInstance)
-                                .map(Phone.class::cast)
+                        device.stream().filter(Phone.class::isInstance).map(Phone.class::cast)
                                 .filter(Phone::isSupport5G)
                                 .forEach(phone -> System.out.println("\nID: " + phone.getID() + "\nName: "
                                         + phone.getName() + "\nBrand: " + phone.getBrand() + "\nPrice: "
@@ -261,9 +256,7 @@ public class Main {
                         System.out.println("No device exist");
                     } else {
                         System.out.println("Laptop with RAM >= 16GB: ");
-                        device.stream()
-                                .filter(Laptop.class::isInstance)
-                                .map(Laptop.class::cast)
+                        device.stream().filter(Laptop.class::isInstance).map(Laptop.class::cast)
                                 .filter(laptop -> laptop.getRam() >= 16)
                                 .forEach(laptop -> System.out.println("\nID: " + laptop.getID() + "\nName: "
                                         + laptop.getName() + "\nBrand: " + laptop.getBrand() + "\nPrice: "
@@ -274,13 +267,8 @@ public class Main {
                 case 5:
                     for (ElectronicDevice d : device) {
                         Discountable discountable = (Discountable) d;
-
-                        System.out.println("ID: " + d.getID());
-                        System.out.println("Name: " + d.getName());
-                        System.out.println("Original price: " + d.getPrice());
-                        System.out.println("Discount price: "
-                                + discountable.calculateDiscountPrice());
-                        System.out.println();
+                        System.out.println("ID: " + d.getID() + "\nName: " + d.getName() + "\nOriginal price: "
+                                + d.getPrice() + "\nDiscount price: " + discountable.calculateDiscountPrice() + "\n");
                     }
                     break;
                 case 6:
@@ -300,22 +288,16 @@ public class Main {
                             + ElectronicDevice.DeviceStatistics.averagePrice(device));
                     break;
                 case 8:
-                    device.stream()
-                            .max(Comparator.comparingInt(ElectronicDevice::getPrice))
-                            .ifPresentOrElse(
-                                    d -> {
-                                        System.out.println("Device with highest price:");
-                                        d.displayInfo();
-                                    },
-                                    () -> System.out.println("No device exist"));
+                    device.stream().max(Comparator.comparingInt(ElectronicDevice::getPrice)).ifPresentOrElse(d -> {
+                        System.out.println("Device with highest price:");
+                        d.displayInfo();
+                    }, () -> System.out.println("No device exist"));
                     break;
                 case 9:
                     if (device.isEmpty()) {
                         System.out.println("No device exist");
                     } else {
-                        int totalValue = device.stream()
-                                .mapToInt(ElectronicDevice::getPrice)
-                                .sum();
+                        int totalValue = device.stream().mapToInt(ElectronicDevice::getPrice).sum();
                         System.out.println("Total value of all devices: " + totalValue);
                     }
                     break;
@@ -327,8 +309,7 @@ public class Main {
                         String searchBrand = br.readLine();
 
                         List<ElectronicDevice> brandResults = device.stream()
-                                .filter(d -> d.getBrand().equalsIgnoreCase(searchBrand))
-                                .toList();
+                                .filter(d -> d.getBrand().equalsIgnoreCase(searchBrand)).toList();
 
                         if (brandResults.isEmpty()) {
                             System.out.println("No device found for brand: " + searchBrand);
@@ -352,9 +333,7 @@ public class Main {
                         System.out.println("No device exist");
                     } else {
                         System.out.println("Device names:");
-                        device.stream()
-                                .map(ElectronicDevice::getName)
-                                .forEach(System.out::println);
+                        device.stream().map(ElectronicDevice::getName).forEach(System.out::println);
                     }
                     break;
                 case 13:
@@ -366,8 +345,7 @@ public class Main {
                             int year = Integer.parseInt(br.readLine());
 
                             List<ElectronicDevice> yearResults = device.stream()
-                                    .filter(d -> d.getImportDate().getYear() == year)
-                                    .toList();
+                                    .filter(d -> d.getImportDate().getYear() == year).toList();
 
                             if (yearResults.isEmpty()) {
                                 System.out.println("No devices imported in " + year);

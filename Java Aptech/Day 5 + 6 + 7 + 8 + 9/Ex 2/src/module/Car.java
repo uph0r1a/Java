@@ -44,14 +44,12 @@ public class Car extends Vehicle implements Registrable {
     @Override
     public double calculateAnnualTax() {
         String type = getFuelType().toString().toLowerCase();
-        if (type.equals("gasoline")) {
-            return getValue() * 0.05;
-        } else if (type.equals("diesel")) {
-            return getValue() * 0.06;
-        } else if (type.equals("electric")) {
-            return getValue() * 0.03;
-        }
-        throw new UnsupportedOperationException("Unimplemented method 'calculateAnnualTax'");
+        return switch (type) {
+            case "gasoline" -> getValue() * 0.05;
+            case "diesel" -> getValue() * 0.06;
+            case "electric" -> getValue() * 0.03;
+            default -> throw new UnsupportedOperationException("Unimplemented method 'calculateAnnualTax'");
+        };
     }
 
     @Override

@@ -17,7 +17,6 @@ import module.Motorcycle;
 import module.Registrable;
 
 public class Main {
-
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     public static boolean validID(List<Vehicle> vehicles, String ID) {
@@ -60,15 +59,11 @@ public class Main {
     }
 
     public static Optional<Vehicle> findVehicleByID(List<Vehicle> vehicles, String searchID) {
-        return vehicles.stream()
-                .filter(v -> v.getID().equals(searchID))
-                .findFirst();
+        return vehicles.stream().filter(v -> v.getID().equals(searchID)).findFirst();
     }
 
     public static List<Vehicle> findVehiclesByName(List<Vehicle> vehicles, String searchName) {
-        return vehicles.stream()
-                .filter(v -> v.getName().equalsIgnoreCase(searchName))
-                .toList();
+        return vehicles.stream().filter(v -> v.getName().equalsIgnoreCase(searchName)).toList();
     }
 
     public static void main(String[] args) throws NumberFormatException, IOException {
@@ -183,9 +178,7 @@ public class Main {
                             System.out.print(e.getMessage() + "\nRe-enter coverage amount: ");
                         }
                     }
-
                     LocalDate carRegistrationDate = readRegistrationDate(br);
-
                     vehicles.add(new Car(ID, name, manufacturer, value, numberOfSeat, selectedFuel, insuranceProvider,
                             coverageAmount, carRegistrationDate));
                     break;
@@ -300,22 +293,16 @@ public class Main {
                     if (vehicles.isEmpty()) {
                         System.out.println("No vehicle exist");
                     } else {
-                        vehicles.stream()
-                                .filter(v -> v instanceof Car)
-                                .map(v -> (Car) v)
-                                .filter(car -> car.getFuelType() == FUEL_TYPE.Electric)
-                                .forEach(Main::printVehicle);
+                        vehicles.stream().filter(v -> v instanceof Car).map(v -> (Car) v)
+                                .filter(car -> car.getFuelType() == FUEL_TYPE.Electric).forEach(Main::printVehicle);
                     }
                     break;
                 case 6:
                     if (vehicles.isEmpty()) {
                         System.out.println("No vehicle exist");
                     } else {
-                        vehicles.stream()
-                                .filter(v -> v instanceof Motorcycle)
-                                .map(v -> (Motorcycle) v)
-                                .filter(Motorcycle::isABSSupported)
-                                .forEach(Main::printVehicle);
+                        vehicles.stream().filter(v -> v instanceof Motorcycle).map(v -> (Motorcycle) v)
+                                .filter(Motorcycle::isABSSupported).forEach(Main::printVehicle);
                     }
                     break;
                 case 7:
@@ -374,8 +361,7 @@ public class Main {
                         String searchMfr = br.readLine();
 
                         List<Vehicle> mfrResults = vehicles.stream()
-                                .filter(v -> v.getManufacturer().equalsIgnoreCase(searchMfr))
-                                .toList();
+                                .filter(v -> v.getManufacturer().equalsIgnoreCase(searchMfr)).toList();
 
                         if (mfrResults.isEmpty()) {
                             System.out.println("No vehicles found for manufacturer: " + searchMfr);

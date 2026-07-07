@@ -7,8 +7,8 @@ import module.Phone;
 
 public class Main {
     public static boolean validateID(List<Phone> phone, String ID) {
-        for (int i = 0; i < phone.size(); i++) {
-            if (phone.get(i).getPhoneID().equals(ID)) {
+        for (Phone value : phone) {
+            if (value.getPhoneID().equals(ID)) {
                 return true;
             }
         }
@@ -79,7 +79,7 @@ public class Main {
                     phone.add(new Phone(phoneID, phoneName, brand, price, stock));
                     break;
                 case 2:
-                    if (phone.size() == 0) {
+                    if (phone.isEmpty()) {
                         System.out.println("No phone exist");
                     } else {
                         for (int i = 0; i < phone.size(); i++) {
@@ -92,7 +92,7 @@ public class Main {
                     break;
                 case 3:
                     boolean found = false;
-                    if (phone.size() == 0) {
+                    if (phone.isEmpty()) {
                         System.out.println("No phone exist");
                     } else {
                         System.out.print("Enter phone ID: ");
@@ -113,9 +113,9 @@ public class Main {
                             System.out.print("Price cannot be negative\nRe-enter price: ");
                         }
 
-                        for (int i = 0; i < phone.size(); i++) {
-                            if (phone.get(i).getPhoneID().equals(phoneID)) {
-                                phone.get(i).setPrice(price);
+                        for (Phone value : phone) {
+                            if (value.getPhoneID().equals(phoneID)) {
+                                value.setPrice(price);
                                 found = true;
                             }
                         }
@@ -125,7 +125,7 @@ public class Main {
                     }
                     break;
                 case 4:
-                    if (phone.size() == 0) {
+                    if (phone.isEmpty()) {
                         System.out.println("No phone exist");
                     } else {
                         found = false;

@@ -13,9 +13,9 @@ public class Ticket {
         RESOLVED
     }
 
-    private int id;
-    private String title, reporterName;
-    private Priority priority;
+    private final int id;
+    private final String title, reporterName;
+    private final Priority priority;
     private Status status;
 
     public Ticket() {
