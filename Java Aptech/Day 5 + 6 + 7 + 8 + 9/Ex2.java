@@ -1,0 +1,687 @@
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+
+public class Ex2 {
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+    public static abstract class Vehicle implements Comparable<Vehicle> {
+        private String ID, name, manufacturer;
+        private int value;
+        private final VehicleInsurance insurance;
+        private LocalDate registrationDate;
+
+        public Vehicle(String ID, String name, String manufacturer, int value, String insuranceProvider,
+                double coverageAmount, LocalDate registrationDate) {
+            this.ID = ID;
+            this.name = name;
+            this.manufacturer = manufacturer;
+            this.value = value;
+            this.insurance = new VehicleInsurance(insuranceProvider, coverageAmount);
+            this.registrationDate = registrationDate;
+        }
+
+        public String getID() {
+            return ID;
+        }
+
+        public void setID(String ID) {
+            this.ID = ID;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        public String getManufacturer() {
+            return manufacturer;
+        }
+
+        public void setManufacturer(String manufacturer) {
+            this.manufacturer = manufacturer;
+        }
+
+        public int getValue() {
+            return value;
+        }
+
+        public void setValue(int value) {
+            this.value = value;
+        }
+
+        public VehicleInsurance getInsurance() {
+            return insurance;
+        }
+
+        public LocalDate getRegistrationDate() {
+            return registrationDate;
+        }
+
+        public void setRegistrationDate(LocalDate registrationDate) {
+            this.registrationDate = registrationDate;
+        }
+
+        public String display() {
+            return "\nID: " + ID + "\nName: " + name + "\nManufacturer: " + manufacturer + "\nValue: " + value
+                    + "\nInsurance Provider: " + insurance.getInsuranceProvider() + "\nCoverage Amount: "
+                    + insurance.getCoverageAmount() + "\nRegistration Date: " + registrationDate;
+        }
+
+        @Override
+        public int compareTo(Vehicle other) {
+            return Integer.compare(this.value, other.value);
+        }
+
+        public abstract double calculateAnnualTax();
+
+        public class VehicleInsurance {
+            private final String insuranceProvider;
+            private final double coverageAmount;
+
+            public VehicleInsurance(String insuranceProvider, double coverageAmount) {
+                this.insuranceProvider = insuranceProvider;
+                this.coverageAmount = coverageAmount;
+            }
+
+            public String getInsuranceProvider() {
+                return insuranceProvider;
+            }
+
+            public double getCoverageAmount() {
+                return coverageAmount;
+            }
+        }
+
+        public static class VehicleStatistics {
+            private static int totalVehicles = 0, totalCars = 0, totalMotorcycles = 0;
+            private static double totalVehicleValue = 0;
+
+            public static int getTotalVehicles() {
+                return totalVehicles;
+            }
+
+            public static int getTotalCars() {
+                return totalCars;
+            }
+
+            public static int getTotalMotorcycles() {
+                return totalMotorcycles;
+            }
+
+            public static double getTotalVehicleValue() {
+                return totalVehicleValue;
+            }
+
+            public static void addCar(int value) {
+                totalVehicles++;
+                totalCars++;
+                totalVehicleValue += value;
+            }
+
+            public static void addMotorcycle(int value) {
+                totalVehicles++;
+                totalMotorcycles++;
+                totalVehicleValue += value;
+            }
+        }
+    }
+
+    public static interface Registrable {
+        String getRegistrationStatus();
+    }
+
+    public static class Motorcycle extends Vehicle implements Registrable {
+        private double engineCapacity;
+        private boolean ABSSupported;
+
+        public Motorcycle(String iD, String name, String manufacturer, int value, double engineCapacity,
+                boolean ABSSupported, String insuranceProvider, double coverageAmount, LocalDate registrationDate) {
+            super(iD, name, manufacturer, value, insuranceProvider, coverageAmount, registrationDate);
+            this.engineCapacity = engineCapacity;
+            this.ABSSupported = ABSSupported;
+            VehicleStatistics.addMotorcycle(value);
+        }
+
+        public double getEngineCapacity() {
+            return engineCapacity;
+        }
+
+        public void setEngineCapacity(double engineCapacity) {
+            this.engineCapacity = engineCapacity;
+        }
+
+        public boolean isABSSupported() {
+            return ABSSupported;
+        }
+
+        public void setABSSupported(boolean ABSSupported) {
+            this.ABSSupported = ABSSupported;
+        }
+
+        @Override
+        public String display() {
+            return super.display() + "\nEngine capacity: " + engineCapacity + " cc\nABS supported: "
+                    + (ABSSupported ? "Yes" : "No");
+        }
+
+        @Override
+        public double calculateAnnualTax() {
+            if (getEngineCapacity() < 150) {
+                return getValue() * 0.02;
+            } else if (getEngineCapacity() >= 150) {
+                return getValue() * 0.04;
+            }
+            throw new UnsupportedOperationException("Unimplemented method 'calculateAnnualTax'");
+        }
+
+        @Override
+        public String getRegistrationStatus() {
+            if (ABSSupported) {
+                return "Safety Certified";
+            } else {
+                return "Basic Certified";
+            }
+        }
+    }
+
+    public static class InvalidVehicleValueException extends Exception {
+        public InvalidVehicleValueException(String message) {
+            super(message);
+        }
+    }
+
+    public static class DuplicateVehicleIdException extends Exception {
+        public DuplicateVehicleIdException(String message) {
+            super(message);
+        }
+    }
+
+    public static enum FUEL_TYPE {
+        Gasoline,
+        Diesel,
+        Electric
+    }
+
+    public static class Car extends Vehicle implements Registrable {
+        private int numberOfSeats;
+        private FUEL_TYPE fuelType;
+
+        public Car(String iD, String name, String manufacturer, int value, int numberOfSeats, FUEL_TYPE fuelType,
+                String insuranceProvider, double coverageAmount, LocalDate registrationDate) {
+            super(iD, name, manufacturer, value, insuranceProvider, coverageAmount, registrationDate);
+            this.numberOfSeats = numberOfSeats;
+            this.fuelType = fuelType;
+            VehicleStatistics.addCar(value);
+        }
+
+        public int getNumberOfSeats() {
+            return numberOfSeats;
+        }
+
+        public void setNumberOfSeats(int numberOfSeats) {
+            this.numberOfSeats = numberOfSeats;
+        }
+
+        public FUEL_TYPE getFuelType() {
+            return fuelType;
+        }
+
+        public void setFuelType(FUEL_TYPE fuelType) {
+            this.fuelType = fuelType;
+        }
+
+        @Override
+        public String display() {
+            return super.display() + "\nNumber of seat: " + numberOfSeats + "\nFuel type: " + fuelType.toString();
+        }
+
+        @Override
+        public double calculateAnnualTax() {
+            String type = getFuelType().toString().toLowerCase();
+            return switch (type) {
+                case "gasoline" -> getValue() * 0.05;
+                case "diesel" -> getValue() * 0.06;
+                case "electric" -> getValue() * 0.03;
+                default -> throw new UnsupportedOperationException("Unimplemented method 'calculateAnnualTax'");
+            };
+        }
+
+        @Override
+        public String getRegistrationStatus() {
+            String type = getFuelType().toString().toLowerCase();
+            if (type.equals("electric")) {
+                return "Green Vehicle";
+            } else if (type.equals("diesel") || type.equals("gasoline")) {
+                return "Standard Vehicle";
+            }
+            throw new UnsupportedOperationException("Unimplemented method 'getRegistrationStatus'");
+        }
+    }
+
+    public static boolean validID(List<Vehicle> vehicles, String ID) {
+        for (Vehicle vehicle : vehicles) {
+            if (vehicle.getID().equals(ID)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static boolean validFuelType(String type) {
+        for (FUEL_TYPE fuel : FUEL_TYPE.values()) {
+            if (fuel.name().equalsIgnoreCase(type)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static LocalDate readRegistrationDate(BufferedReader br) throws IOException {
+        System.out.print("Enter registration date (yyyy-MM-dd): ");
+        while (true) {
+            String input = br.readLine();
+            try {
+                return LocalDate.parse(input, DATE_FORMATTER);
+            } catch (DateTimeParseException e) {
+                System.out.print(
+                        "Invalid date format. Please enter the date using yyyy-MM-dd.\nRe-enter registration date: ");
+            }
+        }
+    }
+
+    public static void printVehicle(Vehicle vehicle) {
+        if (vehicle instanceof Car car) {
+            System.out.println("Car" + car.display());
+        } else if (vehicle instanceof Motorcycle motorcycle) {
+            System.out.println("Motorcycle" + motorcycle.display());
+        }
+    }
+
+    public static Optional<Vehicle> findVehicleByID(List<Vehicle> vehicles, String searchID) {
+        return vehicles.stream().filter(v -> v.getID().equals(searchID)).findFirst();
+    }
+
+    public static List<Vehicle> findVehiclesByName(List<Vehicle> vehicles, String searchName) {
+        return vehicles.stream().filter(v -> v.getName().equalsIgnoreCase(searchName)).toList();
+    }
+
+    public static void main(String[] args) throws NumberFormatException, IOException {
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+
+        List<Vehicle> vehicles = new ArrayList<>();
+        boolean isExit = false;
+
+        while (!isExit) {
+            System.out.print(
+                    "1. Add a Car\n2. Add a Motorcycle\n3. Display All Vehicles\n4. Search for a Vehicle by ID\n5. Display All Electric Cars\n6. Display All Motorcycles with ABS\n7. Sort Vehicles by Value\n8. Sort Vehicles by Name\n9. Sort Vehicles by Manufacturer\n10. Sort Vehicles by Annual Tax\n11. Display Vehicle Tax Report\n12. Display Vehicle Statistics\n13. Search Vehicle by Name\n14. Display Vehicles by Manufacturer\n15. Display Vehicles Registered Within the Last N Days\n0. Exit\nEnter your choice: ");
+
+            int choice = -1;
+            try {
+                choice = Integer.parseInt(br.readLine());
+            } catch (NumberFormatException e) {
+                System.out.println("Invalid input");
+                continue;
+            }
+
+            switch (choice) {
+                case 0:
+                    isExit = true;
+                    break;
+                case 1:
+                    System.out.print("Enter ID: ");
+                    String ID = null;
+                    while (true) {
+                        try {
+                            ID = br.readLine();
+                            if (validID(vehicles, ID)) {
+                                throw new DuplicateVehicleIdException("Vehicle with ID " + ID + " already exists");
+                            }
+                            break;
+                        } catch (DuplicateVehicleIdException e) {
+                            System.out.print(e.getMessage() + "\nRe-enter ID: ");
+                        }
+                    }
+
+                    System.out.print("Enter name: ");
+                    String name = br.readLine();
+
+                    System.out.print("Enter manufacturer: ");
+                    String manufacturer = br.readLine();
+
+                    System.out.print("Enter value: ");
+                    int value = 0;
+                    while (true) {
+                        try {
+                            value = Integer.parseInt(br.readLine());
+                            if (value <= 0) {
+                                throw new InvalidVehicleValueException("Value must be greater than 0");
+                            }
+                            break;
+                        } catch (NumberFormatException e) {
+                            System.out.print("Invalid input\nRe-enter value: ");
+                        } catch (InvalidVehicleValueException e) {
+                            System.out.print(e.getMessage() + "\nRe-enter value: ");
+                        }
+                    }
+
+                    System.out.print("Enter number of seat: ");
+                    int numberOfSeat = 0;
+                    while (true) {
+                        try {
+                            numberOfSeat = Integer.parseInt(br.readLine());
+                            if (numberOfSeat <= 0) {
+                                throw new InvalidVehicleValueException("Number of seat must be greater than 0");
+                            }
+                            break;
+                        } catch (NumberFormatException e) {
+                            System.out.print("Invalid input\nRe-enter number of seat: ");
+                        } catch (InvalidVehicleValueException e) {
+                            System.out.print(e.getMessage() + "\nRe-enter number of seat: ");
+                        }
+                    }
+
+                    System.out.print("Enter fuel type: ");
+                    String fuelType;
+                    while (true) {
+                        fuelType = br.readLine();
+                        if (validFuelType(fuelType)) {
+                            break;
+                        }
+                        System.out.print("Invalid fuel type\nRe-enter fuel type: ");
+                    }
+
+                    FUEL_TYPE selectedFuel = null;
+
+                    for (FUEL_TYPE fuel : FUEL_TYPE.values()) {
+                        if (fuel.name().equalsIgnoreCase(fuelType)) {
+                            selectedFuel = fuel;
+                            break;
+                        }
+                    }
+
+                    System.out.print("Enter insurance provider: ");
+                    String insuranceProvider = br.readLine();
+
+                    System.out.print("Enter coverage amount: ");
+                    double coverageAmount = 0;
+                    while (true) {
+                        try {
+                            coverageAmount = Double.parseDouble(br.readLine());
+                            if (coverageAmount <= 0) {
+                                throw new InvalidVehicleValueException("Coverage amount must be greater than 0");
+                            }
+                            break;
+                        } catch (NumberFormatException e) {
+                            System.out.print("Invalid input\nRe-enter coverage amount: ");
+                        } catch (InvalidVehicleValueException e) {
+                            System.out.print(e.getMessage() + "\nRe-enter coverage amount: ");
+                        }
+                    }
+                    LocalDate carRegistrationDate = readRegistrationDate(br);
+                    vehicles.add(new Car(ID, name, manufacturer, value, numberOfSeat, selectedFuel, insuranceProvider,
+                            coverageAmount, carRegistrationDate));
+                    break;
+                case 2:
+                    System.out.print("Enter ID: ");
+                    while (true) {
+                        try {
+                            ID = br.readLine();
+                            if (validID(vehicles, ID)) {
+                                throw new DuplicateVehicleIdException("Vehicle with ID " + ID + " already exists");
+                            }
+                            break;
+                        } catch (DuplicateVehicleIdException e) {
+                            System.out.print(e.getMessage() + "\nRe-enter ID: ");
+                        }
+                    }
+
+                    System.out.print("Enter name: ");
+                    name = br.readLine();
+
+                    System.out.print("Enter manufacturer: ");
+                    manufacturer = br.readLine();
+
+                    System.out.print("Enter value: ");
+                    while (true) {
+                        try {
+                            value = Integer.parseInt(br.readLine());
+                            if (value <= 0) {
+                                throw new InvalidVehicleValueException("Value must be greater than 0");
+                            }
+                            break;
+                        } catch (NumberFormatException e) {
+                            System.out.print("Invalid input\nRe-enter value: ");
+                        } catch (InvalidVehicleValueException e) {
+                            System.out.print(e.getMessage() + "\nRe-enter value: ");
+                        }
+                    }
+
+                    System.out.print("Enter engine capacity: ");
+                    double engineCapacity = 0;
+                    while (true) {
+                        try {
+                            engineCapacity = Double.parseDouble(br.readLine());
+                            if (engineCapacity <= 0) {
+                                throw new InvalidVehicleValueException("Engine capacity must be greater than 0");
+                            }
+                            break;
+                        } catch (NumberFormatException e) {
+                            System.out.print("Invalid input\nRe-enter engine capacity: ");
+                        } catch (InvalidVehicleValueException e) {
+                            System.out.print(e.getMessage() + "\nRe-enter engine capacity: ");
+                        }
+                    }
+
+                    System.out.print("Enter ABS support 1)Yes 2)No: ");
+                    int ABSSupport = -1;
+                    while (true) {
+                        try {
+                            ABSSupport = Integer.parseInt(br.readLine());
+                            if (ABSSupport == 1 || ABSSupport == 2) {
+                                break;
+                            }
+                            System.out.print("Invalid option\nRe-enter ABS support 1)Yes 2)No: ");
+                        } catch (NumberFormatException e) {
+                            System.out.print("Invalid input\nRe-enter ABS support 1)Yes 2)No: ");
+                        }
+                    }
+
+                    System.out.print("Enter insurance provider: ");
+                    insuranceProvider = br.readLine();
+
+                    System.out.print("Enter coverage amount: ");
+                    coverageAmount = 0;
+                    while (true) {
+                        try {
+                            coverageAmount = Double.parseDouble(br.readLine());
+                            if (coverageAmount <= 0) {
+                                throw new InvalidVehicleValueException("Coverage amount must be greater than 0");
+                            }
+                            break;
+                        } catch (NumberFormatException e) {
+                            System.out.print("Invalid input\nRe-enter coverage amount: ");
+                        } catch (InvalidVehicleValueException e) {
+                            System.out.print(e.getMessage() + "\nRe-enter coverage amount: ");
+                        }
+                    }
+
+                    LocalDate motoRegistrationDate = readRegistrationDate(br);
+
+                    vehicles.add(new Motorcycle(ID, name, manufacturer, value, engineCapacity, ABSSupport == 1,
+                            insuranceProvider, coverageAmount, motoRegistrationDate));
+                    break;
+                case 3:
+                    if (vehicles.isEmpty()) {
+                        System.out.println("No vehicle exist");
+                    } else {
+                        vehicles.forEach(Ex2::printVehicle);
+                    }
+                    break;
+                case 4:
+                    if (vehicles.isEmpty()) {
+                        System.out.println("No vehicle exist");
+                    } else {
+                        System.out.print("Enter ID: ");
+                        String searchID = br.readLine();
+
+                        Optional<Vehicle> foundByID = findVehicleByID(vehicles, searchID);
+                        foundByID.ifPresentOrElse(Ex2::printVehicle, () -> System.out.println("Vehicle not found"));
+                    }
+                    break;
+                case 5:
+                    if (vehicles.isEmpty()) {
+                        System.out.println("No vehicle exist");
+                    } else {
+                        vehicles.stream().filter(v -> v instanceof Car).map(v -> (Car) v)
+                                .filter(car -> car.getFuelType() == FUEL_TYPE.Electric).forEach(Ex2::printVehicle);
+                    }
+                    break;
+                case 6:
+                    if (vehicles.isEmpty()) {
+                        System.out.println("No vehicle exist");
+                    } else {
+                        vehicles.stream().filter(v -> v instanceof Motorcycle).map(v -> (Motorcycle) v)
+                                .filter(Motorcycle::isABSSupported).forEach(Ex2::printVehicle);
+                    }
+                    break;
+                case 7:
+                    if (vehicles.isEmpty()) {
+                        System.out.println("No vehicle exist");
+                    } else {
+                        Collections.sort(vehicles);
+                        System.out.println("Vehicles sorted by value (ascending):");
+                        vehicles.forEach(Ex2::printVehicle);
+                    }
+                    break;
+                case 8:
+                    if (vehicles.isEmpty()) {
+                        System.out.println("No vehicle exist");
+                    } else {
+                        vehicles.sort((v1, v2) -> v1.getName().compareToIgnoreCase(v2.getName()));
+                        System.out.println("Vehicles sorted by name (A -> Z):");
+                        vehicles.forEach(Ex2::printVehicle);
+                    }
+                    break;
+                case 9:
+                    if (vehicles.isEmpty()) {
+                        System.out.println("No vehicle exist");
+                    } else {
+                        vehicles.sort((v1, v2) -> v1.getManufacturer().compareToIgnoreCase(v2.getManufacturer()));
+                        System.out.println("Vehicles sorted by manufacturer (A -> Z):");
+                        vehicles.forEach(Ex2::printVehicle);
+                    }
+                    break;
+                case 10:
+                    if (vehicles.isEmpty()) {
+                        System.out.println("No vehicle exist");
+                    } else {
+                        vehicles.sort((v1, v2) -> Double.compare(v2.calculateAnnualTax(), v1.calculateAnnualTax()));
+                        System.out.println("Vehicles sorted by annual tax (highest -> lowest):");
+                        vehicles.forEach(Ex2::printVehicle);
+                    }
+                    break;
+                case 11:
+                    if (vehicles.isEmpty()) {
+                        System.out.println("No vehicle exist");
+                    } else {
+                        for (Vehicle vehicle : vehicles) {
+                            String vehicleType = (vehicle instanceof Car) ? "Car" : "Motorcycle";
+                            double annualTax = vehicle.calculateAnnualTax();
+                            String status = ((Registrable) vehicle).getRegistrationStatus();
+                            System.out.println("Vehicle ID: " + vehicle.getID() + "\nVehicle Name: " + vehicle.getName()
+                                    + "\nVehicle Type: " + vehicleType + "\nAnnual Tax: " + annualTax
+                                    + "\nRegistration Status: " + status);
+                        }
+                    }
+                    break;
+                case 12:
+                    System.out.println("Total Number of Vehicles: " + Vehicle.VehicleStatistics.getTotalVehicles()
+                            + "\nTotal Number of Cars: " + Vehicle.VehicleStatistics.getTotalCars()
+                            + "\nTotal Number of Motorcycles: " + Vehicle.VehicleStatistics.getTotalMotorcycles()
+                            + "\nTotal Vehicle Value: " + Vehicle.VehicleStatistics.getTotalVehicleValue());
+                    break;
+                case 13:
+                    if (vehicles.isEmpty()) {
+                        System.out.println("No vehicle exist");
+                    } else {
+                        System.out.print("Enter name: ");
+                        String searchName = br.readLine();
+
+                        List<Vehicle> nameResults = findVehiclesByName(vehicles, searchName);
+
+                        if (nameResults.isEmpty()) {
+                            System.out.println("Vehicle not found");
+                        } else {
+                            nameResults.forEach(Ex2::printVehicle);
+                        }
+                    }
+                    break;
+                case 14:
+                    if (vehicles.isEmpty()) {
+                        System.out.println("No vehicle exist");
+                    } else {
+                        System.out.print("Enter manufacturer: ");
+                        String searchMfr = br.readLine();
+
+                        List<Vehicle> mfrResults = vehicles.stream()
+                                .filter(v -> v.getManufacturer().equalsIgnoreCase(searchMfr)).toList();
+
+                        if (mfrResults.isEmpty()) {
+                            System.out.println("No vehicles found for manufacturer: " + searchMfr);
+                        } else {
+                            mfrResults.forEach(Ex2::printVehicle);
+                        }
+                    }
+                    break;
+                case 15:
+                    if (vehicles.isEmpty()) {
+                        System.out.println("No vehicle exist");
+                    } else {
+                        System.out.print("Enter number of days: ");
+                        int days = -1;
+                        while (true) {
+                            try {
+                                days = Integer.parseInt(br.readLine());
+                                if (days < 0) {
+                                    throw new InvalidVehicleValueException("Number of days must be 0 or greater");
+                                }
+                                break;
+                            } catch (NumberFormatException e) {
+                                System.out.print("Invalid input\nRe-enter number of days: ");
+                            } catch (InvalidVehicleValueException e) {
+                                System.out.print(e.getMessage() + "\nRe-enter number of days: ");
+                            }
+                        }
+
+                        LocalDate today = LocalDate.now();
+                        int finalDays = days;
+                        List<Vehicle> recentResults = vehicles.stream()
+                                .filter(v -> !v.getRegistrationDate().isBefore(today.minusDays(finalDays))
+                                        && !v.getRegistrationDate().isAfter(today))
+                                .toList();
+
+                        if (recentResults.isEmpty()) {
+                            System.out.println("No vehicles registered within the last " + days + " day(s)");
+                        } else {
+                            recentResults.forEach(Ex2::printVehicle);
+                        }
+                    }
+                    break;
+                default:
+                    System.out.println("Invalid choice");
+                    break;
+            }
+        }
+    }
+}
