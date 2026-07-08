@@ -285,7 +285,7 @@ public class Ex2 {
                     course.input(br);
                     courseList.add(course);
                 }
-                case 3 -> courseList.stream().forEach(course -> course.display());
+                case 3 -> courseList.forEach(Course::display);
                 case 4 -> courseList.stream().filter(course -> course.getClass() == OnlineCourse.class)
                         .map(OnlineCourse.class::cast).sorted(Comparator.comparing(OnlineCourse::getCostMetric))
                         .forEach(OnlineCourse::display);

@@ -137,7 +137,7 @@ public class Ex1 {
     }
 
     public static class InventoryManager {
-        private List<ElectronicDevice> devices = new ArrayList<>();
+        private final List<ElectronicDevice> devices = new ArrayList<>();
 
         public void addDevice() {
             ElectronicDevice device = new ElectronicDevice();
