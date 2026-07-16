@@ -83,6 +83,8 @@ public class Ex6 {
         }
 
         public double calculateGPA(double[] grades) {
+            if (grades == null || grades.length == 0)
+                return 0;
             return Arrays.stream(grades).average().orElse(0);
         }
     }
@@ -153,10 +155,10 @@ public class Ex6 {
 
     public static class Product {
         private String name;
-        private int price;
-        private float quantity;
+        private float price;
+        private int quantity;
 
-        public Product(String name, int price, float quantity) {
+        public Product(String name, float price, int quantity) {
             this.name = name;
             this.price = price;
             this.quantity = quantity;
@@ -203,7 +205,10 @@ public class Ex6 {
     public static class PersonList {
         private List<Person> personList = new ArrayList<>();
 
-        public PersonList(List<Ex6.Person> personList) {
+        public PersonList() {
+        }
+
+        public PersonList(List<Person> personList) {
             this.personList = personList;
         }
 
@@ -246,11 +251,7 @@ public class Ex6 {
             System.out.print("Enter person name: ");
             String name = br.readLine();
 
-            for (Person person : personList) {
-                if (person.getName().toLowerCase().contains(name.toLowerCase())) {
-                    personList.remove(person);
-                }
-            }
+            personList.removeIf(p -> p.getName().toLowerCase().contains(name.toLowerCase()));
         }
 
         public void search() throws IOException {
@@ -277,16 +278,17 @@ public class Ex6 {
                             4. Create a computer object and display its information
                             5. Create a circle and display its perimeter and area
                             6. Create an animal object and print its sound
-                            7. Create a car object and print its depreciation
-                            8. Create an employee object and print their annual salary
-                            9. Add, remove, and search for a Person in the list
+                            7. Create a product object and print its total price
+                            8. Create a car object and print its depreciation
+                            9. Create an employee object and print their annual salary
+                            10. Add, remove, and search for a Person in the list
                             0. Exit
                             Enter your choice:\s""");
             int choice;
             while (true) {
                 try {
                     choice = Integer.parseInt(br.readLine());
-                    if (choice >= 0 && choice <= 9) {
+                    if (choice >= 0 && choice <= 10) {
                         break;
                     }
                     System.out.print("Invalid choice\nRe-enter your choice: ");
@@ -332,7 +334,6 @@ public class Ex6 {
                     person.getInfo();
                 }
                 case 2 -> {
-
                     System.out.print("Enter student ID: ");
                     String id = br.readLine();
 
@@ -396,9 +397,8 @@ public class Ex6 {
                     while (true) {
                         try {
                             balance = Double.parseDouble(br.readLine());
-                            if (balance >= 0) {
+                            if (balance >= 0)
                                 break;
-                            }
                             System.out.print("Invalid balance\nRe-enter balance: ");
                         } catch (Exception e) {
                             System.out.println("Error: " + e.getMessage());
@@ -406,19 +406,222 @@ public class Ex6 {
                     }
                     BankAccount account = new BankAccount(balance);
                     System.out.println("Balance: " + account.getBalance());
+
+                    System.out.print("Enter deposit amount: ");
+                    double deposit;
+                    while (true) {
+                        try {
+                            deposit = Double.parseDouble(br.readLine());
+                            if (deposit >= 0)
+                                break;
+                            System.out.print("Invalid amount\nRe-enter amount: ");
+                        } catch (Exception e) {
+                            System.out.println("Error: " + e.getMessage());
+                        }
+                    }
+                    account.deposit(deposit);
+                    System.out.println("Balance after deposit: " + account.getBalance());
+
+                    System.out.print("Enter withdraw amount: ");
+                    double withdraw;
+                    while (true) {
+                        try {
+                            withdraw = Double.parseDouble(br.readLine());
+                            if (withdraw >= 0 && withdraw <= account.getBalance())
+                                break;
+                            System.out.print("Invalid amount\nRe-enter amount: ");
+                        } catch (Exception e) {
+                            System.out.println("Error: " + e.getMessage());
+                        }
+                    }
+                    account.withdraw(withdraw);
+                    System.out.println("Balance after withdraw: " + account.getBalance());
                 }
                 case 4 -> {
-                    System.out.println("");
+                    System.out.print("Enter brand: ");
+                    String brand = br.readLine();
+
+                    System.out.print("Enter model: ");
+                    String model = br.readLine();
+
+                    System.out.print("Enter price: ");
+                    double price;
+                    while (true) {
+                        try {
+                            price = Double.parseDouble(br.readLine());
+                            if (price >= 0) {
+                                break;
+                            }
+                            System.out.print("Invalid price\nRe-enter price");
+                        } catch (Exception e) {
+                            System.out.println("Error: " + e.getMessage());
+                        }
+                    }
+
+                    Computer computer = new Computer(brand, model, price);
+                    computer.displayInfo();
                 }
                 case 5 -> {
+                    System.out.print("Enter radius: ");
+                    double radius;
+                    while (true) {
+                        try {
+                            radius = Double.parseDouble(br.readLine());
+                            if (radius >= 0) {
+                                break;
+                            }
+                            System.out.print("Invalid radius\nRe-enter radius");
+                        } catch (Exception e) {
+                            System.out.println("Error: " + e.getMessage());
+                        }
+                    }
+
+                    Circle circle = new Circle(radius);
+                    System.out
+                            .println("Area: " + circle.calculateArea() + "\nPerimeter: " + circle.calculatePerimeter());
                 }
                 case 6 -> {
+                    System.out.print("Enter animal name: ");
+                    String name = br.readLine();
+
+                    System.out.print("Enter animal sound: ");
+                    String sound = br.readLine();
+
+                    Animal animal = new Animal(name, sound);
+                    animal.makeSound();
                 }
                 case 7 -> {
+                    System.out.println("Enter product name: ");
+                    String name = br.readLine();
+
+                    System.out.println("Enter price: ");
+                    float price;
+                    while (true) {
+                        try {
+                            price = Float.parseFloat(br.readLine());
+                            if (price >= 0) {
+                                break;
+                            }
+                            System.out.println("Invalid price\nRe-enter price: ");
+                        } catch (Exception e) {
+                            System.out.println("Error: " + e.getMessage());
+                        }
+                    }
+
+                    System.out.println("Enter quantity: ");
+                    int quantity;
+                    while (true) {
+                        try {
+                            quantity = Integer.parseInt(br.readLine());
+                            if (quantity >= 0) {
+                                break;
+                            }
+                            System.out.println("Invalid quantity\nRe-enter ");
+                        } catch (Exception e) {
+                            System.out.println("Error: " + e.getMessage());
+                        }
+                    }
+
+                    Product product = new Product(name, price, quantity);
+                    System.out.println("Total price: " + product.calculateTotalPrice());
                 }
                 case 8 -> {
+                    System.out.println("Enter car brand: ");
+                    String brand = br.readLine();
+
+                    System.out.println("Enter car model: ");
+                    String model = br.readLine();
+
+                    System.out.println("Enter year: ");
+                    int year;
+                    while (true) {
+                        try {
+                            year = Integer.parseInt(br.readLine());
+                            if (year >= 1970 && year <= Year.now().getValue()) {
+                                break;
+                            }
+                            System.out.println("Invalid year\nRe-enter year: ");
+                        } catch (Exception e) {
+                            System.out.println("Error: " + e.getMessage());
+                        }
+                    }
+
+                    System.out.println("Enter price: ");
+                    double price;
+                    while (true) {
+                        try {
+                            price = Double.parseDouble(br.readLine());
+                            if (price >= 0) {
+                                break;
+                            }
+                            System.out.println("Invalid price\nRe-enter price: ");
+                        } catch (Exception e) {
+                            System.out.println("Error: " + e.getMessage());
+                        }
+                    }
+
+                    Car car = new Car(brand, model, year, price);
+                    System.out.println("Depreciation: " + car.calculateDepreciation());
                 }
                 case 9 -> {
+                    System.out.println("Enter employee name: ");
+                    String name = br.readLine();
+
+                    System.out.println("Enter employee ID: ");
+                    String id = br.readLine();
+
+                    System.out.println("Enter employee position: ");
+                    String position = br.readLine();
+
+                    System.out.println("Enter employee salary: ");
+                    double salary;
+                    while (true) {
+                        try {
+                            salary = Double.parseDouble(br.readLine());
+                            if (salary >= 0) {
+                                break;
+                            }
+                            System.out.println("Invalid salary\nRe-enter salary: ");
+                        } catch (Exception e) {
+                            System.out.println("Error: " + e.getMessage());
+                        }
+                    }
+
+                    Employee employee = new Employee(id, name, position, salary);
+                    System.out.println("Salary: " + employee.calculateAnnualSalary());
+                }
+                case 10 -> {
+                    PersonList personList = new PersonList();
+                    boolean isExit1 = false;
+                    while (!isExit1) {
+                        System.out.println("""
+                                1. Add person
+                                2. Remove person
+                                3. Search for a person
+                                0. Exit
+                                Enter your choice:\s""");
+                        int choice1;
+                        System.out.println("Enter your choice: ");
+                        while (true) {
+                            try {
+                                choice1 = Integer.parseInt(br.readLine());
+                                if (choice1 >= 0 && choice1 <= 3) {
+                                    break;
+                                }
+                                System.out.println("Invalid choice\nRe-enter your choice: ");
+                            } catch (Exception e) {
+                                System.out.println("Error: " + e.getMessage());
+                            }
+                        }
+
+                        switch (choice1) {
+                            case 1 -> personList.add();
+                            case 2 -> personList.remove();
+                            case 3 -> personList.search();
+                            case 0 -> isExit1 = true;
+                            default -> System.out.println("Invalid choice\nRe-enter your choice: ");
+                        }
+                    }
                 }
                 case 0 -> isExit = true;
                 default -> System.out.print("Invalid choice\nRe-enter your choice: ");

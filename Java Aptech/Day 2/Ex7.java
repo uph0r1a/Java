@@ -3,7 +3,6 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 
 public class Ex7 {
-
     public enum Profession {
         SELF_EMPLOYED("Self-Employed"),
         PROFESSIONAL("Professional"),
@@ -39,7 +38,6 @@ public class Ex7 {
         }
 
         public int getLoanAmountEligible() {
-
             if (age >= 16 && age <= 25
                     && (profession == Profession.SELF_EMPLOYED || profession == Profession.PROFESSIONAL)
                     && personalAssets > 25000) {
@@ -74,7 +72,6 @@ public class Ex7 {
                     return 25000 - age * 100;
                 }
             }
-
             return 0;
         }
     }
@@ -93,21 +90,13 @@ public class Ex7 {
 
         int professionChoice = Integer.parseInt(br.readLine());
 
-        Profession profession;
+        Profession profession = null;
 
         switch (professionChoice) {
-            case 1:
-                profession = Profession.SELF_EMPLOYED;
-                break;
-            case 2:
-                profession = Profession.PROFESSIONAL;
-                break;
-            case 3:
-                profession = Profession.RETIRED;
-                break;
-            default:
-                System.out.println("Invalid profession choice.");
-                return;
+            case 1 -> profession = Profession.SELF_EMPLOYED;
+            case 2 -> profession = Profession.PROFESSIONAL;
+            case 3 -> profession = Profession.RETIRED;
+            default -> System.out.println("Invalid profession choice.");
         }
 
         System.out.print("Enter personal assets: ");
