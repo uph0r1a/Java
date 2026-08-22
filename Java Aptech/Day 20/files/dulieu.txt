@@ -1,0 +1,12 @@
+The java.io package contains nearly every class you might ever need to perform
+input and output (I/O) in Java. All these streams represent an input source and
+an output destination. The stream in the java.io package supports many data such
+as primitives, Object, localized characters, etc.
+A stream can be defined as a sequence of data. The InputStream is used to read
+data from a source and the OutputStream is used for writing data to a
+destination.
+Java provides strong but flexible support for I/O related to Files and networks
+but this tutorial covers very basic functionality related to streams and I/O. We
+would see most commonly used example one by one:
+
+Byte Streams
