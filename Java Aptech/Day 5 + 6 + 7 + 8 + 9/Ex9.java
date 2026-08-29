@@ -94,7 +94,7 @@ public class Ex9 {
     }
 
     public static class Food extends Product {
-        private String expirationDate,;
+        private String expirationDate;
         private boolean isPerishable;
 
         public Food(String name, double price, int quantity, String expirationDate, boolean isPerishable) {
@@ -313,7 +313,7 @@ public class Ex9 {
             }
         }
 
-        public void remove() {
+        public void remove() throws IOException {
             if (products.isEmpty()) {
                 System.out.println("No products yet");
             } else {
