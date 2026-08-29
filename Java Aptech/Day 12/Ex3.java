@@ -6,49 +6,48 @@ import java.util.Map;
 
 public class Ex3 {
     public static class Product {
-        private String maSP, tenSP;
-        private int soLuongTon;
-        private double giaban;
+        private String productId, productName;
+        private int stockQuantity;
+        private double sellingPrice;
 
-        public Product(String maSP, String tenSP, int soLuongTon, double giaban) {
-            this.maSP = maSP;
-            this.tenSP = tenSP;
-            this.soLuongTon = soLuongTon;
-            this.giaban = giaban;
+        public Product(String productId, String productName, int stockQuantity, double sellingPrice) {
+            this.productId = productId;
+            this.productName = productName;
+            this.stockQuantity = stockQuantity;
+            this.sellingPrice = sellingPrice;
         }
 
-        public String getMaSP() {
-            return maSP;
+        public String getProductId() {
+            return productId;
         }
 
-        public String getTenSP() {
-            return tenSP;
+        public String getProductName() {
+            return productName;
         }
 
-        public int getSoLuongTon() {
-            return soLuongTon;
+        public int getStockQuantity() {
+            return stockQuantity;
         }
 
-        public double getGiaban() {
-            return giaban;
+        public double getSellingPrice() {
+            return sellingPrice;
         }
 
-        public void setMaSP(String maSP) {
-            this.maSP = maSP;
+        public void setProductId(String productId) {
+            this.productId = productId;
         }
 
-        public void setTenSP(String tenSP) {
-            this.tenSP = tenSP;
+        public void setProductName(String productName) {
+            this.productName = productName;
         }
 
-        public void setSoLuongTon(int soLuongTon) {
-            this.soLuongTon = soLuongTon;
+        public void setStockQuantity(int stockQuantity) {
+            this.stockQuantity = stockQuantity;
         }
 
-        public void setGiaban(double giaban) {
-            this.giaban = giaban;
+        public void setSellingPrice(double sellingPrice) {
+            this.sellingPrice = sellingPrice;
         }
-
     }
 
     public static void main(String[] args) throws IOException {
@@ -58,11 +57,11 @@ public class Ex3 {
         boolean isExit = false;
         while (!isExit) {
             System.out.print("""
-                    1.  Import
-                    2.  Export
-                    3.  Search for product
-                    4.  Low stock product
-                    5.  Total value
+                    1.  Receive stock
+                    2.  Ship stock out
+                    3.  Search for a product by name
+                    4.  Print low-stock products
+                    5.  Calculate total inventory value
                     0.  Exit
                     Enter your choice:\s""");
 
@@ -82,19 +81,19 @@ public class Ex3 {
             switch (choice) {
                 case 1 -> {
                     System.out.print("Enter product ID: ");
-                    String maSP = br.readLine().strip();
-                    String tenSP;
-                    double giaBan;
+                    String productId = br.readLine().strip();
+                    String productName;
+                    double sellingPrice;
 
-                    if (!storage.containsKey(maSP)) {
+                    if (!storage.containsKey(productId)) {
                         System.out.print("Enter product name: ");
-                        tenSP = br.readLine().strip();
+                        productName = br.readLine().strip();
 
                         System.out.print("Enter product price: ");
                         while (true) {
                             try {
-                                giaBan = Double.parseDouble(br.readLine());
-                                if (giaBan >= 0) {
+                                sellingPrice = Double.parseDouble(br.readLine());
+                                if (sellingPrice >= 0) {
                                     break;
                                 }
                                 System.out.print("Price cant be negative\nRe-enter price: ");
@@ -103,16 +102,16 @@ public class Ex3 {
                             }
                         }
                     } else {
-                        tenSP = storage.get(maSP).getTenSP();
-                        giaBan = storage.get(maSP).getGiaban();
+                        productName = storage.get(productId).getProductName();
+                        sellingPrice = storage.get(productId).getSellingPrice();
                     }
 
                     System.out.print("Enter product stock to import: ");
-                    int soLuongTon;
+                    int stockQuantity;
                     while (true) {
                         try {
-                            soLuongTon = Integer.parseInt(br.readLine());
-                            if (soLuongTon >= 0) {
+                            stockQuantity = Integer.parseInt(br.readLine());
+                            if (stockQuantity >= 0) {
                                 break;
                             }
                             System.out.print("Stock cant be negative\nRe-enter stock: ");
@@ -121,19 +120,20 @@ public class Ex3 {
                         }
                     }
 
-                    Product product = new Product(maSP, tenSP,
-                            storage.containsKey(maSP) ? storage.get(maSP).getSoLuongTon() + soLuongTon : soLuongTon,
-                            giaBan);
-                    storage.put(product.getMaSP(), product);
+                    Product product = new Product(productId, productName,
+                            storage.containsKey(productId) ? storage.get(productId).getStockQuantity() + stockQuantity
+                                    : stockQuantity,
+                            sellingPrice);
+                    storage.put(product.getProductId(), product);
                 }
                 case 2 -> {
                     if (!storage.isEmpty()) {
                         System.out.print("Enter product ID: ");
-                        String maSP;
+                        String productId;
                         while (true) {
                             try {
-                                maSP = br.readLine().strip();
-                                if (storage.containsKey(maSP)) {
+                                productId = br.readLine().strip();
+                                if (storage.containsKey(productId)) {
                                     break;
                                 }
                                 System.out.print("Invalid ID\nRe-enter product ID: ");
@@ -143,11 +143,12 @@ public class Ex3 {
                         }
 
                         System.out.print("Enter product stock to export: ");
-                        int soLuongTon;
+                        int stockQuantity;
                         while (true) {
                             try {
-                                soLuongTon = Integer.parseInt(br.readLine());
-                                if (soLuongTon >= 0 && storage.get(maSP).getSoLuongTon() - soLuongTon >= 0) {
+                                stockQuantity = Integer.parseInt(br.readLine());
+                                if (stockQuantity >= 0
+                                        && storage.get(productId).getStockQuantity() - stockQuantity >= 0) {
                                     break;
                                 }
                                 System.out.print("Not enough stock or invalid quantity\nRe-enter stock: ");
@@ -156,9 +157,8 @@ public class Ex3 {
                             }
                         }
 
-                        Product product = storage.get(maSP);
-                        product.setSoLuongTon(product.getSoLuongTon() - soLuongTon);
-                        storage.put(maSP, product);
+                        Product product = storage.get(productId);
+                        product.setStockQuantity(product.getStockQuantity() - stockQuantity);
                     } else {
                         System.out.println("No product yet");
                     }
@@ -166,21 +166,20 @@ public class Ex3 {
                 case 3 -> {
                     if (!storage.isEmpty()) {
                         System.out.print("Enter product name: ");
-                        String tenSP = br.readLine().strip();
+                        String productName = br.readLine().strip();
                         boolean found = false;
 
                         for (Product value : storage.values()) {
-                            if (value.getTenSP().toLowerCase().contains(tenSP.toLowerCase())) {
+                            if (value.getProductName().toLowerCase().contains(productName.toLowerCase())) {
                                 found = true;
-                                System.out.println(
-                                        "Product ID: " + value.getMaSP() + "\nProduct name: " + value.getTenSP()
-                                                + "\nProduct stock: " + value.getSoLuongTon() + "\nProduct price: "
-                                                + value.getGiaban() + "\n");
+                                System.out.println("Product ID: " + value.getProductId() + "\nProduct name: "
+                                        + value.getProductName() + "\nProduct stock: " + value.getStockQuantity()
+                                        + "\nProduct price: " + value.getSellingPrice() + "\n");
                             }
                         }
 
                         if (!found) {
-                            System.out.println("No product matches \"" + tenSP + "\".\n");
+                            System.out.println("No product matches \"" + productName + "\".\n");
                         }
                     } else {
                         System.out.println("No product yet");
@@ -191,12 +190,11 @@ public class Ex3 {
                         boolean found = false;
 
                         for (Product value : storage.values()) {
-                            if (value.getSoLuongTon() < 10) {
+                            if (value.getStockQuantity() < 10) {
                                 found = true;
-                                System.out.println(
-                                        "Product ID: " + value.getMaSP() + "\nProduct name: " + value.getTenSP()
-                                                + "\nProduct stock: " + value.getSoLuongTon() + "\nProduct price: "
-                                                + value.getGiaban());
+                                System.out.println("Product ID: " + value.getProductId() + "\nProduct name: "
+                                        + value.getProductName() + "\nProduct stock: " + value.getStockQuantity()
+                                        + "\nProduct price: " + value.getSellingPrice());
                             }
                         }
 
@@ -209,14 +207,14 @@ public class Ex3 {
                 }
                 case 5 -> {
                     if (!storage.isEmpty()) {
-                        System.out.println("Total product value: "
-                                + storage.values().stream().mapToDouble(p -> p.getGiaban() * p.getSoLuongTon()).sum());
+                        System.out.println("Total product value: " + storage.values().stream()
+                                .mapToDouble(p -> p.getSellingPrice() * p.getStockQuantity()).sum());
                     } else {
                         System.out.println("No product yet");
                     }
                 }
                 case 0 -> isExit = true;
-                default -> System.out.println("Invalid choice\nRe-enter your choice: ");
+                default -> System.out.print("Invalid choice\nRe-enter your choice: ");
             }
         }
     }

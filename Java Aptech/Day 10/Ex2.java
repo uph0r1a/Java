@@ -65,6 +65,28 @@ public class Ex2 {
         public abstract void display();
 
         public abstract String getCourseType();
+
+        protected static int readInt(BufferedReader reader, String prompt) throws IOException {
+            while (true) {
+                System.out.print(prompt);
+                try {
+                    return Integer.parseInt(reader.readLine());
+                } catch (NumberFormatException e) {
+                    System.out.println("Invalid number, please try again.");
+                }
+            }
+        }
+
+        protected static double readDouble(BufferedReader reader, String prompt) throws IOException {
+            while (true) {
+                System.out.print(prompt);
+                try {
+                    return Double.parseDouble(reader.readLine());
+                } catch (NumberFormatException e) {
+                    System.out.println("Invalid number, please try again.");
+                }
+            }
+        }
     }
 
     public static interface CostCalculable {
@@ -115,14 +137,12 @@ public class Ex2 {
             System.out.print("Enter start date: ");
             String date = reader.readLine();
 
-            System.out.print("Enter max students: ");
-            int maxStudents = Integer.parseInt(reader.readLine());
+            int maxStudents = readInt(reader, "Enter max students: ");
 
             System.out.print("Enter platform: ");
             String platform = reader.readLine();
 
-            System.out.print("Enter course fee: ");
-            double fee = Double.parseDouble(reader.readLine());
+            double fee = readDouble(reader, "Enter course fee: ");
 
             setCourseID(id);
             setCourseName(name);
@@ -195,24 +215,15 @@ public class Ex2 {
             System.out.print("Enter start date: ");
             String date = reader.readLine();
 
-            System.out.print("Enter max students: ");
-            int maxStudents = Integer.parseInt(reader.readLine());
+            int maxStudents = readInt(reader, "Enter max students: ");
 
             System.out.print("Enter room name: ");
             String roomName = reader.readLine();
 
-            System.out.print("Has lab 1)Yes 2)No: ");
-            int labChoice;
-            while (true) {
-                try {
-                    labChoice = Integer.parseInt(reader.readLine());
-                    if (labChoice == 1 || labChoice == 2) {
-                        break;
-                    }
-                    System.out.print("Invalid choice\nRe-enter choice: ");
-                } catch (Exception e) {
-                    System.out.println("Error: " + e.getMessage());
-                }
+            int labChoice = readInt(reader, "Has lab 1)Yes 2)No: ");
+            while (labChoice != 1 && labChoice != 2) {
+                System.out.println("Invalid choice, please enter 1 or 2.");
+                labChoice = readInt(reader, "Re-enter choice: ");
             }
 
             setCourseID(id);

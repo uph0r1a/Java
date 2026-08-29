@@ -93,16 +93,16 @@ public class Ex1 {
 
             for (int i = 0; i < n; i++) {
                 System.out.print("Enter ISBN: ");
-                String isbn = br.readLine();
+                String isbn = br.readLine().trim();
 
                 System.out.print("Enter book name: ");
-                String name = br.readLine();
+                String name = br.readLine().trim();
 
                 System.out.print("Enter book author: ");
-                String author = br.readLine();
+                String author = br.readLine().trim();
 
                 System.out.print("Enter book publisher: ");
-                String publisher = br.readLine();
+                String publisher = br.readLine().trim();
 
                 System.out.print("Enter book price: ");
                 float price;
@@ -127,7 +127,7 @@ public class Ex1 {
                 System.out.println("No book yet");
             } else {
                 for (int i = 0; i < books.size(); i++) {
-                    System.out.println("Book " + (i + 1) + ": " + books.get(i).toString());
+                    System.out.println("Book " + (i + 1) + ": " + books.get(i));
                 }
             }
         }
@@ -167,7 +167,7 @@ public class Ex1 {
             System.out.print("""
                     1) Input book
                     2) Display book
-                    3) Sorted book
+                    3) Sort book (descending by price)
                     0) Exit
                     Enter your choice:\s""");
             int choice;

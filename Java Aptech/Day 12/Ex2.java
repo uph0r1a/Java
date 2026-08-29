@@ -9,13 +9,12 @@ public class Ex2 {
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 
         Map<String, Integer> occurrences = new HashMap<>();
-        System.out.print("Enter text:");
+        System.out.print("Enter text (blank line to finish):");
         String line;
         while ((line = br.readLine()) != null && !line.isEmpty()) {
-            String[] words = line.split("[^a-zA-Z0-9]+");
+            String[] words = line.toLowerCase().split("\\W+");
 
             for (String word : words) {
-                word = word.toLowerCase();
                 if (word.isEmpty()) {
                     continue;
                 }

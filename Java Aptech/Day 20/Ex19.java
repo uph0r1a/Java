@@ -95,23 +95,23 @@ public class Ex19 {
 
             for (int i = 0; i < n; i++) {
                 System.out.print("Enter isbn: ");
-                String isbn = br.readLine();
+                String isbn = br.readLine().trim();
 
                 System.out.print("Enter book name: ");
-                String name = br.readLine();
+                String name = br.readLine().trim();
 
                 System.out.print("Enter author: ");
-                String author = br.readLine();
+                String author = br.readLine().trim();
 
                 System.out.print("Enter publisher: ");
-                String publisher = br.readLine();
+                String publisher = br.readLine().trim();
 
                 System.out.print("Enter price: ");
                 float price;
                 while (true) {
                     try {
                         price = Float.parseFloat(br.readLine());
-                        if (price > 0) {
+                        if (price >= 0) {
                             break;
                         }
                         System.out.print("Invalid price\nRe-enter price: ");
@@ -130,7 +130,7 @@ public class Ex19 {
 
             try (PrintWriter writer = new PrintWriter(new BufferedWriter(new FileWriter("files/book.txt")))) {
                 for (Book book : books) {
-                    writer.println(book.toString());
+                    writer.println(book);
                 }
             } catch (Exception e) {
                 System.out.println("Error: " + e.getMessage());
@@ -157,29 +157,23 @@ public class Ex19 {
             }
 
             for (Book book : books) {
-                System.out.println(book.toString());
+                System.out.println(book);
             }
         }
 
         public void findBook() throws IOException {
             System.out.print("Enter book name: ");
-            String name = br.readLine();
+            String keyword = br.readLine().trim().toLowerCase();
 
             boolean found = false;
 
-            try (BufferedReader reader = new BufferedReader(new FileReader("files/book.txt"))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    String[] value = line.split("\\|");
-                    if (value[1].equalsIgnoreCase(name)) {
-                        found = true;
-                        Book book = new Book(value[0], value[1], value[2], value[3], Float.parseFloat(value[4]));
-                        System.out.println(book.toString());
-                    }
+            for (Book book : books) {
+                if (book.getBookName().toLowerCase().contains(keyword)) {
+                    found = true;
+                    System.out.println(book);
                 }
-            } catch (Exception e) {
-                System.out.println("Error: " + e.getMessage());
             }
+
             if (!found) {
                 System.out.println("None match");
             }

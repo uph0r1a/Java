@@ -1,13 +1,13 @@
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
 public class Ex17 {
     public static void main(String[] args) {
         try {
-            for (String line : Files.readAllLines(Path.of("files/dulieu.txt"))) {
-                System.out.println(line);
-            }
-        } catch (Exception e) {
+            String content = Files.readString(Path.of("files/dulieu.txt"));
+            System.out.print(content);
+        } catch (IOException e) {
             System.out.println("Error: " + e.getMessage());
         }
     }

@@ -1,8 +1,6 @@
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Scanner;
 
 public class SS4 {
     static public enum Priority {
@@ -18,9 +16,9 @@ public class SS4 {
     }
 
     static public class Ticket {
-        private final int id;
-        private final String title, reporterName;
-        private final Priority priority;
+        private int id;
+        private String title, reporterName;
+        private Priority priority;
         private Status status;
 
         public Ticket() {
@@ -31,36 +29,35 @@ public class SS4 {
             this.status = Status.OPEN;
         }
 
-        public Ticket(int id, String title, String reporterName, Priority priority, Status status) {
+        public Ticket(int id, String title, String reporterName, Priority priority) {
             this.id = id;
             this.title = title;
             this.reporterName = reporterName;
             this.priority = priority;
-            this.status = status;
+            this.status = Status.OPEN;
         }
 
-        public int getID() {
+        public int getId() {
             return id;
-        }
-
-        public void setStatus(String status) {
-            this.status = Status.valueOf(status.toUpperCase());
         }
 
         public Priority getPriority() {
             return priority;
         }
 
-        public String display() {
-            return "\nID: " + id + "\nTitle: " + title + "\nReporter: " + reporterName + "\nPriority: "
-                    + priority.toString().toLowerCase()
-                    + "\nStatus: " + status.toString().toLowerCase();
+        public void setStatus(String status) {
+            this.status = Status.valueOf(status.toUpperCase());
+        }
+
+        public void display() {
+            System.out.println("\nID: " + id + "\nTitle: " + title + "\nReporter: " + reporterName + "\nPriority: "
+                    + priority + "\nStatus: " + status);
         }
     }
 
-    public static boolean validID(List<Ticket> ticket, int id) {
-        for (Ticket value : ticket) {
-            if (value.getID() == id) {
+    public static boolean validId(List<Ticket> tickets, int id) {
+        for (Ticket t : tickets) {
+            if (t.getId() == id) {
                 return true;
             }
         }
@@ -77,153 +74,176 @@ public class SS4 {
     }
 
     public static boolean validStatus(String status) {
-        for (Status p : Status.values()) {
-            if (p.name().equals(status)) {
+        for (Status s : Status.values()) {
+            if (s.name().equals(status)) {
                 return true;
             }
         }
         return false;
     }
 
-    public static void main(String[] args) throws NumberFormatException, IOException {
-        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        List<Ticket> tickets = new ArrayList<>();
         boolean isExit = false;
-        List<Ticket> ticket = new ArrayList<>();
 
         while (!isExit) {
-            System.out.print(
-                    "=== IT SUPPORT TICKET SYSTEM ===\n1. Create new ticket\n2. View all tickets\n3. Update ticket status\n4. Delete ticket\n5. Filter by priority\n0. Exit\nEnter your choice:");
-            int choice = Integer.parseInt(br.readLine());
+            System.out.print("""
+                    === IT SUPPORT TICKET SYSTEM ===
+                    1. Create new ticket
+                    2. View all tickets
+                    3. Update ticket status
+                    4. Delete ticket
+                    5. Filter by priority
+                    0. Exit
+                    Enter your choice:\s""");
+
+            int choice;
+            while (true) {
+                try {
+                    choice = Integer.parseInt(sc.nextLine().trim());
+                    break;
+                } catch (NumberFormatException e) {
+                    System.out.print("Invalid choice, please re-enter: ");
+                }
+            }
 
             switch (choice) {
-                case 0:
-                    isExit = true;
-                    break;
-                case 1:
-                    System.out.print("Enter ID: ");
+                case 0 -> isExit = true;
+                case 1 -> {
                     int id;
                     while (true) {
-                        id = Integer.parseInt(br.readLine());
-                        if (!validID(ticket, id)) {
-                            break;
+                        System.out.print("Enter ID: ");
+                        try {
+                            id = Integer.parseInt(sc.nextLine().trim());
+                            if (!validId(tickets, id)) {
+                                break;
+                            }
+                            System.out.println("ID already exists.");
+                        } catch (NumberFormatException e) {
+                            System.out.println("Invalid ID, please enter a number.");
                         }
-                        System.out.print("Invalid ID\nRe-enter ID: ");
                     }
 
                     System.out.print("Enter title: ");
-                    String title = br.readLine();
+                    String title = sc.nextLine();
 
                     System.out.print("Enter reporter name: ");
-                    String reporterName = br.readLine();
+                    String reporterName = sc.nextLine();
 
-                    System.out.print("Enter priority: ");
+                    System.out.println("Available priorities: LOW, MEDIUM, HIGH");
                     String priority;
                     while (true) {
-                        priority = br.readLine().toUpperCase();
+                        System.out.print("Enter priority: ");
+                        priority = sc.nextLine().trim().toUpperCase();
                         if (validPriority(priority)) {
                             break;
                         }
-                        System.out.print("Invalid priority\nRe-enter priority: ");
+                        System.out.println("Invalid priority, please re-enter.");
                     }
 
-                    System.out.print("Enter status: ");
-                    String status;
-                    while (true) {
-                        status = br.readLine().toUpperCase();
-                        if (validStatus(status)) {
-                            break;
-                        }
-                        System.out.print("Invalid priority\nRe-enter priority: ");
-                    }
-
-                    ticket.add(new Ticket(id, title, reporterName, Priority.valueOf(priority), Status.valueOf(status)));
-                    System.out.println("Ticket add successfully");
-                    break;
-                case 2:
-                    if (ticket.isEmpty()) {
-                        System.out.println("No ticket");
+                    tickets.add(new Ticket(id, title, reporterName, Priority.valueOf(priority)));
+                    System.out.println("Ticket added successfully. Status set to OPEN.");
+                }
+                case 2 -> {
+                    if (tickets.isEmpty()) {
+                        System.out.println("No tickets.");
                     } else {
-                        for (int i = 0; i < ticket.size(); i++) {
-                            System.out.println("Ticket " + (i + 1) + ticket.get(i).display() + "\n");
+                        for (int i = 0; i < tickets.size(); i++) {
+                            System.out.println("\nTicket " + (i + 1));
+                            tickets.get(i).display();
                         }
                     }
-                    break;
-                case 3:
-                    if (ticket.isEmpty()) {
-                        System.out.println("No ticket");
+                }
+                case 3 -> {
+                    if (tickets.isEmpty()) {
+                        System.out.println("No tickets.");
                     } else {
-                        System.out.print("Enter ID: ");
+                        int id;
                         while (true) {
-                            id = Integer.parseInt(br.readLine());
-                            if (validID(ticket, id)) {
-                                break;
+                            System.out.print("Enter ID: ");
+                            try {
+                                id = Integer.parseInt(sc.nextLine().trim());
+                                if (validId(tickets, id)) {
+                                    break;
+                                }
+                                System.out.println("Ticket not found.");
+                            } catch (NumberFormatException e) {
+                                System.out.println("Invalid ID, please enter a number.");
                             }
-                            System.out.print("Invalid ID\nRe-enter ID: ");
                         }
 
-                        System.out.print("Enter status: ");
+                        String status;
                         while (true) {
-                            status = br.readLine().toUpperCase();
+                            System.out.print("Enter status (OPEN, IN_PROGRESS, RESOLVED): ");
+                            status = sc.nextLine().trim().toUpperCase();
                             if (validStatus(status)) {
                                 break;
                             }
-                            System.out.print("Invalid priority\nRe-enter priority: ");
+                            System.out.println("Invalid status, please re-enter.");
                         }
 
-                        for (int i = 0; i < ticket.size(); i++) {
-                            if (ticket.get(i).getID() == id) {
-                                ticket.get(i).setStatus(status);
-                            }
-                        }
-
-                        System.out.println("Status change successfully");
-                    }
-                    break;
-                case 4:
-                    if (ticket.isEmpty()) {
-                        System.out.println("No ticket");
-                    } else {
-                        System.out.print("Enter ID: ");
-                        while (true) {
-                            id = Integer.parseInt(br.readLine());
-                            if (validID(ticket, id)) {
+                        for (Ticket t : tickets) {
+                            if (t.getId() == id) {
+                                t.setStatus(status);
                                 break;
                             }
-                            System.out.print("Invalid ID\nRe-enter ID: ");
                         }
 
-                        for (int i = 0; i < ticket.size(); i++) {
-                            if (ticket.get(i).getID() == id) {
-                                ticket.remove(i);
+                        System.out.println("Status changed successfully.");
+                    }
+                }
+                case 4 -> {
+                    if (tickets.isEmpty()) {
+                        System.out.println("No tickets.");
+                    } else {
+                        int id;
+                        while (true) {
+                            System.out.print("Enter ID: ");
+                            try {
+                                id = Integer.parseInt(sc.nextLine().trim());
+                                if (validId(tickets, id)) {
+                                    break;
+                                }
+                                System.out.println("Ticket not found.");
+                            } catch (NumberFormatException e) {
+                                System.out.println("Invalid ID, please enter a number.");
                             }
                         }
 
-                        System.out.println("Ticket deleted");
+                        final int ticketId = id;
+                        tickets.removeIf(t -> t.getId() == ticketId);
+                        System.out.println("Ticket deleted.");
                     }
-                    break;
-                case 5:
-                    if (ticket.isEmpty()) {
-                        System.out.println("No ticket");
+                }
+                case 5 -> {
+                    if (tickets.isEmpty()) {
+                        System.out.println("No tickets.");
                     } else {
-                        System.out.print("Enter priority: ");
+                        String priority;
                         while (true) {
-                            priority = br.readLine().toUpperCase();
+                            System.out.print("Enter priority (LOW, MEDIUM, HIGH): ");
+                            priority = sc.nextLine().trim().toUpperCase();
                             if (validPriority(priority)) {
                                 break;
                             }
-                            System.out.print("Invalid priority\nRe-enter priority: ");
+                            System.out.println("Invalid priority, please re-enter.");
                         }
-                        for (int i = 0; i < ticket.size(); i++) {
-                            if (ticket.get(i).getPriority().toString().equals(priority)) {
-                                System.out.println("Ticket " + (i + 1) + ticket.get(i).display() + "\n");
+
+                        boolean found = false;
+                        for (int i = 0; i < tickets.size(); i++) {
+                            if (tickets.get(i).getPriority().name().equals(priority)) {
+                                System.out.println("\nTicket " + (i + 1));
+                                tickets.get(i).display();
+                                found = true;
                             }
                         }
+                        if (!found) {
+                            System.out.println("No tickets with that priority.");
+                        }
                     }
-                    break;
-                default:
-                    System.out.println("Invalid choice");
-                    break;
+                }
+                default -> System.out.println("Invalid choice.");
             }
         }
     }

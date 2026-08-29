@@ -1,5 +1,11 @@
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+
 public class Ex2 {
-    static int[] arr = new int[20];
+    private static final BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+
+    static int[] arr = new int[10];
     static int size = 10;
 
     static {
@@ -65,13 +71,21 @@ public class Ex2 {
     }
 
     public static void insert(int pos, int x) {
-        if (size == arr.length) {
-            System.out.println("Array is full!");
+        if (pos < 0 || pos > size) {
+            System.out.println("Invalid position.");
             return;
         }
 
-        if (pos < 0 || pos > size) {
-            System.out.println("Invalid position.");
+        if (size == arr.length) {
+            if (pos == size) {
+                System.out.println("Array is full!");
+                return;
+            }
+            for (int i = arr.length - 1; i > pos; i--) {
+                arr[i] = arr[i - 1];
+            }
+            arr[pos] = x;
+            System.out.println("Array is full! Last element discarded to make room.");
             return;
         }
 
@@ -141,6 +155,22 @@ public class Ex2 {
         return true;
     }
 
+    public static void bubbleSort() {
+        for (int i = 0; i < size - 1; i++) {
+            boolean swapped = false;
+            for (int j = 0; j < size - 1 - i; j++) {
+                if (arr[j] > arr[j + 1]) {
+                    int temp = arr[j];
+                    arr[j] = arr[j + 1];
+                    arr[j + 1] = temp;
+                    swapped = true;
+                }
+            }
+            if (!swapped)
+                break;
+        }
+    }
+
     public static void selectionSort() {
         for (int i = 0; i < size - 1; i++) {
             int min = i;
@@ -156,20 +186,36 @@ public class Ex2 {
         }
     }
 
-    public static void main(String[] args) {
+    private static int readInt() throws IOException {
+        while (true) {
+            try {
+                return Integer.parseInt(br.readLine().trim());
+            } catch (NumberFormatException e) {
+                System.out.print("Invalid number! Enter again: ");
+            }
+        }
+    }
+
+    public static void main(String[] args) throws IOException {
         System.out.println("Original array:");
         printArray();
 
         System.out.println("\nMaximum = " + findMax() + "\nMinimum = " + findMin() + "\nSum = " + sum() + "\nAverage = "
-                + average() + "\n\nAdd 11:");
-        add(11);
-        printArray();
+                + average());
 
         System.out.println("\nRemove position 3:");
         remove(3);
         printArray();
 
-        System.out.println("\nInsert 100 at position 2:");
+        System.out.println("\nAdd 11 (should succeed, one free slot):");
+        add(11);
+        printArray();
+
+        System.out.println("\nAdd 99 (should fail, array is full again):");
+        add(99);
+        printArray();
+
+        System.out.println("\nInsert 100 at position 2 (array is full, last element should be dropped):");
         insert(2, 100);
         printArray();
 
@@ -180,12 +226,15 @@ public class Ex2 {
         else
             System.out.println("\n" + x + " not found.");
 
-        System.out.println("\nRotate left by 2:");
-        rotateLeft(2);
+        System.out.print("\nEnter k for rotation: ");
+        int k = readInt();
+
+        System.out.println("Rotate left by " + k + ":");
+        rotateLeft(k);
         printArray();
 
-        System.out.println("\nRotate right by 2:");
-        rotateRight(2);
+        System.out.println("\nRotate right by " + k + ":");
+        rotateRight(k);
         printArray();
 
         System.out.println("\nReverse:");
@@ -194,7 +243,13 @@ public class Ex2 {
 
         System.out.println("\nPalindrome? " + isPalindrome());
 
-        System.out.println("\nSelection sort:");
+        System.out.println("\nReverse again to unsort, then bubble sort:");
+        reverseArray();
+        bubbleSort();
+        printArray();
+
+        System.out.println("\nReverse again to unsort, then selection sort:");
+        reverseArray();
         selectionSort();
         printArray();
     }

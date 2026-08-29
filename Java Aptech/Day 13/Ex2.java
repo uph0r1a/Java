@@ -1,12 +1,13 @@
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.Comparator;
 import java.util.PriorityQueue;
 
 public class Ex2 {
     public enum STATUS {
-        PENDING,
-        COMPLETED
+        OPEN,
+        RESOLVED
     }
 
     public static class SupportTicket {
@@ -19,7 +20,7 @@ public class Ex2 {
             this.customerName = customerName;
             this.issueDescription = issueDescription;
             this.priority = priority;
-            this.status = STATUS.PENDING;
+            this.status = STATUS.OPEN;
         }
 
         public String getTicketID() {
@@ -72,8 +73,9 @@ public class Ex2 {
     public static void main(String[] args) throws IOException {
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 
-        PriorityQueue<SupportTicket> tickets = new PriorityQueue<>(
-                (a, b) -> Integer.compare(a.getPriority(), b.getPriority()));
+        Comparator<SupportTicket> byPriorityThenTicketId = Comparator.comparingInt(SupportTicket::getPriority)
+                .thenComparing(SupportTicket::getTicketID);
+        PriorityQueue<SupportTicket> tickets = new PriorityQueue<>(byPriorityThenTicketId);
         boolean isExit = false;
 
         while (!isExit) {
@@ -127,7 +129,7 @@ public class Ex2 {
                 case 2 -> {
                     if (!tickets.isEmpty()) {
                         SupportTicket ticket = tickets.poll();
-                        ticket.setStatus(STATUS.COMPLETED);
+                        ticket.setStatus(STATUS.RESOLVED);
                         System.out.println("Ticket process completed\nTicket ID: " + ticket.getTicketID()
                                 + "\nCustomer name: " + ticket.getCustomerName() + "\nIssue description: "
                                 + ticket.getIssueDescription() + "\nPriority: " + ticket.getPriority() + "\nStatus: "
@@ -149,14 +151,12 @@ public class Ex2 {
                 }
                 case 4 -> {
                     if (!tickets.isEmpty()) {
+                        int[] counts = new int[5];
+                        for (SupportTicket ticket : tickets) {
+                            counts[ticket.getPriority() - 1]++;
+                        }
                         for (int i = 0; i < 5; i++) {
-                            int count = 0;
-                            for (SupportTicket supportTicket : tickets) {
-                                if (supportTicket.getPriority() == (i + 1)) {
-                                    count++;
-                                }
-                            }
-                            System.out.println("Priority " + (i + 1) + ": " + count);
+                            System.out.println("Priority " + (i + 1) + ": " + counts[i]);
                         }
                     } else {
                         System.out.println("Queue is empty");

@@ -1,22 +1,23 @@
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.util.LinkedList;
+import java.time.LocalTime;
+import java.util.ArrayDeque;
 import java.util.Queue;
 
 public class Ex1 {
     public enum TYPE {
         DEPOSIT,
-        WITHDRAW,
-        BORROW
+        WITHDRAWAL,
+        LOAN
     }
 
     public static class Customer {
         private String customerID, name;
         private TYPE serviceType;
-        private long arrivalTime;
+        private LocalTime arrivalTime;
 
-        public Customer(String customerID, String name, TYPE serviceType, long arrivalTime) {
+        public Customer(String customerID, String name, TYPE serviceType, LocalTime arrivalTime) {
             this.customerID = customerID;
             this.name = name;
             this.serviceType = serviceType;
@@ -47,6 +48,14 @@ public class Ex1 {
             this.serviceType = serviceType;
         }
 
+        public LocalTime getArrivalTime() {
+            return arrivalTime;
+        }
+
+        public void setArrivalTime(LocalTime arrivalTime) {
+            this.arrivalTime = arrivalTime;
+        }
+
         @Override
         public String toString() {
             return "\nCustomer ID: " + customerID + "\nCustomer Name: " + name + "\nService Type: " + serviceType.name()
@@ -57,7 +66,7 @@ public class Ex1 {
     public static void main(String[] args) throws IOException {
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 
-        Queue<Customer> customers = new LinkedList<>();
+        Queue<Customer> customers = new ArrayDeque<>();
         boolean isExit = false;
         while (!isExit) {
             System.out.print("""
@@ -74,7 +83,7 @@ public class Ex1 {
                     if (choice >= 0 && choice <= 4) {
                         break;
                     }
-                    System.out.println("Invalid choice\nRe-enter your choice: ");
+                    System.out.print("Invalid choice\nRe-enter your choice: ");
                 } catch (Exception e) {
                     System.out.println("Error: " + e.getMessage());
                 }
@@ -87,7 +96,7 @@ public class Ex1 {
                     System.out.print("Enter customer name: ");
                     String name = br.readLine();
 
-                    System.out.print("1) Deposit \n2) Withdrawal \n3) Borrow\nEnter service type: ");
+                    System.out.print("1) Deposit \n2) Withdrawal \n3) Loan\nEnter service type: ");
                     int type;
                     while (true) {
                         try {
@@ -101,27 +110,32 @@ public class Ex1 {
                         }
                     }
 
-                    customers.offer(new Customer(id, name, TYPE.values()[type - 1], System.currentTimeMillis()));
+                    customers.offer(new Customer(id, name, TYPE.values()[type - 1], LocalTime.now()));
                 }
                 case 2 -> {
-                    if (!customers.isEmpty()) {
-                        Customer customer = customers.poll();
+                    Customer customer = customers.poll();
+                    if (customer != null) {
                         System.out.println("Serving customer: " + customer.getName() + "\nService: "
                                 + customer.getServiceType().name());
                     } else {
-                        System.out.println("Queue is empty");
+                        System.out.println("No customers waiting.");
                     }
                 }
                 case 3 -> {
-                    if (!customers.isEmpty()) {
-                        System.out.println("Next customer: " + customers.peek());
+                    Customer next = customers.peek();
+                    if (next != null) {
+                        System.out.println("Next customer: " + next);
                     } else {
                         System.out.println("Queue is empty");
                     }
                 }
                 case 4 -> {
-                    System.out.println("Customer in queue: ");
-                    customers.forEach(System.out::println);
+                    if (customers.isEmpty()) {
+                        System.out.println("Queue is empty");
+                    } else {
+                        System.out.println("Customer in queue: ");
+                        customers.forEach(System.out::println);
+                    }
                 }
                 case 0 -> isExit = true;
                 default -> System.out.println("Invalid choice\nRe-enter your choice: ");

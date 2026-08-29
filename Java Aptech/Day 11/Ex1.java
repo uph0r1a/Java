@@ -12,13 +12,15 @@ public class Ex1 {
         System.out.print("Enter shipping time: ");
         int time = Integer.parseInt(br.readLine());
 
-        double price = 5.5;
-        if (time >= 30) {
+        double price;
+        if (time > 30) {
             price = 0;
         } else if (time >= 20) {
             price = 2.5;
         } else if (time >= 10) {
             price = 4;
+        } else {
+            price = 5.5;
         }
 
         System.out.println("Total price: $" + (price * amount));

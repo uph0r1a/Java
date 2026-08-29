@@ -4,15 +4,15 @@ import java.io.InputStreamReader;
 import java.time.LocalDate;
 
 public class Ex2 {
-    static class AirLine {
+    static class Airline {
         private String flightID, origin, destination;
         private int amount;
         private LocalDate startDate;
 
-        public AirLine() {
+        public Airline() {
         }
 
-        public AirLine(String flightID, String origin, String destination, int amount, LocalDate startDate) {
+        public Airline(String flightID, String origin, String destination, int amount, LocalDate startDate) {
             this.flightID = flightID;
             this.origin = origin;
             this.destination = destination;
@@ -60,8 +60,7 @@ public class Ex2 {
             this.startDate = startDate;
         }
 
-        public void NhapTT() throws NumberFormatException, IOException {
-            BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+        public void inputInfo(BufferedReader br) throws NumberFormatException, IOException {
             System.out.print("Enter flight ID: ");
             setFlightID(br.readLine());
 
@@ -74,20 +73,30 @@ public class Ex2 {
             System.out.print("Enter passenger amount: ");
             setAmount(Integer.parseInt(br.readLine()));
 
-            System.out.print("Enter start date(yyyy-MM-dd): ");
+            System.out.print("Enter start date (yyyy-MM-dd): ");
             setStartDate(LocalDate.parse(br.readLine()));
         }
 
-        public void XuatTT() {
+        public void displayInfo() {
             System.out.println("FlightID: " + flightID + "\nOrigin: " + origin + "\nDestination: " + destination
                     + "\nPassenger amount: " + amount + "\nStart date: " + startDate);
         }
-
     }
 
     public static void main(String[] args) throws NumberFormatException, IOException {
-        AirLine airLine = new AirLine();
-        airLine.NhapTT();
-        airLine.XuatTT();
+        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+
+        Airline[] airlines = new Airline[3];
+
+        for (int i = 0; i < airlines.length; i++) {
+            System.out.println("\n--- Enter details for flight " + (i + 1) + " ---");
+            airlines[i] = new Airline();
+            airlines[i].inputInfo(br);
+        }
+
+        for (int i = 0; i < airlines.length; i++) {
+            System.out.println("\n--- Flight " + (i + 1) + " details ---");
+            airlines[i].displayInfo();
+        }
     }
 }

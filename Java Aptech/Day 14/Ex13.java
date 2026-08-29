@@ -4,7 +4,7 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 
-public class Ex3 {
+public class Ex13 {
     public static class Student {
         private String name;
         private double grade;
@@ -46,7 +46,7 @@ public class Ex3 {
             System.out.println("\nStudent " + (i + 1));
 
             System.out.print("Enter name: ");
-            String name = br.readLine();
+            String name = br.readLine().strip();
 
             System.out.print("Enter grade: ");
             double grade;
@@ -70,8 +70,7 @@ public class Ex3 {
             int max = i;
 
             for (int j = i + 1; j < students.size(); j++) {
-                Student s1 = students.get(j);
-                Student s2 = students.get(max);
+                Student s1 = students.get(j), s2 = students.get(max);
 
                 if (s1.getGrade() > s2.getGrade()
                         || (s1.getGrade() == s2.getGrade() && s1.getName().compareToIgnoreCase(s2.getName()) < 0)) {
@@ -110,7 +109,7 @@ public class Ex3 {
         }
 
         System.out.print("\nEnter name to search: ");
-        String key = br.readLine().trim();
+        String key = br.readLine().strip();
 
         int low = 0, high = searchList.size() - 1;
         boolean found = false;
@@ -118,24 +117,19 @@ public class Ex3 {
         while (low <= high) {
             int mid = low + (high - low) / 2, cmp = searchList.get(mid).getName().compareToIgnoreCase(key);
             if (cmp == 0) {
-
                 Student student = searchList.get(mid);
-
                 int rank = -1;
 
                 for (int i = 0; i < students.size(); i++) {
-                    if (students.get(i).getName()
-                            .equalsIgnoreCase(student.getName())) {
+                    if (students.get(i).getName().equalsIgnoreCase(student.getName())) {
                         rank = i + 1;
                         break;
                     }
                 }
 
                 System.out.println("\nFound:\n" + student.getName() + " - " + student.getGrade() + ", Rank: " + rank);
-
                 found = true;
                 break;
-
             } else if (cmp < 0) {
                 low = mid + 1;
             } else {

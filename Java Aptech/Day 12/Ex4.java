@@ -6,29 +6,64 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class Ex4 {
+    public static class Product {
+        private String productId, productName;
+        private double sellingPrice;
+
+        public Product(String productId, String productName, double sellingPrice) {
+            this.productId = productId;
+            this.productName = productName;
+            this.sellingPrice = sellingPrice;
+        }
+
+        public String getProductId() {
+            return productId;
+        }
+
+        public void setProductId(String productId) {
+            this.productId = productId;
+        }
+
+        public String getProductName() {
+            return productName;
+        }
+
+        public void setProductName(String productName) {
+            this.productName = productName;
+        }
+
+        public double getSellingPrice() {
+            return sellingPrice;
+        }
+
+        public void setSellingPrice(double sellingPrice) {
+            this.sellingPrice = sellingPrice;
+        }
+    }
+
     public static class CartItem {
-        private String item;
-        private int stock;
+        private Product product;
+        private int quantity;
 
-        public CartItem(String item, int stock) {
-            this.item = item;
-            this.stock = stock;
+        public CartItem(Product product, int quantity) {
+            this.product = product;
+            this.quantity = quantity;
         }
 
-        public String getItem() {
-            return item;
+        public Product getProduct() {
+            return product;
         }
 
-        public void setItem(String item) {
-            this.item = item;
+        public void setProduct(Product product) {
+            this.product = product;
         }
 
-        public int getStock() {
-            return stock;
+        public int getQuantity() {
+            return quantity;
         }
 
-        public void setStock(int stock) {
-            this.stock = stock;
+        public void setQuantity(int quantity) {
+            this.quantity = quantity;
         }
     }
 
@@ -55,7 +90,7 @@ public class Ex4 {
                     }
                     System.out.print("Invalid choice\nRe-enter choice: ");
                 } catch (Exception e) {
-                    System.out.println("Error: " + e.getMessage() + "\nRe-enter choice: ");
+                    System.out.print("Error: " + e.getMessage() + "\nRe-enter choice: ");
                 }
             }
 
@@ -63,12 +98,29 @@ public class Ex4 {
                 case 1 -> {
                     System.out.print("Enter product ID: ");
                     String id = br.readLine();
-                    String name;
-                    if (!items.containsKey(id)) {
-                        System.out.print("Enter item name: ");
-                        name = br.readLine();
+
+                    Product product;
+                    if (items.containsKey(id)) {
+                        product = items.get(id).getProduct();
                     } else {
-                        name = items.get(id).getItem();
+                        System.out.print("Enter item name: ");
+                        String name = br.readLine();
+
+                        double price;
+                        while (true) {
+                            System.out.print("Enter selling price: ");
+                            try {
+                                price = Double.parseDouble(br.readLine());
+                                if (price >= 0) {
+                                    break;
+                                }
+                                System.out.println("Price can't be negative.");
+                            } catch (Exception e) {
+                                System.out.println("Error: " + e.getMessage());
+                            }
+                        }
+
+                        product = new Product(id, name, price);
                     }
 
                     System.out.print("Enter item stock to add: ");
@@ -81,10 +133,12 @@ public class Ex4 {
                             }
                             System.out.print("Stock cant be negative\nRe-enter stock to add: ");
                         } catch (Exception e) {
-                            System.out.println("Error: " + e.getMessage() + "\nRe-enter stock to add: ");
+                            System.out.print("Error: " + e.getMessage() + "\nRe-enter stock to add: ");
                         }
                     }
-                    items.put(id, new CartItem(name, items.containsKey(id) ? items.get(id).getStock() + stock : stock));
+
+                    int newQuantity = items.containsKey(id) ? items.get(id).getQuantity() + stock : stock;
+                    items.put(id, new CartItem(product, newQuantity));
                 }
                 case 2 -> {
                     if (!items.isEmpty()) {
@@ -98,7 +152,7 @@ public class Ex4 {
                                 }
                                 System.out.print("Product ID doesn't exist\nRe-enter product ID: ");
                             } catch (Exception e) {
-                                System.out.println("Error: " + e.getMessage() + "\nRe-enter product ID: ");
+                                System.out.print("Error: " + e.getMessage() + "\nRe-enter product ID: ");
                             }
                         }
 
@@ -107,22 +161,22 @@ public class Ex4 {
                         while (true) {
                             try {
                                 stock = Integer.parseInt(br.readLine());
-                                if (stock >= 0 && items.get(id).getStock() - stock >= 0) {
+                                if (stock >= 0) {
                                     break;
                                 }
                                 System.out.print("Stock cant be negative\nRe-enter stock to remove: ");
                             } catch (Exception e) {
-                                System.out.println("Error: " + e.getMessage() + "\nRe-enter stock to remove: ");
+                                System.out.print("Error: " + e.getMessage() + "\nRe-enter stock to remove: ");
                             }
                         }
 
                         CartItem item = items.get(id);
-                        int newStock = item.getStock() - stock;
-                        if (newStock == 0) {
+                        int newQuantity = item.getQuantity() - stock;
+                        if (newQuantity <= 0) {
                             items.remove(id);
-                            System.out.println("Item '" + item.getItem() + "' removed from cart.");
+                            System.out.println("Item '" + item.getProduct().getProductName() + "' removed from cart.");
                         } else {
-                            items.put(id, new CartItem(item.getItem(), newStock));
+                            item.setQuantity(newQuantity);
                         }
                     } else {
                         System.out.println("No item yet");
@@ -130,31 +184,20 @@ public class Ex4 {
                 }
                 case 3 -> {
                     if (!items.isEmpty()) {
-                        System.out.print("Enter price per item: ");
-                        double price;
-                        while (true) {
-                            try {
-                                price = Double.parseDouble(br.readLine());
-                                if (price > 0) {
-                                    break;
-                                }
-                                System.out.print("Price must be positive\nRe-enter price per item: ");
-                            } catch (Exception e) {
-                                System.out.println("Error: " + e.getMessage() + "\nRe-enter price per item: ");
-                            }
-                        }
-
-                        System.out.println(
-                                "Total cost: " + items.values().stream().mapToInt(p -> p.getStock()).sum() * price);
+                        double total = items.values().stream()
+                                .mapToDouble(item -> item.getProduct().getSellingPrice() * item.getQuantity()).sum();
+                        System.out.println("Total cost: " + total);
                     } else {
                         System.out.println("No item yet");
                     }
                 }
                 case 4 -> {
                     if (!items.isEmpty()) {
-                        items.entrySet().stream().sorted(Comparator.comparing(e -> e.getValue().getItem()))
-                                .forEach(e -> System.out.println("Item ID: " + e.getKey() + "\nItem name: "
-                                        + e.getValue().getItem() + "\nItem stock: " + e.getValue().getStock() + "\n"));
+                        items.values().stream().sorted(Comparator.comparing(item -> item.getProduct().getProductName()))
+                                .forEach(item -> System.out.println("Item ID: " + item.getProduct().getProductId()
+                                        + "\nItem name: " + item.getProduct().getProductName() + "\nSelling price: "
+                                        + item.getProduct().getSellingPrice() + "\nQuantity: " + item.getQuantity()
+                                        + "\n"));
                     } else {
                         System.out.println("No item yet");
                     }

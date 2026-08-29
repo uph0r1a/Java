@@ -13,6 +13,12 @@ public class Ex1 {
         public void displayDevice();
     }
 
+    static class InvalidDeviceDataException extends Exception {
+        public InvalidDeviceDataException(String message) {
+            super(message);
+        }
+    }
+
     public static class ElectronicDevice implements IElectronicDevice {
         private String name, brand;
         private int releaseYear;
@@ -69,9 +75,11 @@ public class Ex1 {
                     if (name.length() >= 2) {
                         break;
                     }
-                    throw new InvalidDeviceDataException("Device name must be >= 2 characters\nRe-enter name: ");
+                    throw new InvalidDeviceDataException("Device name must be at least 2 characters.");
+                } catch (InvalidDeviceDataException e) {
+                    System.out.print("Error: " + e.getMessage() + "\nRe-enter name: ");
                 } catch (Exception e) {
-                    System.out.print("Error: " + e.getMessage());
+                    System.out.print("Error: " + e.getMessage() + "\nRe-enter name: ");
                 }
             }
 
@@ -83,9 +91,11 @@ public class Ex1 {
                     if (brand.length() >= 2) {
                         break;
                     }
-                    throw new InvalidDeviceDataException("Device brand must be >= 2 characters\nRe-enter brand: ");
+                    throw new InvalidDeviceDataException("Device brand must be at least 2 characters.");
+                } catch (InvalidDeviceDataException e) {
+                    System.out.print("Error: " + e.getMessage() + "\nRe-enter brand: ");
                 } catch (Exception e) {
-                    System.out.print("Error: " + e.getMessage());
+                    System.out.print("Error: " + e.getMessage() + "\nRe-enter brand: ");
                 }
             }
 
@@ -98,10 +108,13 @@ public class Ex1 {
                         break;
                     }
                     throw new InvalidDeviceDataException(
-                            "Device release year must be between 2000 and " + Year.now().getValue()
-                                    + "\nRe-enter release year: ");
+                            "Device release year must be between 2000 and " + Year.now().getValue());
+                } catch (NumberFormatException e) {
+                    System.out.print("Error: release year must be a whole number.\nRe-enter release year: ");
+                } catch (InvalidDeviceDataException e) {
+                    System.out.print("Error: " + e.getMessage() + "\nRe-enter release year: ");
                 } catch (Exception e) {
-                    System.out.print("Error: " + e.getMessage());
+                    System.out.println("Error: " + e.getMessage());
                 }
             }
 
@@ -113,9 +126,13 @@ public class Ex1 {
                     if (price > 0) {
                         break;
                     }
-                    throw new InvalidDeviceDataException("Device price must be positive\nRe-enter price: ");
+                    throw new InvalidDeviceDataException("Device price must be positive.");
+                } catch (NumberFormatException e) {
+                    System.out.print("Error: price must be a valid number.\nRe-enter price: ");
+                } catch (InvalidDeviceDataException e) {
+                    System.out.print("Error: " + e.getMessage() + "\nRe-enter price: ");
                 } catch (Exception e) {
-                    System.out.print("Error: " + e.getMessage());
+                    System.out.println("Error: " + e.getMessage());
                 }
             }
 
@@ -166,12 +183,6 @@ public class Ex1 {
                 }
             }
             expensive.displayDevice();
-        }
-    }
-
-    static class InvalidDeviceDataException extends Exception {
-        public InvalidDeviceDataException(String message) {
-            super(message);
         }
     }
 

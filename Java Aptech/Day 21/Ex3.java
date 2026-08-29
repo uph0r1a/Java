@@ -7,7 +7,7 @@ public class Ex3 {
             System.out.println(ThreadLocalRandom.current().nextInt());
         });
         Thread localTimeThread = new Thread(() -> {
-            System.out.println(LocalTime.now());
+            System.out.println("The current time is: " + LocalTime.now());
         });
 
         randomNumberThread.start();

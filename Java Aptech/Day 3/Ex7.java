@@ -75,37 +75,122 @@ public class Ex7 {
             return "Borrow Slip ID: " + borrowSlipID + "\nBook ID: " + bookID + "\nBorrow Date: " + borrowDate
                     + "\nDue Date: " + dueDate + "\nStudent: " + student;
         }
-
     }
 
-    public void add(List<BorrowCard> cards) throws IOException {
-        System.out.print("Enter borrow slip ID: ");
-        String id = br.readLine();
+    public static class BorrowCardManager {
+        private final List<BorrowCard> cards = new ArrayList<>();
 
-        System.out.print("Enter borrow slip ID: ");
-        String id = br.readLine();
+        private boolean slipIdExists(String slipId) {
+            return cards.stream().anyMatch(c -> c.getBorrowSlipID().equalsIgnoreCase(slipId));
+        }
 
-        System.out.print("Enter borrow slip ID: ");
-        String id = br.readLine();
+        public void add() throws IOException {
+            String slipId;
+            while (true) {
+                System.out.print("Enter borrow slip ID: ");
+                slipId = br.readLine().trim();
+                if (!slipIdExists(slipId)) {
+                    break;
+                }
+                System.out.println("A card with this slip ID already exists!");
+            }
 
-        System.out.print("Enter borrow slip ID: ");
-        String id = br.readLine();
+            System.out.print("Enter book ID: ");
+            String bookId = br.readLine().trim();
 
-        System.out.print("Enter borrow slip ID: ");
-        String id = br.readLine();
+            LocalDate borrowDate = readDate("Enter borrow date (yyyy-MM-dd): ");
+            LocalDate dueDate = readDate("Enter due date (yyyy-MM-dd): ");
 
-        System.out.print("Enter borrow slip ID: ");
-        String id = br.readLine();
+            System.out.print("Enter student full name: ");
+            String fullName = br.readLine().trim();
 
-        System.out.print("Enter borrow slip ID: ");
-        String id = br.readLine();
+            System.out.print("Enter student class/section: ");
+            String className = br.readLine().trim();
+
+            int age = readInt("Enter student age: ");
+
+            Student student = new Student(fullName, className, age);
+            cards.add(new BorrowCard(slipId, bookId, borrowDate, dueDate, student));
+
+            System.out.println("Borrow card added successfully!");
+        }
+
+        public void remove() throws IOException {
+            System.out.print("Enter the slip ID of the card to remove (return the book): ");
+            String slipId = br.readLine().trim();
+
+            boolean removed = cards.removeIf(c -> c.getBorrowSlipID().equalsIgnoreCase(slipId));
+
+            if (removed) {
+                System.out.println("Book returned, borrow card removed.");
+            } else {
+                System.out.println("No card found with that slip ID.");
+            }
+        }
+
+        public void display() {
+            if (cards.isEmpty()) {
+                System.out.println("No borrow cards on file.");
+                return;
+            }
+
+            for (BorrowCard card : cards) {
+                System.out.println("\n--------------------");
+                System.out.println(card);
+            }
+        }
+
+        private LocalDate readDate(String prompt) throws IOException {
+            while (true) {
+                System.out.print(prompt);
+                try {
+                    return LocalDate.parse(br.readLine().trim());
+                } catch (Exception e) {
+                    System.out.println("Invalid date format, please use yyyy-MM-dd.");
+                }
+            }
+        }
+
+        private int readInt(String prompt) throws IOException {
+            while (true) {
+                System.out.print(prompt);
+                try {
+                    return Integer.parseInt(br.readLine().trim());
+                } catch (NumberFormatException e) {
+                    System.out.println("Invalid number, please try again.");
+                }
+            }
+        }
     }
 
-    public void remove(List<BorrowCard> cards) {
+    public static void main(String[] args) throws IOException {
+        BorrowCardManager manager = new BorrowCardManager();
+        boolean isRunning = true;
 
-    }
+        while (isRunning) {
+            System.out.print("""
+                    ===== Library Borrow Card Menu =====
+                    1. Add borrow card
+                    2. Remove borrow card (return book)
+                    3. Display all borrow cards
+                    4. Exit
+                    Choose an option:\s""");
 
-    public static void main(String[] args) {
-        List<BorrowCard> cards = new ArrayList<>();
+            int choice;
+            try {
+                choice = Integer.parseInt(br.readLine().trim());
+            } catch (NumberFormatException e) {
+                System.out.println("Invalid choice!");
+                continue;
+            }
+
+            switch (choice) {
+                case 1 -> manager.add();
+                case 2 -> manager.remove();
+                case 3 -> manager.display();
+                case 4 -> isRunning = false;
+                default -> System.out.println("Invalid choice! Please choose 1-4.");
+            }
+        }
     }
 }

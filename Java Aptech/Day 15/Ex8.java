@@ -5,8 +5,7 @@ import java.util.List;
 
 public class Ex8 {
     public static abstract class ElectronicDevice {
-        private String brand;
-        private String model;
+        private String brand, model;
         private double price;
 
         public ElectronicDevice(String brand, String model, double price) {
@@ -44,17 +43,17 @@ public class Ex8 {
         public abstract String getDeviceType();
 
         public void displayInfo() {
-            System.out.println("Brand: " + brand + "\nModel: " + model + "\nPrice: " + price
-                    + "\nDevice Type: " + getDeviceType() + "\nPower Consumption: " + calculatePowerConsumption()
+            System.out.println("Brand: " + brand + "\nModel: " + model + "\nPrice: " + price + "\nDevice Type: "
+                    + getDeviceType() + "\nPower Consumption: " + calculatePowerConsumption()
                     + " W\n-----------------------------");
         }
     }
 
-    public static class SmartPhone extends ElectronicDevice {
+    public static class Smartphone extends ElectronicDevice {
         private double screenSize;
         private int batteryCapacity;
 
-        public SmartPhone(String brand, String model, double price, double screenSize, int batteryCapacity) {
+        public Smartphone(String brand, String model, double price, double screenSize, int batteryCapacity) {
             super(brand, model, price);
             this.screenSize = screenSize > 0 ? screenSize : 0;
             this.batteryCapacity = batteryCapacity > 0 ? batteryCapacity : 0;
@@ -115,10 +114,8 @@ public class Ex8 {
 
     public static void main(String[] args) {
         List<ElectronicDevice> devices = new ArrayList<>();
-        Collections.addAll(devices,
-                new SmartPhone("Samsung", "S23", 25000, 6.1, 4500),
-                new SmartPhone("Apple", "iPhone 15", 32000, 6.1, 4200),
-                new Laptop("Dell", "XPS 15", 45000, 16, 15.6),
+        Collections.addAll(devices, new Smartphone("Samsung", "S23", 25000, 6.1, 4500),
+                new Smartphone("Apple", "iPhone 15", 32000, 6.1, 4200), new Laptop("Dell", "XPS 15", 45000, 16, 15.6),
                 new Tablet("Samsung", "Tab S9", 20000, 11.0, 8000));
 
         System.out.println("=== DEVICE INFO ===");

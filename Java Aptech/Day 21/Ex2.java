@@ -9,8 +9,9 @@ public class Ex2 {
                 System.out.println(province);
                 try {
                     Thread.sleep(1000);
-                } catch (Exception e) {
-                    System.out.println("Error: " + e.getMessage());
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
                 }
             }
         });

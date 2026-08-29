@@ -1,4 +1,5 @@
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
 
 public class Ex7 {
@@ -17,7 +18,21 @@ public class Ex7 {
         return sum;
     }
 
-    public static void main(String[] args) {
+    private static String buildSequence(int n) {
+        if (n <= 0) {
+            return "0";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 1; i <= n; i++) {
+            sb.append(i);
+            if (i < n) {
+                sb.append(" + ");
+            }
+        }
+        return sb.toString();
+    }
+
+    public static void main(String[] args) throws IOException {
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 
         System.out.print("Enter n: ");
@@ -33,6 +48,9 @@ public class Ex7 {
                 System.out.println("Error: " + e.getMessage());
             }
         }
-        System.out.println("Sum: " + sum(n));
+
+        int recursiveResult = sum(n), loopResult = sumLoop(n + 1);
+        System.out.println(buildSequence(n) + " = " + recursiveResult + "\nSum (recursive): " + recursiveResult
+                + "\nSum (iterative): " + loopResult);
     }
 }

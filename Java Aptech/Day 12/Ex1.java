@@ -6,46 +6,46 @@ import java.util.Map;
 
 public class Ex1 {
     public static class Student {
-        private String maSV, hoTen, lop;
-        private double diemTrungBinh;
+        private String studentId, fullName, className;
+        private double averageScore;
 
-        public Student(String maSV, String hoTen, String lop, double diemTrungBinh) {
-            this.maSV = maSV;
-            this.hoTen = hoTen;
-            this.lop = lop;
-            this.diemTrungBinh = diemTrungBinh;
+        public Student(String studentId, String fullName, String className, double averageScore) {
+            this.studentId = studentId;
+            this.fullName = fullName;
+            this.className = className;
+            this.averageScore = averageScore;
         }
 
-        public String getMaSV() {
-            return maSV;
+        public String getStudentId() {
+            return studentId;
         }
 
-        public void setMaSV(String maSV) {
-            this.maSV = maSV;
+        public void setStudentId(String studentId) {
+            this.studentId = studentId;
         }
 
-        public String getHoTen() {
-            return hoTen;
+        public String getFullName() {
+            return fullName;
         }
 
-        public void setHoTen(String hoTen) {
-            this.hoTen = hoTen;
+        public void setFullName(String fullName) {
+            this.fullName = fullName;
         }
 
-        public String getLop() {
-            return lop;
+        public String getClassName() {
+            return className;
         }
 
-        public void setLop(String lop) {
-            this.lop = lop;
+        public void setClassName(String className) {
+            this.className = className;
         }
 
-        public double getDiemTrungBinh() {
-            return diemTrungBinh;
+        public double getAverageScore() {
+            return averageScore;
         }
 
-        public void setDiemTrungBinh(double diemTrungBinh) {
-            this.diemTrungBinh = diemTrungBinh;
+        public void setAverageScore(double averageScore) {
+            this.averageScore = averageScore;
         }
     }
 
@@ -97,7 +97,7 @@ public class Ex1 {
                     String name = br.readLine();
 
                     System.out.print("Enter student class: ");
-                    String lop = br.readLine();
+                    String className = br.readLine();
 
                     System.out.print("Enter student average score: ");
                     double score;
@@ -112,8 +112,8 @@ public class Ex1 {
                             System.out.println("Error: " + e.getMessage());
                         }
                     }
-                    Student sv = new Student(id, name, lop, score);
-                    students.put(sv.getMaSV(), sv);
+                    Student sv = new Student(id, name, className, score);
+                    students.put(sv.getStudentId(), sv);
                 }
                 case 2 -> {
                     if (!students.isEmpty()) {
@@ -132,9 +132,9 @@ public class Ex1 {
                         }
 
                         Student sv = students.get(id);
-                        System.out.println(
-                                "Student ID: " + sv.getMaSV() + "\nStudent name: " + sv.getHoTen() + "\nStudent class: "
-                                        + sv.getLop() + "\nStudent average score: " + sv.getDiemTrungBinh());
+                        System.out.println("Student ID: " + sv.getStudentId() + "\nStudent name: " + sv.getFullName()
+                                + "\nStudent class: " + sv.getClassName() + "\nStudent average score: "
+                                + sv.getAverageScore());
                     } else {
                         System.out.println("No student yet");
                     }
@@ -170,8 +170,7 @@ public class Ex1 {
                         }
 
                         Student sv = students.get(id);
-                        sv.setDiemTrungBinh(score);
-                        students.put(id, sv);
+                        sv.setAverageScore(score);
                     } else {
                         System.out.println("No student yet");
                     }
@@ -179,20 +178,14 @@ public class Ex1 {
                 case 4 -> {
                     if (!students.isEmpty()) {
                         System.out.print("Enter student ID: ");
-                        String id;
-                        while (true) {
-                            try {
-                                id = br.readLine();
-                                if (students.containsKey(id)) {
-                                    break;
-                                }
-                                System.out.print("ID dont exist\nRe-enter student ID: ");
-                            } catch (Exception e) {
-                                System.out.println("Error: " + e.getMessage());
-                            }
-                        }
+                        String id = br.readLine();
 
-                        students.remove(id);
+                        boolean removed = students.remove(id) != null;
+                        if (removed) {
+                            System.out.println("Student removed successfully.");
+                        } else {
+                            System.out.println("No student found with that ID.");
+                        }
                     } else {
                         System.out.println("No student yet");
                     }
@@ -201,11 +194,11 @@ public class Ex1 {
                     if (!students.isEmpty()) {
                         boolean exist = false;
                         for (Student sv : students.values()) {
-                            if (sv.getDiemTrungBinh() >= 8) {
+                            if (sv.getAverageScore() >= 8) {
                                 exist = true;
-                                System.out.println("Student ID: " + sv.getMaSV() + "\nStudent name: " + sv.getHoTen()
-                                        + "\nStudent class: " + sv.getLop() + "\nStudent average score: "
-                                        + sv.getDiemTrungBinh());
+                                System.out.println("Student ID: " + sv.getStudentId() + "\nStudent name: "
+                                        + sv.getFullName() + "\nStudent class: " + sv.getClassName()
+                                        + "\nStudent average score: " + sv.getAverageScore());
                             }
                         }
                         if (!exist) {
@@ -216,7 +209,7 @@ public class Ex1 {
                     }
                 }
                 case 0 -> isExit = true;
-                default -> System.out.println("Invalid choice\nRe-enter choice: ");
+                default -> System.out.print("Invalid choice\nRe-enter choice: ");
             }
         }
     }

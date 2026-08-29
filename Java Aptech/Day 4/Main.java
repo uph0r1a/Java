@@ -68,7 +68,7 @@ public class Main {
         return false;
     }
 
-    public static void main(String[] args) throws NumberFormatException, IOException {
+    public static void main(String[] args) throws IOException {
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 
         List<Phone> phone = new ArrayList<>();
@@ -76,10 +76,16 @@ public class Main {
 
         while (!isExit) {
             System.out.print("1)Add phone\n2)Phone list\n3)Update price\n4)Delete phone\n5)Exit\nEnter your choice: ");
-            int choice = Integer.parseInt(br.readLine());
+            int choice;
+            try {
+                choice = Integer.parseInt(br.readLine());
+            } catch (NumberFormatException e) {
+                System.out.println("Invalid choice");
+                continue;
+            }
 
             switch (choice) {
-                case 1:
+                case 1 -> {
                     String phoneID, phoneName, brand;
                     double price;
                     int stock;
@@ -87,10 +93,13 @@ public class Main {
                     System.out.print("Enter phone ID: ");
                     while (true) {
                         phoneID = br.readLine();
-                        if (!phoneID.isEmpty() && !validateID(phone, phoneID)) {
+                        if (phoneID.isEmpty()) {
+                            System.out.print("Phone ID cannot be empty\nRe-enter phone ID: ");
+                        } else if (validateID(phone, phoneID)) {
+                            System.out.print("Phone ID already exists\nRe-enter phone ID: ");
+                        } else {
                             break;
                         }
-                        System.out.print("Phone ID cannot be empty\nRe-enter phone ID: ");
                     }
 
                     System.out.print("Enter phone name: ");
@@ -113,57 +122,75 @@ public class Main {
 
                     System.out.print("Enter price: ");
                     while (true) {
-                        price = Double.parseDouble(br.readLine());
-                        if (price > 0) {
-                            break;
+                        try {
+                            price = Double.parseDouble(br.readLine());
+                            if (price > 0) {
+                                break;
+                            }
+                            System.out.print("Price cannot be negative\nRe-enter price: ");
+                        } catch (NumberFormatException e) {
+                            System.out.print("Invalid price\nRe-enter price: ");
                         }
-                        System.out.print("Price cannot be negative\nRe-enter price: ");
                     }
 
                     System.out.print("Enter stock: ");
                     while (true) {
-                        stock = Integer.parseInt(br.readLine());
-                        if (stock > 0) {
-                            break;
+                        try {
+                            stock = Integer.parseInt(br.readLine());
+                            if (stock > 0) {
+                                break;
+                            }
+                            System.out.print("Stock cannot be negative\nRe-enter stock: ");
+                        } catch (NumberFormatException e) {
+                            System.out.print("Invalid stock\nRe-enter stock: ");
                         }
-                        System.out.print("Stock cannot be negative\nRe-enter stock: ");
                     }
 
                     phone.add(new Phone(phoneID, phoneName, brand, price, stock));
-                    break;
-                case 2:
+                }
+                case 2 -> {
                     if (phone.isEmpty()) {
                         System.out.println("No phone exist");
                     } else {
                         for (int i = 0; i < phone.size(); i++) {
                             System.out.println("Phone " + (i + 1) + "\nPhone ID: " + phone.get(i).getPhoneID()
                                     + "\nPhone name: " + phone.get(i).getPhoneName() + "\nBrand: "
-                                    + phone.get(i).getBrand()
-                                    + "\nPrice: " + phone.get(i).getPrice() + "\nStock: " + phone.get(i).getStock());
+                                    + phone.get(i).getBrand() + "\nPrice: " + phone.get(i).getPrice() + "\nStock: "
+                                    + phone.get(i).getStock());
                         }
                     }
-                    break;
-                case 3:
-                    boolean found = false;
+                }
+                case 3 -> {
                     if (phone.isEmpty()) {
                         System.out.println("No phone exist");
                     } else {
+                        boolean found = false;
+                        String phoneID;
+                        double price;
+
                         System.out.print("Enter phone ID: ");
                         while (true) {
                             phoneID = br.readLine();
-                            if (!phoneID.isEmpty() && validateID(phone, phoneID)) {
+                            if (phoneID.isEmpty()) {
+                                System.out.print("Phone ID cannot be empty\nRe-enter phone ID: ");
+                            } else if (!validateID(phone, phoneID)) {
+                                System.out.print("Phone not found\nRe-enter phone ID: ");
+                            } else {
                                 break;
                             }
-                            System.out.print("Phone ID cannot be empty\nRe-enter phone ID: ");
                         }
 
                         System.out.print("Enter price: ");
                         while (true) {
-                            price = Double.parseDouble(br.readLine());
-                            if (price > 0) {
-                                break;
+                            try {
+                                price = Double.parseDouble(br.readLine());
+                                if (price > 0) {
+                                    break;
+                                }
+                                System.out.print("Price cannot be negative\nRe-enter price: ");
+                            } catch (NumberFormatException e) {
+                                System.out.print("Invalid price\nRe-enter price: ");
                             }
-                            System.out.print("Price cannot be negative\nRe-enter price: ");
                         }
 
                         for (Phone value : phone) {
@@ -176,19 +203,24 @@ public class Main {
                             System.out.println("Phone not found");
                         }
                     }
-                    break;
-                case 4:
+                }
+                case 4 -> {
                     if (phone.isEmpty()) {
                         System.out.println("No phone exist");
                     } else {
-                        found = false;
+                        boolean found = false;
+                        String phoneID;
+
                         System.out.print("Enter phone ID: ");
                         while (true) {
                             phoneID = br.readLine();
-                            if (!phoneID.isEmpty() && validateID(phone, phoneID)) {
+                            if (phoneID.isEmpty()) {
+                                System.out.print("Phone ID cannot be empty\nRe-enter phone ID: ");
+                            } else if (!validateID(phone, phoneID)) {
+                                System.out.print("Phone not found\nRe-enter phone ID: ");
+                            } else {
                                 break;
                             }
-                            System.out.print("Phone ID cannot be empty\nRe-enter phone ID: ");
                         }
 
                         for (int i = 0; i < phone.size(); i++) {
@@ -203,13 +235,9 @@ public class Main {
                             System.out.println("Phone not found");
                         }
                     }
-                    break;
-                case 5:
-                    isExit = true;
-                    break;
-                default:
-                    System.out.println("Invalid choice");
-                    break;
+                }
+                case 5 -> isExit = true;
+                default -> System.out.println("Invalid choice");
             }
         }
     }

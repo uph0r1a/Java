@@ -1,14 +1,7 @@
 public class Ex3 {
     public static class AdvancedComparion<T extends Comparable<T>> {
-        private T a, b, c;
 
-        public AdvancedComparion(T a, T b, T c) {
-            this.a = a;
-            this.b = b;
-            this.c = c;
-        }
-
-        public T maximum() {
+        public T maximum(T a, T b, T c) {
             T max = a;
             if (b.compareTo(max) > 0) {
                 max = b;
@@ -21,11 +14,12 @@ public class Ex3 {
     }
 
     public static void main(String[] args) {
-        AdvancedComparion<Integer> advancedComparionInt = new AdvancedComparion<>(1, 2, 3);
-        AdvancedComparion<Float> advancedComparionFloat = new AdvancedComparion<>(1.1f, 2.2f, 3.3f);
-        AdvancedComparion<String> advancedComparionStr = new AdvancedComparion<>("a", "b", "c");
+        AdvancedComparion<Integer> advancedComparionInt = new AdvancedComparion<>();
+        AdvancedComparion<Float> advancedComparionFloat = new AdvancedComparion<>();
+        AdvancedComparion<String> advancedComparionStr = new AdvancedComparion<>();
 
-        System.out.println("Max int: " + advancedComparionInt.maximum() + "\nMax float: "
-                + advancedComparionFloat.maximum() + "\nMax string: " + advancedComparionStr.maximum());
+        System.out.println("Max int: " + advancedComparionInt.maximum(1, 2, 3) + "\nMax float: "
+                + advancedComparionFloat.maximum(1.1f, 2.2f, 3.3f) + "\nMax string: "
+                + advancedComparionStr.maximum("a", "b", "c"));
     }
 }

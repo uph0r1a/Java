@@ -2,7 +2,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 
-public class Ex2 {
+public class Ex12 {
     public static void main(String[] args) throws NumberFormatException, IOException {
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 
@@ -10,18 +10,20 @@ public class Ex2 {
         System.out.print("Enter product ID to find: ");
         int id = Integer.parseInt(br.readLine());
 
+        System.out.println("Linear Search: ");
         long start = System.currentTimeMillis();
         boolean isFound = false;
-        System.out.println("Linear Search: ");
         for (int i = 0; i < ID.length; i++) {
             if (id == ID[i]) {
                 long time = System.currentTimeMillis() - start;
                 isFound = true;
-                System.out.println("Found at: " + (i + 1) + "\nTime: " + time + " ms");
+                System.out.println("Found at position " + i + "\nTime: " + time + " ms");
                 break;
             }
         }
-        System.out.println(isFound ? "" : "Not found");
+        if (!isFound) {
+            System.out.println("Not found");
+        }
 
         System.out.println("Binary Search: ");
         start = System.currentTimeMillis();
@@ -33,7 +35,7 @@ public class Ex2 {
             if (ID[mid] == id) {
                 long time = System.currentTimeMillis() - start;
                 isFound = true;
-                System.out.println("Found at: " + (mid + 1) + "\nTime: " + time + " ms");
+                System.out.println("Found at position " + mid + "\nTime: " + time + " ms");
                 break;
             }
             if (ID[mid] < id) {
@@ -43,6 +45,8 @@ public class Ex2 {
             }
         }
 
-        System.out.println(isFound ? "" : "Not found");
+        if (!isFound) {
+            System.out.println("Not found");
+        }
     }
 }

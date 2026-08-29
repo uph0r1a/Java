@@ -71,7 +71,7 @@ public class Ex8 {
         }
     }
 
-    public static void main(String[] args) throws NumberFormatException, IOException {
+    public static void main(String[] args) throws IOException {
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 
         List<Product> products = new ArrayList<>();
@@ -82,12 +82,8 @@ public class Ex8 {
         while (!isExit) {
             System.out.print("""
                     Cafe Management Program
-                    1. Enter Product
-                    2. Place Booking
-                    3. Find Booking by Date (dd-MM-yy)
-                    4. Product List
-                    5. Booking History
-                    6. Exit
+                    1. Enter Product | 2. Place Booking | 3. Find Booking by Date (ddmmyy)
+                    4. Product List | 5. Booking History | 6. Exit
                     Enter your choice:\s""");
             int choice;
             while (true) {
@@ -206,7 +202,7 @@ public class Ex8 {
                     }
 
                     bookings.add(new Booking(nextBookingId++, product.getId(), quantity, product.getName(),
-                            LocalDate.now().format(DateTimeFormatter.ofPattern("ddMM-yy")), product.getPrice()));
+                            LocalDate.now().format(DateTimeFormatter.ofPattern("ddMMyy")), product.getPrice()));
                     System.out.println("Booking placed successfully.");
                 }
                 case 3 -> {
@@ -215,12 +211,12 @@ public class Ex8 {
                         break;
                     }
 
-                    System.out.print("Enter a date (ddMM-yy): ");
+                    System.out.print("Enter a date (ddmmyy): ");
                     String date;
                     while (true) {
                         try {
                             date = br.readLine();
-                            LocalDate.parse(date, DateTimeFormatter.ofPattern("ddMM-yy"));
+                            LocalDate.parse(date, DateTimeFormatter.ofPattern("ddMMyy"));
                             break;
                         } catch (Exception e) {
                             System.out.print("Error: " + e.getMessage() + "\nRe-enter a date: ");

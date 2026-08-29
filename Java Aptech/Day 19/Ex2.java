@@ -95,13 +95,13 @@ public class Ex2 {
 
             for (int i = 0; i < n; i++) {
                 System.out.print("Enter product ID: ");
-                String id = br.readLine();
+                String id = br.readLine().trim();
 
                 System.out.print("Enter product name: ");
-                String name = br.readLine();
+                String name = br.readLine().trim();
 
                 System.out.print("Enter product producer: ");
-                String producer = br.readLine();
+                String producer = br.readLine().trim();
 
                 System.out.print("Enter year making: ");
                 int yearMaking;
@@ -140,7 +140,7 @@ public class Ex2 {
                 System.out.println("No product yet");
             } else {
                 for (int i = 0; i < productTest.size(); i++) {
-                    System.out.println("Product " + (i + 1) + ": " + productTest.get(i).toString());
+                    System.out.println("Product " + (i + 1) + ": " + productTest.get(i));
                 }
             }
         }
@@ -180,7 +180,7 @@ public class Ex2 {
             System.out.print("""
                     1) Input product
                     2) Display product
-                    3) Sorted product by year
+                    3) Sort product by year (ascending)
                     0) Exit
                     Enter your choice:\s""");
             int choice;

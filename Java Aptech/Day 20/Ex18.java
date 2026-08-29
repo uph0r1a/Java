@@ -7,7 +7,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 
 public class Ex18 {
-    public static void main(String[] args) throws NumberFormatException, IOException {
+    public static void main(String[] args) throws IOException {
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 
         System.out.print("Enter a int: ");
@@ -25,21 +25,21 @@ public class Ex18 {
         System.out.print("Enter a string: ");
         String str = br.readLine();
 
-        try (DataOutputStream dos = new DataOutputStream(new FileOutputStream("files/data.dat"))) {
+        try (DataOutputStream dos = new DataOutputStream(new FileOutputStream("data.dat"))) {
             dos.writeInt(i);
             dos.writeDouble(d);
             dos.writeBoolean(b);
             dos.writeChar(c);
             dos.writeUTF(str);
-        } catch (Exception e) {
+        } catch (IOException e) {
             System.out.println("Error: " + e.getMessage());
         }
 
-        try (DataInputStream dis = new DataInputStream(new FileInputStream("files/data.dat"))) {
+        try (DataInputStream dis = new DataInputStream(new FileInputStream("data.dat"))) {
             System.out.println("\nData successfully read:\nInteger: " + dis.readInt() + "\nDouble: " + dis.readDouble()
                     + "\nBoolean: " + dis.readBoolean() + "\nCharacter: " + dis.readChar() + "\nString: "
                     + dis.readUTF());
-        } catch (Exception e) {
+        } catch (IOException e) {
             System.out.println("Error: " + e.getMessage());
         }
     }

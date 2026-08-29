@@ -95,6 +95,7 @@ public class Ex1 {
                 return;
             }
             attachChildren(root);
+            sortTreeRecursively(root);
         }
 
         private void attachChildren(Category parent) {
@@ -335,6 +336,14 @@ public class Ex1 {
         manager.addCategory(8, "MacBook", 3);
         manager.buildTree();
 
+        Category mobilePhones = manager.findCategoryByName(manager.getRoot(), "Mobile Phones");
+        if (mobilePhones != null) {
+            System.out.println("\n--- Binary Search Demo (Part 4) ---");
+            Category result = manager.binarySearchByName(mobilePhones.getChildren(), "iPhone");
+            System.out
+                    .println(result != null ? "Binary search found: " + result.getName() : "Binary search: not found");
+        }
+
         boolean isExit = false;
         while (!isExit) {
             System.out.print("""
@@ -354,30 +363,14 @@ public class Ex1 {
             try {
                 int choice = Integer.parseInt(br.readLine().trim());
                 switch (choice) {
-                    case 1:
-                        handleAddCategory();
-                        break;
-                    case 2:
-                        handleShowTree();
-                        break;
-                    case 3:
-                        handleSearchByName();
-                        break;
-                    case 4:
-                        handleCountTotal();
-                        break;
-                    case 5:
-                        handleBreadcrumb();
-                        break;
-                    case 6:
-                        handleLevelOrder();
-                        break;
-                    case 7:
-                        isExit = true;
-                        System.out.println("Goodbye!");
-                        break;
-                    default:
-                        System.out.println("Invalid choice, please try again.");
+                    case 1 -> handleAddCategory();
+                    case 2 -> handleShowTree();
+                    case 3 -> handleSearchByName();
+                    case 4 -> handleCountTotal();
+                    case 5 -> handleBreadcrumb();
+                    case 6 -> handleLevelOrder();
+                    case 7 -> isExit = true;
+                    default -> System.out.println("Invalid choice, please try again.");
                 }
             } catch (NumberFormatException e) {
                 System.out.println("Invalid input. Please enter a number between 1 and 7.");
