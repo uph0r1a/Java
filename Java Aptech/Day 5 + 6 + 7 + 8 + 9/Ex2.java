@@ -73,7 +73,7 @@ public class Ex2 {
             this.registrationDate = registrationDate;
         }
 
-        public String display() {
+        public String displayInfo() {
             return "\nID: " + ID + "\nName: " + name + "\nManufacturer: " + manufacturer + "\nValue: " + value
                     + "\nInsurance Provider: " + insurance.getInsuranceProvider() + "\nCoverage Amount: "
                     + insurance.getCoverageAmount() + "\nRegistration Date: " + registrationDate;
@@ -171,8 +171,8 @@ public class Ex2 {
         }
 
         @Override
-        public String display() {
-            return super.display() + "\nEngine capacity: " + engineCapacity + " cc\nABS supported: "
+        public String displayInfo() {
+            return super.displayInfo() + "\nEngine capacity: " + engineCapacity + " cc\nABS supported: "
                     + (ABSSupported ? "Yes" : "No");
         }
 
@@ -199,7 +199,7 @@ public class Ex2 {
         }
     }
 
-    public static enum FUEL_TYPE {
+    public static enum FuelType {
         Gasoline,
         Diesel,
         Electric
@@ -207,9 +207,9 @@ public class Ex2 {
 
     public static class Car extends Vehicle implements Registrable {
         private int numberOfSeats;
-        private FUEL_TYPE fuelType;
+        private FuelType fuelType;
 
-        public Car(String iD, String name, String manufacturer, int value, int numberOfSeats, FUEL_TYPE fuelType,
+        public Car(String iD, String name, String manufacturer, int value, int numberOfSeats, FuelType fuelType,
                 String insuranceProvider, double coverageAmount, LocalDate registrationDate) {
             super(iD, name, manufacturer, value, insuranceProvider, coverageAmount, registrationDate);
             this.numberOfSeats = numberOfSeats;
@@ -225,17 +225,17 @@ public class Ex2 {
             this.numberOfSeats = numberOfSeats;
         }
 
-        public FUEL_TYPE getFuelType() {
+        public FuelType getFuelType() {
             return fuelType;
         }
 
-        public void setFuelType(FUEL_TYPE fuelType) {
+        public void setFuelType(FuelType fuelType) {
             this.fuelType = fuelType;
         }
 
         @Override
-        public String display() {
-            return super.display() + "\nNumber of seat: " + numberOfSeats + "\nFuel type: " + fuelType.toString();
+        public String displayInfo() {
+            return super.displayInfo() + "\nNumber of seat: " + numberOfSeats + "\nFuel type: " + fuelType;
         }
 
         @Override
@@ -266,7 +266,7 @@ public class Ex2 {
     }
 
     public static boolean validFuelType(String type) {
-        for (FUEL_TYPE fuel : FUEL_TYPE.values()) {
+        for (FuelType fuel : FuelType.values()) {
             if (fuel.name().equalsIgnoreCase(type)) {
                 return true;
             }
@@ -288,7 +288,7 @@ public class Ex2 {
     }
 
     public static void printVehicle(Vehicle vehicle) {
-        System.out.println(vehicle.getClass().getSimpleName() + vehicle.display());
+        System.out.println(vehicle.getClass().getSimpleName() + vehicle.displayInfo());
     }
 
     public static Optional<Vehicle> findVehicleByID(List<Vehicle> vehicles, String searchID) {
@@ -382,8 +382,8 @@ public class Ex2 {
                         System.out.print("Invalid fuel type\nRe-enter fuel type: ");
                     }
 
-                    FUEL_TYPE selectedFuel = null;
-                    for (FUEL_TYPE fuel : FUEL_TYPE.values()) {
+                    FuelType selectedFuel = null;
+                    for (FuelType fuel : FuelType.values()) {
                         if (fuel.name().equalsIgnoreCase(fuelType)) {
                             selectedFuel = fuel;
                             break;
@@ -507,7 +507,7 @@ public class Ex2 {
                     if (vehicles.isEmpty()) {
                         System.out.println("No vehicle exist");
                     } else {
-                        vehicles.forEach(Ex12::printVehicle);
+                        vehicles.forEach(v -> printVehicle(v));
                     }
                 }
                 case 4 -> {
@@ -518,7 +518,7 @@ public class Ex2 {
                         String searchID = br.readLine();
 
                         Optional<Vehicle> foundByID = findVehicleByID(vehicles, searchID);
-                        foundByID.ifPresentOrElse(Ex12::printVehicle, () -> System.out.println("Vehicle not found"));
+                        foundByID.ifPresentOrElse(v -> printVehicle(v), () -> System.out.println("Vehicle not found"));
                     }
                 }
                 case 5 -> {
@@ -529,23 +529,38 @@ public class Ex2 {
                         String searchName = br.readLine();
 
                         Optional<Vehicle> foundByName = findVehicleByName(vehicles, searchName);
-                        foundByName.ifPresentOrElse(Ex12::printVehicle, () -> System.out.println("Vehicle not found"));
+                        foundByName.ifPresentOrElse(v -> printVehicle(v),
+                                () -> System.out.println("Vehicle not found"));
                     }
                 }
                 case 6 -> {
                     if (vehicles.isEmpty()) {
                         System.out.println("No vehicle exist");
                     } else {
-                        vehicles.stream().filter(v -> v instanceof Car).map(v -> (Car) v)
-                                .filter(car -> car.getFuelType() == FUEL_TYPE.Electric).forEach(Ex12::printVehicle);
+                        List<Vehicle> electricCars = vehicles.stream().filter(v -> v instanceof Car)
+                                .map(Car.class::cast).filter(car -> car.getFuelType() == FuelType.Electric)
+                                .map(Vehicle.class::cast).toList();
+
+                        if (electricCars.isEmpty()) {
+                            System.out.println("No electric cars found");
+                        } else {
+                            electricCars.forEach(v -> printVehicle(v));
+                        }
                     }
                 }
                 case 7 -> {
                     if (vehicles.isEmpty()) {
                         System.out.println("No vehicle exist");
                     } else {
-                        vehicles.stream().filter(v -> v instanceof Motorcycle).map(v -> (Motorcycle) v)
-                                .filter(Motorcycle::isABSSupported).forEach(Ex12::printVehicle);
+                        List<Vehicle> absMotorcycles = vehicles.stream().filter(v -> v instanceof Motorcycle)
+                                .map(Motorcycle.class::cast).filter(Motorcycle::isABSSupported).map(Vehicle.class::cast)
+                                .toList();
+
+                        if (absMotorcycles.isEmpty()) {
+                            System.out.println("No ABS-supported motorcycles found");
+                        } else {
+                            absMotorcycles.forEach(v -> printVehicle(v));
+                        }
                     }
                 }
                 case 8 -> {
@@ -561,7 +576,7 @@ public class Ex2 {
                         if (mfrResults.isEmpty()) {
                             System.out.println("No vehicles found for manufacturer: " + searchMfr);
                         } else {
-                            mfrResults.forEach(Ex12::printVehicle);
+                            mfrResults.forEach(v -> printVehicle(v));
                         }
                     }
                 }
@@ -571,7 +586,7 @@ public class Ex2 {
                     } else {
                         Collections.sort(vehicles);
                         System.out.println("Vehicles sorted by value (ascending):");
-                        vehicles.forEach(Ex12::printVehicle);
+                        vehicles.forEach(v -> printVehicle(v));
                     }
                 }
                 case 10 -> {
@@ -580,7 +595,7 @@ public class Ex2 {
                     } else {
                         vehicles.sort(Comparator.comparing(Vehicle::getName, String.CASE_INSENSITIVE_ORDER));
                         System.out.println("Vehicles sorted by name (A -> Z):");
-                        vehicles.forEach(Ex12::printVehicle);
+                        vehicles.forEach(v -> printVehicle(v));
                     }
                 }
                 case 11 -> {
@@ -589,7 +604,7 @@ public class Ex2 {
                     } else {
                         vehicles.sort(Comparator.comparing(Vehicle::getManufacturer, String.CASE_INSENSITIVE_ORDER));
                         System.out.println("Vehicles sorted by manufacturer (A -> Z):");
-                        vehicles.forEach(Ex12::printVehicle);
+                        vehicles.forEach(v -> printVehicle(v));
                     }
                 }
                 case 12 -> {
@@ -598,7 +613,7 @@ public class Ex2 {
                     } else {
                         vehicles.sort(Comparator.comparingDouble(Vehicle::calculateAnnualTax).reversed());
                         System.out.println("Vehicles sorted by annual tax (highest -> lowest):");
-                        vehicles.forEach(Ex12::printVehicle);
+                        vehicles.forEach(v -> printVehicle(v));
                     }
                 }
                 case 13 -> {
@@ -650,7 +665,7 @@ public class Ex2 {
                         if (recentResults.isEmpty()) {
                             System.out.println("No vehicles registered within the last " + days + " day(s)");
                         } else {
-                            recentResults.forEach(Ex12::printVehicle);
+                            recentResults.forEach(v -> printVehicle(v));
                         }
                     }
                 }
