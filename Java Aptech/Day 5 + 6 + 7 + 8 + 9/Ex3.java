@@ -7,7 +7,6 @@ import java.time.format.DateTimeParseException;
 import java.time.format.ResolverStyle;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 public class Ex3 {
     public static BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
@@ -22,14 +21,18 @@ public class Ex3 {
         private String documentID, publisherName;
         private int numberOfCopies;
 
-        public Document(String publisherName, int numberOfCopies) {
-            this.documentID = UUID.randomUUID().toString();
+        public Document(String documentID, String publisherName, int numberOfCopies) {
+            this.documentID = documentID;
             this.publisherName = publisherName;
             this.numberOfCopies = numberOfCopies;
         }
 
         public String getDocumentID() {
             return documentID;
+        }
+
+        public void setDocumentID(String documentID) {
+            this.documentID = documentID;
         }
 
         public String getPublisherName() {
@@ -49,12 +52,12 @@ public class Ex3 {
         }
     }
 
-    public static class Books extends Document {
+    public static class Book extends Document {
         private String authorName;
         private int numberOfPages;
 
-        public Books(String publisherName, int numberOfCopies, String authorName, int numberOfPages) {
-            super(publisherName, numberOfCopies);
+        public Book(String documentID, String publisherName, int numberOfCopies, String authorName, int numberOfPages) {
+            super(documentID, publisherName, numberOfCopies);
             this.authorName = authorName;
             this.numberOfPages = numberOfPages;
         }
@@ -83,11 +86,11 @@ public class Ex3 {
         }
     }
 
-    public static class Magazines extends Document {
+    public static class Magazine extends Document {
         private int issueNumber, issueMonth;
 
-        public Magazines(String publisherName, int numberOfCopies, int issueNumber, int issueMonth) {
-            super(publisherName, numberOfCopies);
+        public Magazine(String documentID, String publisherName, int numberOfCopies, int issueNumber, int issueMonth) {
+            super(documentID, publisherName, numberOfCopies);
             this.issueNumber = issueNumber;
             this.issueMonth = issueMonth;
         }
@@ -116,11 +119,11 @@ public class Ex3 {
         }
     }
 
-    public static class Newspapers extends Document {
+    public static class Newspaper extends Document {
         private LocalDate issueDate;
 
-        public Newspapers(String publisherName, int numberOfCopies, LocalDate issueDate) {
-            super(publisherName, numberOfCopies);
+        public Newspaper(String documentID, String publisherName, int numberOfCopies, LocalDate issueDate) {
+            super(documentID, publisherName, numberOfCopies);
             this.issueDate = issueDate;
         }
 
@@ -134,8 +137,8 @@ public class Ex3 {
 
         @Override
         public void display() {
-            System.out.println(
-                    "\nNewspaper:\nDocument ID: " + getDocumentID() + "\nPublisher name: " + getPublisherName()
+            System.out
+                    .println("\nNewspaper:\nDocument ID: " + getDocumentID() + "\nPublisher name: " + getPublisherName()
                             + "\nNumber of copies: " + getNumberOfCopies() + "\nIssue date: " + getIssueDate());
         }
     }
@@ -147,7 +150,21 @@ public class Ex3 {
             this.documents = new ArrayList<>();
         }
 
+        private boolean idExists(String id) {
+            return documents.stream().anyMatch(d -> d.getDocumentID().equals(id));
+        }
+
         public void add() throws IOException {
+            System.out.print("Enter document ID: ");
+            String documentID;
+            while (true) {
+                documentID = br.readLine().strip();
+                if (!idExists(documentID)) {
+                    break;
+                }
+                System.out.print("Document ID already in use\nRe-enter document ID: ");
+            }
+
             System.out.print("Enter document type 1)Book 2)Magazine 3)Newspaper: ");
             int type;
             while (true) {
@@ -197,7 +214,8 @@ public class Ex3 {
                             System.out.println("Error: " + e.getMessage());
                         }
                     }
-                    documents.add(new Books(publisherName, copies, name, pages));
+                    documents.add(new Book(documentID, publisherName, copies, name, pages));
+                    System.out.println("Book added successfully");
                 }
                 case 2 -> {
                     System.out.print("Enter issue number: ");
@@ -228,10 +246,11 @@ public class Ex3 {
                         }
                     }
 
-                    documents.add(new Magazines(publisherName, copies, issueNumber, issueMonth));
+                    documents.add(new Magazine(documentID, publisherName, copies, issueNumber, issueMonth));
+                    System.out.println("Magazine added successfully");
                 }
                 case 3 -> {
-                    System.out.print("Enter issue date (YYYY-MM-DD): ");
+                    System.out.print("Enter issue date (uuuu-MM-dd): ");
                     LocalDate validDate;
                     while (true) {
                         String userInput = br.readLine();
@@ -240,10 +259,11 @@ public class Ex3 {
                             validDate = LocalDate.parse(userInput, formatter);
                             break;
                         } catch (DateTimeParseException e) {
-                            System.out.print("Invalid date\nRe-enter issue date(YYYY-MM-DD): ");
+                            System.out.print("Invalid date\nRe-enter issue date (uuuu-MM-dd): ");
                         }
                     }
-                    documents.add(new Newspapers(publisherName, copies, validDate));
+                    documents.add(new Newspaper(documentID, publisherName, copies, validDate));
+                    System.out.println("Newspaper added successfully");
                 }
             }
         }
@@ -264,7 +284,9 @@ public class Ex3 {
                     }
                 }
                 if (index == -1) {
-                    System.out.println("No document exist");
+                    System.out.println("No document exists with that ID");
+                } else {
+                    System.out.println("Document removed successfully");
                 }
             }
         }
@@ -279,7 +301,7 @@ public class Ex3 {
             }
         }
 
-        public void search() {
+        public void search() throws IOException {
             if (documents.isEmpty()) {
                 System.out.println("No document yet");
                 return;
@@ -302,9 +324,9 @@ public class Ex3 {
             boolean found = false;
             for (Document document : documents) {
                 boolean matches = switch (type) {
-                    case 1 -> document instanceof Books;
-                    case 2 -> document instanceof Magazines;
-                    case 3 -> document instanceof Newspapers;
+                    case 1 -> document instanceof Book;
+                    case 2 -> document instanceof Magazine;
+                    case 3 -> document instanceof Newspaper;
                     default -> false;
                 };
                 if (matches) {
@@ -336,7 +358,7 @@ public class Ex3 {
             while (true) {
                 try {
                     choice = Integer.parseInt(br.readLine());
-                    if (choice >= 0 && choice <= 4) {
+                    if (choice >= 1 && choice <= 5) {
                         break;
                     }
                     System.out.print("Invalid choice\nRe-enter your choice: ");
@@ -350,7 +372,7 @@ public class Ex3 {
                 case 2 -> manager.remove();
                 case 3 -> manager.displayAllDocument();
                 case 4 -> manager.search();
-                case 0 -> isExit = true;
+                case 5 -> isExit = true;
                 default -> System.out.print("Invalid choice\nRe-enter your choice: ");
             }
         }

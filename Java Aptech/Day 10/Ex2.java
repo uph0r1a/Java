@@ -6,26 +6,26 @@ import java.util.Comparator;
 
 public class Ex2 {
     public static abstract class Course {
-        private String courseID, courseName, instructor, startDate;
+        private String courseId, courseName, instructor, startDate;
         private int maxStudents;
 
         public Course() {
         }
 
-        public Course(String courseID, String courseName, String instructor, String startDate, int maxStudents) {
-            this.courseID = courseID;
+        public Course(String courseId, String courseName, String instructor, String startDate, int maxStudents) {
+            this.courseId = courseId;
             this.courseName = courseName;
             this.instructor = instructor;
             this.startDate = startDate;
             this.maxStudents = maxStudents;
         }
 
-        public String getCourseID() {
-            return courseID;
+        public String getCourseId() {
+            return courseId;
         }
 
-        public void setCourseID(String courseID) {
-            this.courseID = courseID;
+        public void setCourseId(String courseId) {
+            this.courseId = courseId;
         }
 
         public String getCourseName() {
@@ -70,7 +70,7 @@ public class Ex2 {
             while (true) {
                 System.out.print(prompt);
                 try {
-                    return Integer.parseInt(reader.readLine());
+                    return Integer.parseInt(reader.readLine().strip());
                 } catch (NumberFormatException e) {
                     System.out.println("Invalid number, please try again.");
                 }
@@ -81,7 +81,7 @@ public class Ex2 {
             while (true) {
                 System.out.print(prompt);
                 try {
-                    return Double.parseDouble(reader.readLine());
+                    return Double.parseDouble(reader.readLine().strip());
                 } catch (NumberFormatException e) {
                     System.out.println("Invalid number, please try again.");
                 }
@@ -100,9 +100,9 @@ public class Ex2 {
         public OnlineCourse() {
         }
 
-        public OnlineCourse(String courseID, String courseName, String instructor, String startDate, int maxStudents,
+        public OnlineCourse(String courseId, String courseName, String instructor, String startDate, int maxStudents,
                 String platform, double courseFee) {
-            super(courseID, courseName, instructor, startDate, maxStudents);
+            super(courseId, courseName, instructor, startDate, maxStudents);
             this.platform = platform;
             this.courseFee = courseFee;
         }
@@ -126,38 +126,39 @@ public class Ex2 {
         @Override
         public void input(BufferedReader reader) throws IOException {
             System.out.print("Enter course ID: ");
-            String id = reader.readLine();
+            String id = reader.readLine().strip();
 
             System.out.print("Enter course name: ");
-            String name = reader.readLine();
+            String name = reader.readLine().strip();
 
             System.out.print("Enter instructor: ");
-            String instructor = reader.readLine();
+            String instructor = reader.readLine().strip();
 
             System.out.print("Enter start date: ");
-            String date = reader.readLine();
+            String date = reader.readLine().strip();
 
             int maxStudents = readInt(reader, "Enter max students: ");
 
             System.out.print("Enter platform: ");
-            String platform = reader.readLine();
+            String platform = reader.readLine().strip();
 
             double fee = readDouble(reader, "Enter course fee: ");
 
-            setCourseID(id);
+            setCourseId(id);
             setCourseName(name);
             setInstructor(instructor);
             setStartDate(date);
             setMaxStudents(maxStudents);
             setPlatform(platform);
             setCourseFee(fee);
+            System.out.println("Online course added successfully.");
         }
 
         @Override
         public void display() {
-            System.out.println("Course ID: " + getCourseID() + "\nCourse name: " + getCourseName() + "\nInstructor: "
+            System.out.println("Course ID: " + getCourseId() + "\nCourse name: " + getCourseName() + "\nInstructor: "
                     + getInstructor() + "\nStart date: " + getStartDate() + "\nMax student: " + getMaxStudents()
-                    + "\nPlatform: " + getPlatform() + "\nCourse fee: " + getCourseFee() + "\n");
+                    + "\nPlatform: " + getPlatform() + "\nCourse fee: " + getCourseFee());
         }
 
         @Override
@@ -178,9 +179,9 @@ public class Ex2 {
         public OfflineCourse() {
         }
 
-        public OfflineCourse(String courseID, String courseName, String instructor, String startDate, int maxStudents,
+        public OfflineCourse(String courseId, String courseName, String instructor, String startDate, int maxStudents,
                 String roomName, boolean hasLab) {
-            super(courseID, courseName, instructor, startDate, maxStudents);
+            super(courseId, courseName, instructor, startDate, maxStudents);
             this.roomName = roomName;
             this.hasLab = hasLab;
         }
@@ -204,43 +205,47 @@ public class Ex2 {
         @Override
         public void input(BufferedReader reader) throws IOException {
             System.out.print("Enter course ID: ");
-            String id = reader.readLine();
+            String id = reader.readLine().strip();
 
             System.out.print("Enter course name: ");
-            String name = reader.readLine();
+            String name = reader.readLine().strip();
 
             System.out.print("Enter instructor: ");
-            String instructor = reader.readLine();
+            String instructor = reader.readLine().strip();
 
             System.out.print("Enter start date: ");
-            String date = reader.readLine();
+            String date = reader.readLine().strip();
 
             int maxStudents = readInt(reader, "Enter max students: ");
 
             System.out.print("Enter room name: ");
-            String roomName = reader.readLine();
+            String roomName = reader.readLine().strip();
 
-            int labChoice = readInt(reader, "Has lab 1)Yes 2)No: ");
-            while (labChoice != 1 && labChoice != 2) {
+            int labChoice;
+            while (true) {
+                labChoice = readInt(reader, "Has lab 1) Yes 2) No: ");
+                if (labChoice == 1 || labChoice == 2) {
+                    break;
+                }
                 System.out.println("Invalid choice, please enter 1 or 2.");
-                labChoice = readInt(reader, "Re-enter choice: ");
             }
 
-            setCourseID(id);
+            setCourseId(id);
             setCourseName(name);
             setInstructor(instructor);
             setStartDate(date);
             setMaxStudents(maxStudents);
             setRoomName(roomName);
             setHasLab(labChoice == 1);
+            System.out.println("Offline course added successfully.");
         }
 
         @Override
         public void display() {
-            System.out.println("Course ID: " + getCourseID() + "\nCourse name: " + getCourseName() + "\nInstructor: "
+            System.out.println("Course ID: " + getCourseId() + "\nCourse name: " + getCourseName() + "\nInstructor: "
                     + getInstructor() + "\nStart date: " + getStartDate() + "\nMax student: " + getMaxStudents()
                     + "\nRoom name: " + getRoomName() + "\nHas lab: " + (isHasLab() ? "Yes" : "No")
-                    + "\nEstimated cost: " + calculateEstimatedCost() + "\n");
+                    + "\nEstimated cost: " + calculateEstimatedCost());
         }
 
         public double calculateEstimatedCost() {
@@ -276,13 +281,13 @@ public class Ex2 {
             int choice;
             while (true) {
                 try {
-                    choice = Integer.parseInt(br.readLine());
+                    choice = Integer.parseInt(br.readLine().strip());
                     if (choice >= 1 && choice <= 6) {
                         break;
                     }
-                    System.out.println("Invalid choice\nRe-enter choice: ");
+                    System.out.print("Invalid choice\nRe-enter choice: ");
                 } catch (Exception e) {
-                    System.out.println("Error: " + e.getMessage());
+                    System.out.print("Error: " + e.getMessage() + "\nRe-enter choice: ");
                 }
             }
             switch (choice) {
@@ -296,13 +301,33 @@ public class Ex2 {
                     course.input(br);
                     courseList.add(course);
                 }
-                case 3 -> courseList.forEach(Course::display);
-                case 4 -> courseList.stream().filter(course -> course.getClass() == OnlineCourse.class)
-                        .map(OnlineCourse.class::cast).sorted(Comparator.comparing(OnlineCourse::getCostMetric))
-                        .forEach(OnlineCourse::display);
-                case 5 -> courseList.stream().filter(course -> course.getClass() == OfflineCourse.class)
-                        .map(OfflineCourse.class::cast).sorted(Comparator.comparing(OfflineCourse::getCostMetric))
-                        .forEach(OfflineCourse::display);
+                case 3 -> {
+                    if (courseList.isEmpty()) {
+                        System.out.println("No courses in the system yet.");
+                    } else {
+                        courseList.forEach(Course::display);
+                    }
+                }
+                case 4 -> {
+                    var onlineCourses = courseList.stream().filter(course -> course.getClass() == OnlineCourse.class)
+                            .map(OnlineCourse.class::cast).sorted(Comparator.comparing(OnlineCourse::getCostMetric))
+                            .toList();
+                    if (onlineCourses.isEmpty()) {
+                        System.out.println("No online courses added yet.");
+                    } else {
+                        onlineCourses.forEach(OnlineCourse::display);
+                    }
+                }
+                case 5 -> {
+                    var offlineCourses = courseList.stream().filter(course -> course.getClass() == OfflineCourse.class)
+                            .map(OfflineCourse.class::cast).sorted(Comparator.comparing(OfflineCourse::getCostMetric))
+                            .toList();
+                    if (offlineCourses.isEmpty()) {
+                        System.out.println("No offline courses added yet.");
+                    } else {
+                        offlineCourses.forEach(OfflineCourse::display);
+                    }
+                }
                 case 6 -> isExit = true;
                 default -> System.out.println("Invalid choice\nRe-enter choice: ");
             }

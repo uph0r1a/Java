@@ -3,7 +3,6 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 public class Ex4 {
     public static BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
@@ -12,8 +11,8 @@ public class Ex4 {
         private String candidateNumber, fullName, address;
         private int priorityLevel;
 
-        public Candidate(String fullName, String address, int priorityLevel) {
-            this.candidateNumber = UUID.randomUUID().toString();
+        public Candidate(String candidateNumber, String fullName, String address, int priorityLevel) {
+            this.candidateNumber = candidateNumber;
             this.fullName = fullName;
             this.address = address;
             this.priorityLevel = priorityLevel;
@@ -21,6 +20,10 @@ public class Ex4 {
 
         public String getCandidateNumber() {
             return candidateNumber;
+        }
+
+        public void setCandidateNumber(String candidateNumber) {
+            this.candidateNumber = candidateNumber;
         }
 
         public int getPriorityLevel() {
@@ -53,15 +56,15 @@ public class Ex4 {
                     + "\nPriority Level: " + priorityLevel;
         }
 
-        public abstract double scoreSum();
+        public abstract double calculateTotalScore();
     }
 
     public static class GroupACandidate extends Candidate {
         private double mathScore, physicsScore, chemistryScore;
 
-        public GroupACandidate(String fullName, String address, int priorityLevel, double mathScore,
-                double physicsScore, double chemistryScore) {
-            super(fullName, address, priorityLevel);
+        public GroupACandidate(String candidateNumber, String fullName, String address, int priorityLevel,
+                double mathScore, double physicsScore, double chemistryScore) {
+            super(candidateNumber, fullName, address, priorityLevel);
             this.mathScore = mathScore;
             this.physicsScore = physicsScore;
             this.chemistryScore = chemistryScore;
@@ -94,11 +97,11 @@ public class Ex4 {
         @Override
         public String toString() {
             return "\nGroup A:" + super.toString() + "\nMath Score: " + mathScore + "\nPhysics Score: " + physicsScore
-                    + "\nChemistry Score: " + chemistryScore;
+                    + "\nChemistry Score: " + chemistryScore + "\nTotal Score: " + calculateTotalScore();
         }
 
         @Override
-        public double scoreSum() {
+        public double calculateTotalScore() {
             return mathScore + physicsScore + chemistryScore;
         }
     }
@@ -106,9 +109,9 @@ public class Ex4 {
     public static class GroupBCandidate extends Candidate {
         private double mathScore, chemistryScore, biologyScore;
 
-        public GroupBCandidate(String fullName, String address, int priorityLevel, double mathScore,
-                double chemistryScore, double biologyScore) {
-            super(fullName, address, priorityLevel);
+        public GroupBCandidate(String candidateNumber, String fullName, String address, int priorityLevel,
+                double mathScore, double chemistryScore, double biologyScore) {
+            super(candidateNumber, fullName, address, priorityLevel);
             this.mathScore = mathScore;
             this.chemistryScore = chemistryScore;
             this.biologyScore = biologyScore;
@@ -141,11 +144,11 @@ public class Ex4 {
         @Override
         public String toString() {
             return "\nGroup B:" + super.toString() + "\nMath Score: " + mathScore + "\nChemistry Score: "
-                    + chemistryScore + "\nBiology Score: " + biologyScore;
+                    + chemistryScore + "\nBiology Score: " + biologyScore + "\nTotal Score: " + calculateTotalScore();
         }
 
         @Override
-        public double scoreSum() {
+        public double calculateTotalScore() {
             return mathScore + chemistryScore + biologyScore;
         }
     }
@@ -153,9 +156,9 @@ public class Ex4 {
     public static class GroupCCandidate extends Candidate {
         private double literatureScore, historyScore, geographyScore;
 
-        public GroupCCandidate(String fullName, String address, int priorityLevel, double literatureScore,
-                double historyScore, double geographyScore) {
-            super(fullName, address, priorityLevel);
+        public GroupCCandidate(String candidateNumber, String fullName, String address, int priorityLevel,
+                double literatureScore, double historyScore, double geographyScore) {
+            super(candidateNumber, fullName, address, priorityLevel);
             this.literatureScore = literatureScore;
             this.historyScore = historyScore;
             this.geographyScore = geographyScore;
@@ -188,11 +191,11 @@ public class Ex4 {
         @Override
         public String toString() {
             return "\nGroup C:" + super.toString() + "\nLiteratureScore: " + literatureScore + "\nHistory Score: "
-                    + historyScore + "\nGeography Score: " + geographyScore;
+                    + historyScore + "\nGeography Score: " + geographyScore + "\nTotal Score: " + calculateTotalScore();
         }
 
         @Override
-        public double scoreSum() {
+        public double calculateTotalScore() {
             return literatureScore + historyScore + geographyScore;
         }
     }
@@ -204,7 +207,21 @@ public class Ex4 {
             candidates = new ArrayList<>();
         }
 
+        private boolean candidateNumberExists(String candidateNumber) {
+            return candidates.stream().anyMatch(c -> c.getCandidateNumber().equals(candidateNumber));
+        }
+
         public void add() throws IOException {
+            System.out.print("Enter candidate number: ");
+            String candidateNumber;
+            while (true) {
+                candidateNumber = br.readLine().strip();
+                if (!candidateNumberExists(candidateNumber)) {
+                    break;
+                }
+                System.out.print("Candidate number already in use\nRe-enter candidate number: ");
+            }
+
             System.out.print("Enter candidate fullname: ");
             String fullName = br.readLine().strip();
 
@@ -283,9 +300,8 @@ public class Ex4 {
                         }
                     }
 
-                    candidates.add(
-                            new GroupACandidate(fullName, address, priorityLevel, mathScore, physicsScore,
-                                    chemistryScore));
+                    candidates.add(new GroupACandidate(candidateNumber, fullName, address, priorityLevel, mathScore,
+                            physicsScore, chemistryScore));
                 }
                 case 2 -> {
                     System.out.print("Enter math score: ");
@@ -330,9 +346,8 @@ public class Ex4 {
                         }
                     }
 
-                    candidates.add(
-                            new GroupBCandidate(fullName, address, priorityLevel, mathScore, chemistryScore,
-                                    biologyScore));
+                    candidates.add(new GroupBCandidate(candidateNumber, fullName, address, priorityLevel, mathScore,
+                            chemistryScore, biologyScore));
                 }
                 case 3 -> {
                     System.out.print("Enter literature score: ");
@@ -377,8 +392,8 @@ public class Ex4 {
                         }
                     }
 
-                    candidates.add(new GroupCCandidate(fullName, address, priorityLevel, literatureScore,
-                            historyScore, geographyScore));
+                    candidates.add(new GroupCCandidate(candidateNumber, fullName, address, priorityLevel,
+                            literatureScore, historyScore, geographyScore));
                 }
                 default ->
                     System.out.print("Invalid group\nRe-enter candidate group 1) Group A 2) Group B 3) Group C: ");
@@ -419,6 +434,7 @@ public class Ex4 {
 
         while (!isExit) {
             System.out.print("""
+                    ===== UNIVERSITY ADMISSIONS =====
                     1) Add a new candidate.
                     2) Display a candidate's information along with their exam group.
                     3) Search for a candidate by Candidate Number.

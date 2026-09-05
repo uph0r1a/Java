@@ -49,6 +49,51 @@ public class Ex1 {
         }
     }
 
+    private static String readNewId(BufferedReader br, Map<String, Student> students) throws IOException {
+        System.out.print("Enter student ID: ");
+        while (true) {
+            try {
+                String id = br.readLine().strip();
+                if (!students.containsKey(id)) {
+                    return id;
+                }
+                System.out.print("ID exist\nRe-enter student ID: ");
+            } catch (Exception e) {
+                System.out.print("Error: " + e.getMessage() + "\nRe-enter student ID: ");
+            }
+        }
+    }
+
+    private static String readExistingId(BufferedReader br, Map<String, Student> students) throws IOException {
+        System.out.print("Enter student ID: ");
+        while (true) {
+            try {
+                String id = br.readLine().strip();
+                if (students.containsKey(id)) {
+                    return id;
+                }
+                System.out.print("ID dont exist\nRe-enter student ID: ");
+            } catch (Exception e) {
+                System.out.print("Error: " + e.getMessage() + "\nRe-enter student ID: ");
+            }
+        }
+    }
+
+    private static double readScore(BufferedReader br) throws IOException {
+        System.out.print("Enter student average score: ");
+        while (true) {
+            try {
+                double score = Double.parseDouble(br.readLine().strip());
+                if (score >= 0 && score <= 10) {
+                    return score;
+                }
+                System.out.print("Invalid average score\nRe-enter average score: ");
+            } catch (Exception e) {
+                System.out.print("Error: " + e.getMessage() + "\nRe-enter average score: ");
+            }
+        }
+    }
+
     public static void main(String[] args) throws IOException {
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 
@@ -63,73 +108,39 @@ public class Ex1 {
                     4.  Delete student by ID
                     5.  Display students with score >= 8.0
                     0.  Exit
-                    Enter your choice:\s """);
+                    Enter your choice:\s""");
             int choice;
             while (true) {
                 try {
-                    choice = Integer.parseInt(br.readLine());
+                    choice = Integer.parseInt(br.readLine().strip());
                     if (choice >= 0 && choice <= 5) {
                         break;
                     }
                     System.out.print("Invalid choice\nRe-enter choice: ");
                 } catch (Exception e) {
-                    System.out.println("Error: " + e.getMessage());
+                    System.out.print("Error: " + e.getMessage() + "\nRe-enter choice: ");
                 }
             }
 
             switch (choice) {
                 case 1 -> {
-                    System.out.print("Enter student ID: ");
-                    String id;
-                    while (true) {
-                        try {
-                            id = br.readLine();
-                            if (!students.containsKey(id)) {
-                                break;
-                            }
-                            System.out.print("ID exist\nRe-enter student ID: ");
-                        } catch (Exception e) {
-                            System.out.println("Error: " + e.getMessage());
-                        }
-                    }
+                    String id = readNewId(br, students);
 
                     System.out.print("Enter student name: ");
-                    String name = br.readLine();
+                    String name = br.readLine().strip();
 
                     System.out.print("Enter student class: ");
-                    String className = br.readLine();
+                    String className = br.readLine().strip();
 
-                    System.out.print("Enter student average score: ");
-                    double score;
-                    while (true) {
-                        try {
-                            score = Double.parseDouble(br.readLine());
-                            if (score >= 0 && score <= 10) {
-                                break;
-                            }
-                            System.out.print("Invalid average score\nRe-enter average score: ");
-                        } catch (Exception e) {
-                            System.out.println("Error: " + e.getMessage());
-                        }
-                    }
+                    double score = readScore(br);
+
                     Student sv = new Student(id, name, className, score);
                     students.put(sv.getStudentId(), sv);
+                    System.out.println("Student added successfully.");
                 }
                 case 2 -> {
                     if (!students.isEmpty()) {
-                        System.out.print("Enter student ID: ");
-                        String id;
-                        while (true) {
-                            try {
-                                id = br.readLine();
-                                if (students.containsKey(id)) {
-                                    break;
-                                }
-                                System.out.print("ID dont exist\nRe-enter student ID: ");
-                            } catch (Exception e) {
-                                System.out.println("Error: " + e.getMessage());
-                            }
-                        }
+                        String id = readExistingId(br, students);
 
                         Student sv = students.get(id);
                         System.out.println("Student ID: " + sv.getStudentId() + "\nStudent name: " + sv.getFullName()
@@ -141,36 +152,12 @@ public class Ex1 {
                 }
                 case 3 -> {
                     if (!students.isEmpty()) {
-                        System.out.print("Enter student ID: ");
-                        String id;
-                        while (true) {
-                            try {
-                                id = br.readLine();
-                                if (students.containsKey(id)) {
-                                    break;
-                                }
-                                System.out.print("ID dont exist\nRe-enter student ID: ");
-                            } catch (Exception e) {
-                                System.out.println("Error: " + e.getMessage());
-                            }
-                        }
-
-                        System.out.print("Enter student average score: ");
-                        double score;
-                        while (true) {
-                            try {
-                                score = Double.parseDouble(br.readLine());
-                                if (score >= 0 && score <= 10) {
-                                    break;
-                                }
-                                System.out.print("Invalid average score\nRe-enter average score: ");
-                            } catch (Exception e) {
-                                System.out.println("Error: " + e.getMessage());
-                            }
-                        }
+                        String id = readExistingId(br, students);
+                        double score = readScore(br);
 
                         Student sv = students.get(id);
                         sv.setAverageScore(score);
+                        System.out.println("Average score updated successfully.");
                     } else {
                         System.out.println("No student yet");
                     }
@@ -178,7 +165,7 @@ public class Ex1 {
                 case 4 -> {
                     if (!students.isEmpty()) {
                         System.out.print("Enter student ID: ");
-                        String id = br.readLine();
+                        String id = br.readLine().strip();
 
                         boolean removed = students.remove(id) != null;
                         if (removed) {

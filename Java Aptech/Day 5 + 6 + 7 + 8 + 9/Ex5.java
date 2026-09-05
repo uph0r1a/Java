@@ -173,6 +173,7 @@ public class Ex5 {
 
         while (!isExit) {
             System.out.print("""
+                    ===== DOCUMENT MANAGEMENT =====
                     1. Add new book
                     2. Display all books
                     3. Search books by author

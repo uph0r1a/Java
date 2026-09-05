@@ -1,4 +1,5 @@
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.time.Year;
 import java.util.ArrayList;
@@ -13,7 +14,7 @@ public class Ex1 {
         public void displayDevice();
     }
 
-    static class InvalidDeviceDataException extends Exception {
+    public static class InvalidDeviceDataException extends Exception {
         public InvalidDeviceDataException(String message) {
             super(message);
         }
@@ -71,14 +72,14 @@ public class Ex1 {
             String name;
             while (true) {
                 try {
-                    name = br.readLine();
+                    name = br.readLine().strip();
                     if (name.length() >= 2) {
                         break;
                     }
                     throw new InvalidDeviceDataException("Device name must be at least 2 characters.");
                 } catch (InvalidDeviceDataException e) {
                     System.out.print("Error: " + e.getMessage() + "\nRe-enter name: ");
-                } catch (Exception e) {
+                } catch (IOException e) {
                     System.out.print("Error: " + e.getMessage() + "\nRe-enter name: ");
                 }
             }
@@ -87,14 +88,14 @@ public class Ex1 {
             String brand;
             while (true) {
                 try {
-                    brand = br.readLine();
+                    brand = br.readLine().strip();
                     if (brand.length() >= 2) {
                         break;
                     }
                     throw new InvalidDeviceDataException("Device brand must be at least 2 characters.");
                 } catch (InvalidDeviceDataException e) {
                     System.out.print("Error: " + e.getMessage() + "\nRe-enter brand: ");
-                } catch (Exception e) {
+                } catch (IOException e) {
                     System.out.print("Error: " + e.getMessage() + "\nRe-enter brand: ");
                 }
             }
@@ -103,7 +104,7 @@ public class Ex1 {
             int releaseYear;
             while (true) {
                 try {
-                    releaseYear = Integer.parseInt(br.readLine());
+                    releaseYear = Integer.parseInt(br.readLine().strip());
                     if (releaseYear >= 2000 && releaseYear <= Year.now().getValue()) {
                         break;
                     }
@@ -113,8 +114,8 @@ public class Ex1 {
                     System.out.print("Error: release year must be a whole number.\nRe-enter release year: ");
                 } catch (InvalidDeviceDataException e) {
                     System.out.print("Error: " + e.getMessage() + "\nRe-enter release year: ");
-                } catch (Exception e) {
-                    System.out.println("Error: " + e.getMessage());
+                } catch (IOException e) {
+                    System.out.print("Error: " + e.getMessage() + "\nRe-enter release year: ");
                 }
             }
 
@@ -122,7 +123,7 @@ public class Ex1 {
             double price;
             while (true) {
                 try {
-                    price = Double.parseDouble(br.readLine());
+                    price = Double.parseDouble(br.readLine().strip());
                     if (price > 0) {
                         break;
                     }
@@ -131,8 +132,8 @@ public class Ex1 {
                     System.out.print("Error: price must be a valid number.\nRe-enter price: ");
                 } catch (InvalidDeviceDataException e) {
                     System.out.print("Error: " + e.getMessage() + "\nRe-enter price: ");
-                } catch (Exception e) {
-                    System.out.println("Error: " + e.getMessage());
+                } catch (IOException e) {
+                    System.out.print("Error: " + e.getMessage() + "\nRe-enter price: ");
                 }
             }
 
@@ -140,12 +141,13 @@ public class Ex1 {
             setBrand(brand);
             setReleaseYear(releaseYear);
             setPrice(price);
+            System.out.println("Device added successfully.");
         }
 
         public void displayDevice() {
             System.out.println("Device name: " + getName() + "\nDevice brand: " + getBrand() + "\nDevice release year: "
                     + getReleaseYear() + "\nDevice price: " + getPrice() + "\nDevice '" + getName() + "'"
-                    + (isPremium() ? " is a premium product.\n" : " is standard.\n"));
+                    + (isPremium() ? " is a premium product." : " is standard."));
         }
 
         public boolean isPremium() {
@@ -163,6 +165,10 @@ public class Ex1 {
         }
 
         public void showAllDevices() {
+            if (devices.isEmpty()) {
+                System.out.println("No devices in inventory yet.");
+                return;
+            }
             for (ElectronicDevice electronicDevice : devices) {
                 electronicDevice.displayDevice();
             }
@@ -200,13 +206,13 @@ public class Ex1 {
             int choice;
             while (true) {
                 try {
-                    choice = Integer.parseInt(br.readLine());
+                    choice = Integer.parseInt(br.readLine().strip());
                     if (choice >= 1 && choice <= 4) {
                         break;
                     }
                     System.out.print("Invalid choice\nRe-enter your choice: ");
                 } catch (Exception e) {
-                    System.out.print("Error: " + e.getMessage());
+                    System.out.print("Error: " + e.getMessage() + "\nRe-enter your choice: ");
                 }
             }
 

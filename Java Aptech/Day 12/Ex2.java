@@ -9,10 +9,10 @@ public class Ex2 {
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 
         Map<String, Integer> occurrences = new HashMap<>();
-        System.out.print("Enter text (blank line to finish):");
+        System.out.print("Enter text (blank line to finish): ");
         String line;
-        while ((line = br.readLine()) != null && !line.isEmpty()) {
-            String[] words = line.toLowerCase().split("\\W+");
+        while ((line = br.readLine()) != null && !line.isBlank()) {
+            String[] words = line.strip().toLowerCase().split("\\W+");
 
             for (String word : words) {
                 if (word.isEmpty()) {
@@ -20,6 +20,11 @@ public class Ex2 {
                 }
                 occurrences.put(word, occurrences.getOrDefault(word, 0) + 1);
             }
+        }
+
+        if (occurrences.isEmpty()) {
+            System.out.println("No words entered.");
+            return;
         }
 
         occurrences.entrySet().stream().sorted(Map.Entry.<String, Integer>comparingByValue().reversed()).limit(5)

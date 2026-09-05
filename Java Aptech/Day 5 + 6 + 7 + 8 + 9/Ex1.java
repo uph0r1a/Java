@@ -26,34 +26,35 @@ public class Ex1 {
     }
 
     public static abstract class ElectronicDevice {
-        private final String ID, name, brand;
-        private final int price;
+        private final String deviceId, deviceName, manufacturer;
+        private final int sellingPrice;
         private final LocalDate importDate;
 
-        public ElectronicDevice(String ID, String name, String brand, int price, LocalDate importDate) {
-            this.ID = ID;
-            this.name = name;
-            this.brand = brand;
-            this.price = price;
+        public ElectronicDevice(String deviceId, String deviceName, String manufacturer, int sellingPrice,
+                LocalDate importDate) {
+            this.deviceId = deviceId;
+            this.deviceName = deviceName;
+            this.manufacturer = manufacturer;
+            this.sellingPrice = sellingPrice;
             this.importDate = importDate;
         }
 
         public abstract void displayInfo();
 
-        public String getID() {
-            return ID;
+        public String getDeviceId() {
+            return deviceId;
         }
 
-        public String getName() {
-            return name;
+        public String getDeviceName() {
+            return deviceName;
         }
 
-        public String getBrand() {
-            return brand;
+        public String getManufacturer() {
+            return manufacturer;
         }
 
-        public int getPrice() {
-            return price;
+        public int getSellingPrice() {
+            return sellingPrice;
         }
 
         public LocalDate getImportDate() {
@@ -109,24 +110,24 @@ public class Ex1 {
     public static class Laptop extends ElectronicDevice implements Discountable {
         private final double ram, screenSize;
 
-        public Laptop(String ID, String name, String brand, int price, double ram, double screenSize,
-                LocalDate importDate) {
-            super(ID, name, brand, price, importDate);
+        public Laptop(String deviceId, String deviceName, String manufacturer, int sellingPrice, double ram,
+                double screenSize, LocalDate importDate) {
+            super(deviceId, deviceName, manufacturer, sellingPrice, importDate);
             this.ram = ram;
             this.screenSize = screenSize;
-            ElectronicDevice.DeviceStatistics.recordLaptop(price);
+            ElectronicDevice.DeviceStatistics.recordLaptop(sellingPrice);
         }
 
         @Override
         public double calculateDiscountPrice() {
-            return getPrice() * 0.85;
+            return getSellingPrice() * 0.85;
         }
 
         @Override
         public void displayInfo() {
-            System.out.println("Laptop\nID: " + getID() + "\nName: " + getName() + "\nBrand: " + getBrand()
-                    + "\nPrice: " + getPrice() + "\nRAM: " + ram + "\nScreen size: " + screenSize + "\nImport date: "
-                    + getImportDate());
+            System.out.println("Laptop\nID: " + getDeviceId() + "\nName: " + getDeviceName() + "\nManufacturer: "
+                    + getManufacturer() + "\nPrice: " + getSellingPrice() + "\nRAM: " + ram + "\nScreen size: "
+                    + screenSize + "\nImport date: " + getImportDate());
         }
 
         public double getRam() {
@@ -139,31 +140,31 @@ public class Ex1 {
     }
 
     public static class Phone extends ElectronicDevice implements Discountable {
-        private final double batteryLife;
+        private final double batteryCapacity;
         private final boolean isSupport5G;
 
-        public Phone(String ID, String name, String brand, int price, double batteryLife, boolean isSupport5G,
-                LocalDate importDate) {
-            super(ID, name, brand, price, importDate);
-            this.batteryLife = batteryLife;
+        public Phone(String deviceId, String deviceName, String manufacturer, int sellingPrice, double batteryCapacity,
+                boolean isSupport5G, LocalDate importDate) {
+            super(deviceId, deviceName, manufacturer, sellingPrice, importDate);
+            this.batteryCapacity = batteryCapacity;
             this.isSupport5G = isSupport5G;
-            ElectronicDevice.DeviceStatistics.recordPhone(price);
+            ElectronicDevice.DeviceStatistics.recordPhone(sellingPrice);
         }
 
         @Override
         public double calculateDiscountPrice() {
-            return getPrice() * 0.9;
+            return getSellingPrice() * 0.9;
         }
 
         @Override
         public void displayInfo() {
-            System.out.println("Phone\nID: " + getID() + "\nName: " + getName() + "\nBrand: " + getBrand() + "\nPrice: "
-                    + getPrice() + "\nBattery life: " + batteryLife + "\nSupport 5G: " + (isSupport5G ? "Yes" : "No")
-                    + "\nImport date: " + getImportDate());
+            System.out.println("Phone\nID: " + getDeviceId() + "\nName: " + getDeviceName() + "\nManufacturer: "
+                    + getManufacturer() + "\nPrice: " + getSellingPrice() + "\nBattery capacity: " + batteryCapacity
+                    + "\nSupport 5G: " + (isSupport5G ? "Yes" : "No") + "\nImport date: " + getImportDate());
         }
 
-        public double getBatteryLife() {
-            return batteryLife;
+        public double getBatteryCapacity() {
+            return batteryCapacity;
         }
 
         public boolean isSupport5G() {
@@ -172,11 +173,11 @@ public class Ex1 {
     }
 
     public static boolean validID(List<ElectronicDevice> devices, String id) {
-        return devices.stream().anyMatch(d -> d.getID().equals(id));
+        return devices.stream().anyMatch(d -> d.getDeviceId().equals(id));
     }
 
     public static Optional<ElectronicDevice> findByID(List<ElectronicDevice> devices, String id) {
-        return devices.stream().filter(d -> d.getID().equals(id)).findFirst();
+        return devices.stream().filter(d -> d.getDeviceId().equals(id)).findFirst();
     }
 
     public static void main(String[] args) throws IOException {
@@ -186,8 +187,25 @@ public class Ex1 {
         boolean isExit = false;
 
         while (!isExit) {
-            System.out.print(
-                    "===== ELECTRONIC DEVICE MANAGEMENT =====\n1. Add device\n2. Search device by ID\n3. Phone list with 5G support\n4. Laptop list with RAM >= 16GB\n5. Find phone with largest battery capacity\n6. Find laptop with largest screen size\n7. Find device with highest price\n8. Total value of all devices\n9. Find devices by manufacturer\n10. Display device names\n11. Display devices by import year\n12. Display discounted price of all devices\n13. Sort devices by name\n14. Sort devices by price\n15. Display device statistics\n0. Exit\nEnter your choice: ");
+            System.out.print("""
+                    ===== ELECTRONIC DEVICE MANAGEMENT =====
+                    1. Add device
+                    2. Search device by ID
+                    3. Phone list with 5G support
+                    4. Laptop list with RAM >= 16GB
+                    5. Find phone with largest battery capacity
+                    6. Find laptop with largest screen size
+                    7. Find device with highest price
+                    8. Total value of all devices
+                    9. Find devices by manufacturer
+                    10. Display device names
+                    11. Display devices by import year
+                    12. Display discounted price of all devices
+                    13. Sort devices by name
+                    14. Sort devices by price
+                    15. Display device statistics
+                    0. Exit
+                    Enter your choice:\s""");
 
             int choice;
             try {
@@ -200,13 +218,18 @@ public class Ex1 {
             switch (choice) {
                 case 0 -> isExit = true;
                 case 1 -> {
-                    System.out.print("Add 1)Laptop or 2)Phone: ");
-                    int addDevice;
-                    try {
-                        addDevice = Integer.parseInt(br.readLine());
-                    } catch (NumberFormatException e) {
-                        System.out.println("Invalid input");
-                        addDevice = -1;
+                    int addDevice = -1;
+                    while (true) {
+                        System.out.print("Add 1)Laptop or 2)Phone: ");
+                        try {
+                            addDevice = Integer.parseInt(br.readLine());
+                            if (addDevice == 1 || addDevice == 2) {
+                                break;
+                            }
+                            System.out.println("Invalid choice");
+                        } catch (NumberFormatException e) {
+                            System.out.println("Invalid input");
+                        }
                     }
 
                     switch (addDevice) {
@@ -228,8 +251,8 @@ public class Ex1 {
                             System.out.print("Enter name: ");
                             String name = br.readLine();
 
-                            System.out.print("Enter brand: ");
-                            String brand = br.readLine();
+                            System.out.print("Enter manufacturer: ");
+                            String manufacturer = br.readLine();
 
                             System.out.print("Enter price: ");
                             int price = 0;
@@ -269,13 +292,12 @@ public class Ex1 {
                                 try {
                                     screenSize = Double.parseDouble(br.readLine());
                                     if (screenSize <= 0) {
-                                        throw new InvalidAttributeException("Screen size must be greater than 0");
+                                        System.out.print("Screen size must be greater than 0\nRe-enter screen size: ");
+                                        continue;
                                     }
                                     break;
                                 } catch (NumberFormatException e) {
                                     System.out.print("Invalid input\nRe-enter screen size: ");
-                                } catch (InvalidAttributeException e) {
-                                    System.out.print(e.getMessage() + "\nRe-enter screen size: ");
                                 }
                             }
 
@@ -289,7 +311,7 @@ public class Ex1 {
                                 }
                             }
 
-                            device.add(new Laptop(id, name, brand, price, ram, screenSize, importDate));
+                            device.add(new Laptop(id, name, manufacturer, price, ram, screenSize, importDate));
                             System.out.println("Laptop added successful");
                         }
                         case 2 -> {
@@ -310,8 +332,8 @@ public class Ex1 {
                             System.out.print("Enter name: ");
                             String name = br.readLine();
 
-                            System.out.print("Enter brand: ");
-                            String brand = br.readLine();
+                            System.out.print("Enter manufacturer: ");
+                            String manufacturer = br.readLine();
 
                             System.out.print("Enter price: ");
                             int price = 0;
@@ -329,19 +351,19 @@ public class Ex1 {
                                 }
                             }
 
-                            System.out.print("Enter battery life: ");
-                            double batteryLife = 0;
+                            System.out.print("Enter battery capacity: ");
+                            double batteryCapacity = 0;
                             while (true) {
                                 try {
-                                    batteryLife = Double.parseDouble(br.readLine());
-                                    if (batteryLife <= 0) {
-                                        throw new InvalidAttributeException("Battery life must be greater than 0");
+                                    batteryCapacity = Double.parseDouble(br.readLine());
+                                    if (batteryCapacity <= 0) {
+                                        throw new InvalidAttributeException("Battery capacity must be greater than 0");
                                     }
                                     break;
                                 } catch (NumberFormatException e) {
-                                    System.out.print("Invalid input\nRe-enter battery life: ");
+                                    System.out.print("Invalid input\nRe-enter battery capacity: ");
                                 } catch (InvalidAttributeException e) {
-                                    System.out.print(e.getMessage() + "\nRe-enter battery life: ");
+                                    System.out.print(e.getMessage() + "\nRe-enter battery capacity: ");
                                 }
                             }
 
@@ -369,10 +391,10 @@ public class Ex1 {
                                 }
                             }
 
-                            device.add(new Phone(id, name, brand, price, batteryLife, isSupport5G == 1, importDate));
+                            device.add(new Phone(id, name, manufacturer, price, batteryCapacity, isSupport5G == 1,
+                                    importDate));
                             System.out.println("Phone added successful");
                         }
-                        default -> System.out.println("Invalid choice");
                     }
                 }
                 case 2 -> {
@@ -409,7 +431,7 @@ public class Ex1 {
                         System.out.println("No device exist");
                     } else {
                         device.stream().filter(Phone.class::isInstance).map(Phone.class::cast)
-                                .max(Comparator.comparingDouble(Phone::getBatteryLife)).ifPresentOrElse(p -> {
+                                .max(Comparator.comparingDouble(Phone::getBatteryCapacity)).ifPresentOrElse(p -> {
                                     System.out.println("Phone with largest battery capacity:");
                                     p.displayInfo();
                                 }, () -> System.out.println("No phones found"));
@@ -427,15 +449,16 @@ public class Ex1 {
                     }
                 }
                 case 7 ->
-                    device.stream().max(Comparator.comparingInt(ElectronicDevice::getPrice)).ifPresentOrElse(d -> {
-                        System.out.println("Device with highest price:");
-                        d.displayInfo();
-                    }, () -> System.out.println("No device exist"));
+                    device.stream().max(Comparator.comparingInt(ElectronicDevice::getSellingPrice))
+                            .ifPresentOrElse(d -> {
+                                System.out.println("Device with highest price:");
+                                d.displayInfo();
+                            }, () -> System.out.println("No device exist"));
                 case 8 -> {
                     if (device.isEmpty()) {
                         System.out.println("No device exist");
                     } else {
-                        int totalValue = device.stream().mapToInt(ElectronicDevice::getPrice).sum();
+                        int totalValue = device.stream().mapToInt(ElectronicDevice::getSellingPrice).sum();
                         System.out.println("Total value of all devices: " + totalValue);
                     }
                 }
@@ -443,16 +466,16 @@ public class Ex1 {
                     if (device.isEmpty()) {
                         System.out.println("No device exist");
                     } else {
-                        System.out.print("Enter brand: ");
-                        String searchBrand = br.readLine();
-                        List<ElectronicDevice> brandResults = device.stream()
-                                .filter(d -> d.getBrand().equalsIgnoreCase(searchBrand)).toList();
+                        System.out.print("Enter manufacturer: ");
+                        String searchManufacturer = br.readLine();
+                        List<ElectronicDevice> manufacturerResults = device.stream()
+                                .filter(d -> d.getManufacturer().equalsIgnoreCase(searchManufacturer)).toList();
 
-                        if (brandResults.isEmpty()) {
-                            System.out.println("No device found for brand: " + searchBrand);
+                        if (manufacturerResults.isEmpty()) {
+                            System.out.println("No device found for manufacturer: " + searchManufacturer);
                         } else {
-                            System.out.println("Devices by brand " + searchBrand + ":");
-                            brandResults.forEach(ElectronicDevice::displayInfo);
+                            System.out.println("Devices by manufacturer " + searchManufacturer + ":");
+                            manufacturerResults.forEach(ElectronicDevice::displayInfo);
                         }
                     }
                 }
@@ -461,27 +484,32 @@ public class Ex1 {
                         System.out.println("No device exist");
                     } else {
                         System.out.println("Device names:");
-                        device.stream().map(ElectronicDevice::getName).forEach(System.out::println);
+                        device.stream().map(ElectronicDevice::getDeviceName).forEach(System.out::println);
                     }
                 }
                 case 11 -> {
                     if (device.isEmpty()) {
                         System.out.println("No device exist");
                     } else {
-                        System.out.print("Enter year: ");
-                        try {
-                            int year = Integer.parseInt(br.readLine());
-                            List<ElectronicDevice> yearResults = device.stream()
-                                    .filter(d -> d.getImportDate().getYear() == year).toList();
-
-                            if (yearResults.isEmpty()) {
-                                System.out.println("No devices imported in " + year);
-                            } else {
-                                System.out.println("Devices imported in " + year + ":");
-                                yearResults.forEach(ElectronicDevice::displayInfo);
+                        int year = -1;
+                        while (true) {
+                            System.out.print("Enter year: ");
+                            try {
+                                year = Integer.parseInt(br.readLine());
+                                break;
+                            } catch (NumberFormatException e) {
+                                System.out.println("Invalid year");
                             }
-                        } catch (NumberFormatException e) {
-                            System.out.println("Invalid year");
+                        }
+                        final int yearFinal = year;
+                        List<ElectronicDevice> yearResults = device.stream()
+                                .filter(d -> d.getImportDate().getYear() == yearFinal).toList();
+
+                        if (yearResults.isEmpty()) {
+                            System.out.println("No devices imported in " + year);
+                        } else {
+                            System.out.println("Devices imported in " + year + ":");
+                            yearResults.forEach(ElectronicDevice::displayInfo);
                         }
                     }
                 }
@@ -489,16 +517,16 @@ public class Ex1 {
                     if (device.isEmpty()) {
                         System.out.println("No device exist");
                     } else {
-                        device.stream().forEach(d -> {
+                        device.forEach(d -> {
                             Discountable discountable = (Discountable) d;
-                            System.out.println(
-                                    "ID: " + d.getID() + "\nName: " + d.getName() + "\nOriginal price: " + d.getPrice()
-                                            + "\nDiscount price: " + discountable.calculateDiscountPrice() + "\n");
+                            System.out.println("ID: " + d.getDeviceId() + "\nName: " + d.getDeviceName()
+                                    + "\nOriginal price: " + d.getSellingPrice() + "\nDiscount price: "
+                                    + discountable.calculateDiscountPrice() + "\n");
                         });
                     }
                 }
                 case 13 -> {
-                    device.sort(Comparator.comparing(ElectronicDevice::getName, String.CASE_INSENSITIVE_ORDER));
+                    device.sort(Comparator.comparing(ElectronicDevice::getDeviceName, String.CASE_INSENSITIVE_ORDER));
 
                     System.out.println("Device list after sorting:");
                     device.forEach(d -> {
@@ -507,7 +535,7 @@ public class Ex1 {
                     });
                 }
                 case 14 -> {
-                    device.sort(Comparator.comparingInt(ElectronicDevice::getPrice));
+                    device.sort(Comparator.comparingInt(ElectronicDevice::getSellingPrice));
 
                     System.out.println("Device list sorted by price (ascending):");
                     device.forEach(d -> {

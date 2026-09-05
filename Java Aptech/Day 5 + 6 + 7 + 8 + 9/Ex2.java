@@ -14,35 +14,35 @@ public class Ex2 {
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
     public static abstract class Vehicle implements Comparable<Vehicle> {
-        private String ID, name, manufacturer;
-        private int value;
+        private String vehicleId, vehicleName, manufacturer;
+        private int vehicleValue;
         private final VehicleInsurance insurance;
         private LocalDate registrationDate;
 
-        public Vehicle(String ID, String name, String manufacturer, int value, String insuranceProvider,
-                double coverageAmount, LocalDate registrationDate) {
-            this.ID = ID;
-            this.name = name;
+        public Vehicle(String vehicleId, String vehicleName, String manufacturer, int vehicleValue,
+                String insuranceProvider, double coverageAmount, LocalDate registrationDate) {
+            this.vehicleId = vehicleId;
+            this.vehicleName = vehicleName;
             this.manufacturer = manufacturer;
-            this.value = value;
+            this.vehicleValue = vehicleValue;
             this.insurance = new VehicleInsurance(insuranceProvider, coverageAmount);
             this.registrationDate = registrationDate;
         }
 
-        public String getID() {
-            return ID;
+        public String getVehicleId() {
+            return vehicleId;
         }
 
-        public void setID(String ID) {
-            this.ID = ID;
+        public void setVehicleId(String vehicleId) {
+            this.vehicleId = vehicleId;
         }
 
-        public String getName() {
-            return name;
+        public String getVehicleName() {
+            return vehicleName;
         }
 
-        public void setName(String name) {
-            this.name = name;
+        public void setVehicleName(String vehicleName) {
+            this.vehicleName = vehicleName;
         }
 
         public String getManufacturer() {
@@ -53,12 +53,12 @@ public class Ex2 {
             this.manufacturer = manufacturer;
         }
 
-        public int getValue() {
-            return value;
+        public int getVehicleValue() {
+            return vehicleValue;
         }
 
-        public void setValue(int value) {
-            this.value = value;
+        public void setVehicleValue(int vehicleValue) {
+            this.vehicleValue = vehicleValue;
         }
 
         public VehicleInsurance getInsurance() {
@@ -74,14 +74,14 @@ public class Ex2 {
         }
 
         public String displayInfo() {
-            return "\nID: " + ID + "\nName: " + name + "\nManufacturer: " + manufacturer + "\nValue: " + value
-                    + "\nInsurance Provider: " + insurance.getInsuranceProvider() + "\nCoverage Amount: "
+            return "\nID: " + vehicleId + "\nName: " + vehicleName + "\nManufacturer: " + manufacturer + "\nValue: "
+                    + vehicleValue + "\nInsurance Provider: " + insurance.getInsuranceProvider() + "\nCoverage Amount: "
                     + insurance.getCoverageAmount() + "\nRegistration Date: " + registrationDate;
         }
 
         @Override
         public int compareTo(Vehicle other) {
-            return Integer.compare(this.value, other.value);
+            return Integer.compare(this.vehicleValue, other.vehicleValue);
         }
 
         public abstract double calculateAnnualTax();
@@ -124,16 +124,16 @@ public class Ex2 {
                 return totalVehicleValue;
             }
 
-            public static void addCar(int value) {
+            public static void addCar(int vehicleValue) {
                 totalVehicles++;
                 totalCars++;
-                totalVehicleValue += value;
+                totalVehicleValue += vehicleValue;
             }
 
-            public static void addMotorcycle(int value) {
+            public static void addMotorcycle(int vehicleValue) {
                 totalVehicles++;
                 totalMotorcycles++;
-                totalVehicleValue += value;
+                totalVehicleValue += vehicleValue;
             }
         }
     }
@@ -146,12 +146,14 @@ public class Ex2 {
         private double engineCapacity;
         private boolean ABSSupported;
 
-        public Motorcycle(String iD, String name, String manufacturer, int value, double engineCapacity,
-                boolean ABSSupported, String insuranceProvider, double coverageAmount, LocalDate registrationDate) {
-            super(iD, name, manufacturer, value, insuranceProvider, coverageAmount, registrationDate);
+        public Motorcycle(String vehicleId, String vehicleName, String manufacturer, int vehicleValue,
+                double engineCapacity, boolean ABSSupported, String insuranceProvider, double coverageAmount,
+                LocalDate registrationDate) {
+            super(vehicleId, vehicleName, manufacturer, vehicleValue, insuranceProvider, coverageAmount,
+                    registrationDate);
             this.engineCapacity = engineCapacity;
             this.ABSSupported = ABSSupported;
-            VehicleStatistics.addMotorcycle(value);
+            VehicleStatistics.addMotorcycle(vehicleValue);
         }
 
         public double getEngineCapacity() {
@@ -178,7 +180,7 @@ public class Ex2 {
 
         @Override
         public double calculateAnnualTax() {
-            return getEngineCapacity() < 150 ? getValue() * 0.02 : getValue() * 0.04;
+            return getEngineCapacity() < 150 ? getVehicleValue() * 0.02 : getVehicleValue() * 0.04;
         }
 
         @Override
@@ -209,12 +211,13 @@ public class Ex2 {
         private int numberOfSeats;
         private FuelType fuelType;
 
-        public Car(String iD, String name, String manufacturer, int value, int numberOfSeats, FuelType fuelType,
-                String insuranceProvider, double coverageAmount, LocalDate registrationDate) {
-            super(iD, name, manufacturer, value, insuranceProvider, coverageAmount, registrationDate);
+        public Car(String vehicleId, String vehicleName, String manufacturer, int vehicleValue, int numberOfSeats,
+                FuelType fuelType, String insuranceProvider, double coverageAmount, LocalDate registrationDate) {
+            super(vehicleId, vehicleName, manufacturer, vehicleValue, insuranceProvider, coverageAmount,
+                    registrationDate);
             this.numberOfSeats = numberOfSeats;
             this.fuelType = fuelType;
-            VehicleStatistics.addCar(value);
+            VehicleStatistics.addCar(vehicleValue);
         }
 
         public int getNumberOfSeats() {
@@ -242,9 +245,9 @@ public class Ex2 {
         public double calculateAnnualTax() {
             String type = getFuelType().toString().toLowerCase();
             return switch (type) {
-                case "gasoline" -> getValue() * 0.05;
-                case "diesel" -> getValue() * 0.06;
-                case "electric" -> getValue() * 0.03;
+                case "gasoline" -> getVehicleValue() * 0.05;
+                case "diesel" -> getVehicleValue() * 0.06;
+                case "electric" -> getVehicleValue() * 0.03;
                 default -> throw new UnsupportedOperationException("Unimplemented method 'calculateAnnualTax'");
             };
         }
@@ -261,8 +264,8 @@ public class Ex2 {
         }
     }
 
-    public static boolean validID(List<Vehicle> vehicles, String ID) {
-        return vehicles.stream().anyMatch(v -> v.getID().equals(ID));
+    public static boolean validID(List<Vehicle> vehicles, String vehicleId) {
+        return vehicles.stream().anyMatch(v -> v.getVehicleId().equals(vehicleId));
     }
 
     public static boolean validFuelType(String type) {
@@ -292,11 +295,11 @@ public class Ex2 {
     }
 
     public static Optional<Vehicle> findVehicleByID(List<Vehicle> vehicles, String searchID) {
-        return vehicles.stream().filter(v -> v.getID().equals(searchID)).findFirst();
+        return vehicles.stream().filter(v -> v.getVehicleId().equals(searchID)).findFirst();
     }
 
     public static Optional<Vehicle> findVehicleByName(List<Vehicle> vehicles, String searchName) {
-        return vehicles.stream().filter(v -> v.getName().equalsIgnoreCase(searchName)).findFirst();
+        return vehicles.stream().filter(v -> v.getVehicleName().equalsIgnoreCase(searchName)).findFirst();
     }
 
     public static void main(String[] args) throws IOException {
@@ -306,8 +309,24 @@ public class Ex2 {
         boolean isExit = false;
 
         while (!isExit) {
-            System.out.print(
-                    "1. Add a Car\n2. Add a Motorcycle\n3. Display All Vehicles\n4. Search Vehicle by ID\n5. Search Vehicle by Name\n6. Display All Electric Cars\n7. Display All Motorcycles with ABS\n8. Display Vehicles by Manufacturer\n9. Sort Vehicles by Value\n10. Sort Vehicles by Name\n11. Sort Vehicles by Manufacturer\n12. Sort Vehicles by Annual Tax\n13. Display Vehicle Tax Report\n14. Display Vehicle Statistics\n15. Display Vehicles Registered Within the Last N Days\n0. Exit\nEnter your choice: ");
+            System.out.print("""
+                    1. Add a Car
+                    2. Add a Motorcycle
+                    3. Display All Vehicles
+                    4. Search Vehicle by ID
+                    5. Search Vehicle by Name
+                    6. Display All Electric Cars
+                    7. Display All Motorcycles with ABS
+                    8. Display Vehicles by Manufacturer
+                    9. Sort Vehicles by Value
+                    10. Sort Vehicles by Name
+                    11. Sort Vehicles by Manufacturer
+                    12. Sort Vehicles by Annual Tax
+                    13. Display Vehicle Tax Report
+                    14. Display Vehicle Statistics
+                    15. Display Vehicles Registered Within the Last N Days
+                    0. Exit
+                    Enter your choice:\s""");
 
             int choice;
             try {
@@ -321,12 +340,13 @@ public class Ex2 {
                 case 0 -> isExit = true;
                 case 1 -> {
                     System.out.print("Enter ID: ");
-                    String ID = null;
+                    String vehicleId = null;
                     while (true) {
                         try {
-                            ID = br.readLine();
-                            if (validID(vehicles, ID)) {
-                                throw new DuplicateVehicleIdException("Vehicle with ID " + ID + " already exists");
+                            vehicleId = br.readLine();
+                            if (validID(vehicles, vehicleId)) {
+                                throw new DuplicateVehicleIdException(
+                                        "Vehicle with ID " + vehicleId + " already exists");
                             }
                             break;
                         } catch (DuplicateVehicleIdException e) {
@@ -335,17 +355,17 @@ public class Ex2 {
                     }
 
                     System.out.print("Enter name: ");
-                    String name = br.readLine();
+                    String vehicleName = br.readLine();
 
                     System.out.print("Enter manufacturer: ");
                     String manufacturer = br.readLine();
 
                     System.out.print("Enter value: ");
-                    int value = 0;
+                    int vehicleValue = 0;
                     while (true) {
                         try {
-                            value = Integer.parseInt(br.readLine());
-                            if (value <= 0) {
+                            vehicleValue = Integer.parseInt(br.readLine());
+                            if (vehicleValue <= 0) {
                                 throw new InvalidVehicleValueException("Value must be greater than 0");
                             }
                             break;
@@ -372,14 +392,14 @@ public class Ex2 {
                         }
                     }
 
-                    System.out.print("Enter fuel type: ");
+                    System.out.print("Enter fuel type (Gasoline / Diesel / Electric): ");
                     String fuelType;
                     while (true) {
                         fuelType = br.readLine();
                         if (validFuelType(fuelType)) {
                             break;
                         }
-                        System.out.print("Invalid fuel type\nRe-enter fuel type: ");
+                        System.out.print("Invalid fuel type\nRe-enter fuel type (Gasoline / Diesel / Electric): ");
                     }
 
                     FuelType selectedFuel = null;
@@ -410,17 +430,18 @@ public class Ex2 {
                     }
 
                     LocalDate carRegistrationDate = readRegistrationDate(br);
-                    vehicles.add(new Car(ID, name, manufacturer, value, numberOfSeat, selectedFuel, insuranceProvider,
-                            coverageAmount, carRegistrationDate));
+                    vehicles.add(new Car(vehicleId, vehicleName, manufacturer, vehicleValue, numberOfSeat, selectedFuel,
+                            insuranceProvider, coverageAmount, carRegistrationDate));
                 }
                 case 2 -> {
                     System.out.print("Enter ID: ");
-                    String ID = null;
+                    String vehicleId = null;
                     while (true) {
                         try {
-                            ID = br.readLine();
-                            if (validID(vehicles, ID)) {
-                                throw new DuplicateVehicleIdException("Vehicle with ID " + ID + " already exists");
+                            vehicleId = br.readLine();
+                            if (validID(vehicles, vehicleId)) {
+                                throw new DuplicateVehicleIdException(
+                                        "Vehicle with ID " + vehicleId + " already exists");
                             }
                             break;
                         } catch (DuplicateVehicleIdException e) {
@@ -429,17 +450,17 @@ public class Ex2 {
                     }
 
                     System.out.print("Enter name: ");
-                    String name = br.readLine();
+                    String vehicleName = br.readLine();
 
                     System.out.print("Enter manufacturer: ");
                     String manufacturer = br.readLine();
 
                     System.out.print("Enter value: ");
-                    int value = 0;
+                    int vehicleValue = 0;
                     while (true) {
                         try {
-                            value = Integer.parseInt(br.readLine());
-                            if (value <= 0) {
+                            vehicleValue = Integer.parseInt(br.readLine());
+                            if (vehicleValue <= 0) {
                                 throw new InvalidVehicleValueException("Value must be greater than 0");
                             }
                             break;
@@ -500,8 +521,8 @@ public class Ex2 {
                     }
 
                     LocalDate motoRegistrationDate = readRegistrationDate(br);
-                    vehicles.add(new Motorcycle(ID, name, manufacturer, value, engineCapacity, ABSSupport == 1,
-                            insuranceProvider, coverageAmount, motoRegistrationDate));
+                    vehicles.add(new Motorcycle(vehicleId, vehicleName, manufacturer, vehicleValue, engineCapacity,
+                            ABSSupport == 1, insuranceProvider, coverageAmount, motoRegistrationDate));
                 }
                 case 3 -> {
                     if (vehicles.isEmpty()) {
@@ -593,7 +614,7 @@ public class Ex2 {
                     if (vehicles.isEmpty()) {
                         System.out.println("No vehicle exist");
                     } else {
-                        vehicles.sort(Comparator.comparing(Vehicle::getName, String.CASE_INSENSITIVE_ORDER));
+                        vehicles.sort(Comparator.comparing(Vehicle::getVehicleName, String.CASE_INSENSITIVE_ORDER));
                         System.out.println("Vehicles sorted by name (A -> Z):");
                         vehicles.forEach(v -> printVehicle(v));
                     }
@@ -624,9 +645,9 @@ public class Ex2 {
                             String vehicleType = vehicle.getClass().getSimpleName();
                             double annualTax = vehicle.calculateAnnualTax();
                             String status = ((Registrable) vehicle).getRegistrationStatus();
-                            System.out.println("Vehicle ID: " + vehicle.getID() + "\nVehicle Name: " + vehicle.getName()
-                                    + "\nVehicle Type: " + vehicleType + "\nAnnual Tax: " + annualTax
-                                    + "\nRegistration Status: " + status);
+                            System.out.println("Vehicle ID: " + vehicle.getVehicleId() + "\nVehicle Name: "
+                                    + vehicle.getVehicleName() + "\nVehicle Type: " + vehicleType + "\nAnnual Tax: "
+                                    + annualTax + "\nRegistration Status: " + status);
                         }
                     }
                 }
