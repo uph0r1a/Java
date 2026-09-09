@@ -6,8 +6,8 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.format.ResolverStyle;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 public class Ex9 {
     public static BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
@@ -38,8 +38,8 @@ public class Ex9 {
         private double price;
         private int quantity;
 
-        public Product(String name, double price, int quantity) {
-            this.id = UUID.randomUUID().toString();
+        public Product(String id, String name, double price, int quantity) {
+            this.id = id;
             this.name = name;
             this.price = price;
             this.quantity = quantity;
@@ -75,11 +75,19 @@ public class Ex9 {
 
         @Override
         public void addStock(int quantity) {
+            if (quantity <= 0) {
+                System.out.println("Error: Quantity to add must be greater than 0");
+                return;
+            }
             this.quantity += quantity;
         }
 
         @Override
         public void removeStock(int quantity) {
+            if (quantity <= 0) {
+                System.out.println("Error: Quantity to remove must be greater than 0");
+                return;
+            }
             if (this.quantity < quantity) {
                 System.out.println("Error: Cant remove more than the stock");
                 return;
@@ -89,7 +97,7 @@ public class Ex9 {
 
         @Override
         public void displayInfo() {
-            System.out.println("\nID" + id + "\nName: " + name + "\nPrice: " + price + "\nQuantity: " + quantity);
+            System.out.println("\nID: " + id + "\nName: " + name + "\nPrice: " + price + "\nQuantity: " + quantity);
         }
     }
 
@@ -97,8 +105,8 @@ public class Ex9 {
         private String expirationDate;
         private boolean isPerishable;
 
-        public Food(String name, double price, int quantity, String expirationDate, boolean isPerishable) {
-            super(name, price, quantity);
+        public Food(String id, String name, double price, int quantity, String expirationDate, boolean isPerishable) {
+            super(id, name, price, quantity);
             this.expirationDate = expirationDate;
             this.isPerishable = isPerishable;
         }
@@ -134,8 +142,8 @@ public class Ex9 {
     public static class Electronics extends Product {
         private String warrantyPeriod, brand;
 
-        public Electronics(String name, double price, int quantity, String warrantyPeriod, String brand) {
-            super(name, price, quantity);
+        public Electronics(String id, String name, double price, int quantity, String warrantyPeriod, String brand) {
+            super(id, name, price, quantity);
             this.warrantyPeriod = warrantyPeriod;
             this.brand = brand;
         }
@@ -157,7 +165,9 @@ public class Ex9 {
         }
 
         public void extendWarranty(String additionalPeriod) {
-            System.out.println(getWarrantyPeriod() + " Extended to: " + additionalPeriod);
+            String updated = warrantyPeriod + " + " + additionalPeriod;
+            System.out.println(warrantyPeriod + " extended to: " + updated);
+            this.warrantyPeriod = updated;
         }
 
         @Override
@@ -170,8 +180,8 @@ public class Ex9 {
     public static class Household extends Product {
         private String material, usage;
 
-        public Household(String name, double price, int quantity, String material, String usage, String updateUsage) {
-            super(name, price, quantity);
+        public Household(String id, String name, double price, int quantity, String material, String usage) {
+            super(id, name, price, quantity);
             this.material = material;
             this.usage = usage;
         }
@@ -211,6 +221,16 @@ public class Ex9 {
         }
 
         public void add() throws IOException {
+            System.out.print("Enter product ID: ");
+            String id;
+            while (true) {
+                id = br.readLine().strip();
+                if (!products.containsKey(id)) {
+                    break;
+                }
+                System.out.print("ID already in use\nRe-enter product ID: ");
+            }
+
             System.out.print("Enter product name: ");
             String name = br.readLine();
 
@@ -258,58 +278,56 @@ public class Ex9 {
 
             switch (type) {
                 case 1 -> {
-                    System.out.println("Enter expiration date: ");
+                    System.out.print("Enter expiration date (uuuu-MM-dd): ");
                     String expDate;
                     while (true) {
-                        try {
-                            expDate = br.readLine();
-                            if (isValidDate(expDate, pattern)) {
-                                break;
-                            }
-                            System.out.println("Invalid expiration date\nRe-enter expiration date: ");
-                        } catch (Exception e) {
-                            System.out.println("Error: " + e.getMessage());
+                        expDate = br.readLine();
+                        if (isValidDate(expDate, pattern)) {
+                            break;
                         }
+                        System.out.print("Invalid expiration date\nRe-enter expiration date (uuuu-MM-dd): ");
                     }
 
                     int isPerishable;
                     while (true) {
-                        System.out.println("Perishability 1) Yes 2) No: ");
+                        System.out.print("Perishability 1) Yes 2) No: ");
                         try {
                             isPerishable = Integer.parseInt(br.readLine());
                             if (isPerishable == 1 || isPerishable == 2) {
                                 break;
                             }
-                            System.out.println("Invalid choice\n");
+                            System.out.println("Invalid choice");
                         } catch (Exception e) {
                             System.out.println("Error: " + e.getMessage());
                         }
                     }
 
-                    Food food = new Food(name, price, quantity, expDate, isPerishable == 1 ? true : false);
+                    Food food = new Food(id, name, price, quantity, expDate, isPerishable == 1);
                     products.put(food.getId(), food);
+                    System.out.println("Food added successfully");
                 }
                 case 2 -> {
-                    System.out.println("Enter warranty period: ");
+                    System.out.print("Enter warranty period: ");
                     String warrantyPeriod = br.readLine();
 
-                    System.out.println("Enter brand: ");
+                    System.out.print("Enter brand: ");
                     String brand = br.readLine();
 
-                    Electronics electronics = new Electronics(name, price, quantity, warrantyPeriod, brand);
+                    Electronics electronics = new Electronics(id, name, price, quantity, warrantyPeriod, brand);
                     products.put(electronics.getId(), electronics);
+                    System.out.println("Electronics added successfully");
                 }
                 case 3 -> {
-                    System.out.println("Enter material: ");
+                    System.out.print("Enter material: ");
                     String material = br.readLine();
 
-                    System.out.println("Enter usage: ");
+                    System.out.print("Enter usage: ");
                     String usage = br.readLine();
 
-                    Household household = new Household(name, price, quantity, material, usage, usage);
+                    Household household = new Household(id, name, price, quantity, material, usage);
                     products.put(household.getId(), household);
+                    System.out.println("Household added successfully");
                 }
-                default -> System.out.print("Invalid type\nRe-enter product type: ");
             }
         }
 
@@ -317,21 +335,208 @@ public class Ex9 {
             if (products.isEmpty()) {
                 System.out.println("No products yet");
             } else {
-                System.out.println("Enter product ID: ");
+                System.out.print("Enter product ID: ");
                 String id = br.readLine().strip();
 
                 if (products.remove(id) != null) {
                     System.out.println("Removed");
                 } else {
-                    System.out.println("Product dont exist");
+                    System.out.println("Product doesn't exist");
                 }
             }
         }
 
-        
+        public void search() throws IOException {
+            if (products.isEmpty()) {
+                System.out.println("No products yet");
+            } else {
+                System.out.print("Enter product ID: ");
+                String id = br.readLine().strip();
+
+                Product product = products.get(id);
+                if (product == null) {
+                    System.out.println("Product not found");
+                } else {
+                    product.displayInfo();
+                }
+            }
+        }
+
+        public void findByName() throws IOException {
+            if (products.isEmpty()) {
+                System.out.println("No products yet");
+                return;
+            }
+
+            System.out.print("Enter product name: ");
+            String name = br.readLine().strip();
+
+            List<Product> results = products.values().stream().filter(p -> p.getName().equalsIgnoreCase(name)).toList();
+
+            if (results.isEmpty()) {
+                System.out.println("No product found with that name");
+            } else {
+                results.forEach(Product::displayInfo);
+            }
+        }
+
+        public void filterByCategory() throws IOException {
+            if (products.isEmpty()) {
+                System.out.println("No products yet");
+                return;
+            }
+
+            System.out.print("Enter category (food/electronics/household): ");
+            String category;
+            while (true) {
+                category = br.readLine().strip();
+                if (category.equalsIgnoreCase("food") || category.equalsIgnoreCase("electronics")
+                        || category.equalsIgnoreCase("household")) {
+                    break;
+                }
+                System.out.print("Invalid category\nRe-enter category (food/electronics/household): ");
+            }
+
+            final String c = category.toLowerCase();
+            List<Product> results = products.values().stream().filter(p -> switch (c) {
+                case "food" -> p instanceof Food;
+                case "electronics" -> p instanceof Electronics;
+                case "household" -> p instanceof Household;
+                default -> false;
+            }).toList();
+
+            if (results.isEmpty()) {
+                System.out.println("No products found in that category");
+            } else {
+                results.forEach(Product::displayInfo);
+            }
+        }
+
+        public void updateFoodExpiration() throws IOException {
+            if (products.isEmpty()) {
+                System.out.println("No products yet");
+                return;
+            }
+
+            System.out.print("Enter product ID: ");
+            String id = br.readLine().strip();
+            Product product = products.get(id);
+
+            if (product == null) {
+                System.out.println("Product not found");
+            } else if (!(product instanceof Food food)) {
+                System.out.println("This product is not a Food item");
+            } else {
+                System.out.print("Enter new expiration date (uuuu-MM-dd): ");
+                String newDate;
+                while (true) {
+                    newDate = br.readLine();
+                    if (isValidDate(newDate, pattern)) {
+                        break;
+                    }
+                    System.out.print("Invalid date\nRe-enter expiration date (uuuu-MM-dd): ");
+                }
+                food.updateExpirationDate(newDate);
+                System.out.println("Expiration date updated");
+            }
+        }
+
+        public void extendElectronicsWarranty() throws IOException {
+            if (products.isEmpty()) {
+                System.out.println("No products yet");
+                return;
+            }
+
+            System.out.print("Enter product ID: ");
+            String id = br.readLine().strip();
+            Product product = products.get(id);
+
+            if (product == null) {
+                System.out.println("Product not found");
+            } else if (!(product instanceof Electronics electronics)) {
+                System.out.println("This product is not an Electronics item");
+            } else {
+                System.out.print("Enter additional warranty period: ");
+                String additionalPeriod = br.readLine();
+                electronics.extendWarranty(additionalPeriod);
+            }
+        }
+
+        public void updateHouseholdUsage() throws IOException {
+            if (products.isEmpty()) {
+                System.out.println("No products yet");
+                return;
+            }
+
+            System.out.print("Enter product ID: ");
+            String id = br.readLine().strip();
+            Product product = products.get(id);
+
+            if (product == null) {
+                System.out.println("Product not found");
+            } else if (!(product instanceof Household household)) {
+                System.out.println("This product is not a Household item");
+            } else {
+                System.out.print("Enter new usage: ");
+                String newUsage = br.readLine();
+                household.updateUsage(newUsage);
+                System.out.println("Usage updated");
+            }
+        }
+
+        public void display() {
+            if (products.isEmpty()) {
+                System.out.println("No products yet");
+            } else {
+                products.values().forEach(Product::displayInfo);
+            }
+        }
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
+        InventoryManager manager = new InventoryManager();
+        boolean isExit = false;
 
+        while (!isExit) {
+            System.out.print("""
+                    ===== WAREHOUSE MANAGEMENT =====
+                    1) Add product
+                    2) Remove product
+                    3) Search product by ID
+                    4) Find products by name
+                    5) Filter by category
+                    6) Update food expiration date
+                    7) Extend electronics warranty
+                    8) Update household usage
+                    9) Display all products
+                    0) Exit
+                    Enter your choice:\s""");
+            int choice;
+            while (true) {
+                try {
+                    choice = Integer.parseInt(br.readLine());
+                    if (choice >= 0 && choice <= 9) {
+                        break;
+                    }
+                    System.out.print("Invalid choice\nRe-enter your choice: ");
+                } catch (Exception e) {
+                    System.out.println("Error: " + e.getMessage());
+                }
+            }
+
+            switch (choice) {
+                case 1 -> manager.add();
+                case 2 -> manager.remove();
+                case 3 -> manager.search();
+                case 4 -> manager.findByName();
+                case 5 -> manager.filterByCategory();
+                case 6 -> manager.updateFoodExpiration();
+                case 7 -> manager.extendElectronicsWarranty();
+                case 8 -> manager.updateHouseholdUsage();
+                case 9 -> manager.display();
+                case 0 -> isExit = true;
+                default -> System.out.print("Invalid choice\nRe-enter your choice: ");
+            }
+        }
     }
 }

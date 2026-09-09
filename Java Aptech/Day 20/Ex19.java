@@ -132,8 +132,8 @@ public class Ex19 {
                 for (Book book : books) {
                     writer.println(book);
                 }
-            } catch (Exception e) {
-                System.out.println("Error: " + e.getMessage());
+            } catch (IOException e) {
+                System.out.println("Error writing to file: " + e.getMessage());
             }
         }
     }
@@ -152,8 +152,8 @@ public class Ex19 {
                     String[] value = line.split("\\|");
                     books.add(new Book(value[0], value[1], value[2], value[3], Float.parseFloat(value[4])));
                 }
-            } catch (Exception e) {
-                System.out.println("Error: " + e.getMessage());
+            } catch (IOException e) {
+                System.out.println("Error reading file: " + e.getMessage());
             }
 
             for (Book book : books) {
@@ -175,7 +175,7 @@ public class Ex19 {
             }
 
             if (!found) {
-                System.out.println("None match");
+                System.out.println("NOT FOUND");
             }
         }
     }

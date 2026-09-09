@@ -1,35 +1,25 @@
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
 import java.time.LocalTime;
 import java.util.ArrayDeque;
 import java.util.Queue;
 
 public class Ex1 {
-    public enum TYPE {
-        DEPOSIT,
-        WITHDRAWAL,
-        LOAN
-    }
-
     public static class Customer {
-        private String customerID, name;
-        private TYPE serviceType;
+        private String customerId, name, serviceType;
         private LocalTime arrivalTime;
 
-        public Customer(String customerID, String name, TYPE serviceType, LocalTime arrivalTime) {
-            this.customerID = customerID;
+        public Customer(String customerId, String name, String serviceType, LocalTime arrivalTime) {
+            this.customerId = customerId;
             this.name = name;
             this.serviceType = serviceType;
             this.arrivalTime = arrivalTime;
         }
 
-        public String getCustomerID() {
-            return customerID;
+        public String getCustomerId() {
+            return customerId;
         }
 
-        public void setCustomerID(String customerID) {
-            this.customerID = customerID;
+        public void setCustomerId(String customerId) {
+            this.customerId = customerId;
         }
 
         public String getName() {
@@ -40,11 +30,11 @@ public class Ex1 {
             this.name = name;
         }
 
-        public TYPE getServiceType() {
+        public String getServiceType() {
             return serviceType;
         }
 
-        public void setServiceType(TYPE serviceType) {
+        public void setServiceType(String serviceType) {
             this.serviceType = serviceType;
         }
 
@@ -58,88 +48,71 @@ public class Ex1 {
 
         @Override
         public String toString() {
-            return "\nCustomer ID: " + customerID + "\nCustomer Name: " + name + "\nService Type: " + serviceType.name()
+            return "\nCustomer ID: " + customerId + "\nCustomer Name: " + name + "\nService Type: " + serviceType
                     + "\nArrival Time: " + arrivalTime + "\n";
         }
     }
 
-    public static void main(String[] args) throws IOException {
-        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+    public static void addCustomer(Queue<Customer> customers, String customerId, String name, String serviceType) {
+        customers.offer(new Customer(customerId, name, serviceType, LocalTime.now()));
+    }
 
-        Queue<Customer> customers = new ArrayDeque<>();
-        boolean isExit = false;
-        while (!isExit) {
-            System.out.print("""
-                    1.  Add customer to queue
-                    2.  Serve customer
-                    3.  See next customer in queue
-                    4.  Show all customer in queue
-                    0.  Exit
-                    Enter your choice:\s""");
-            int choice;
-            while (true) {
-                try {
-                    choice = Integer.parseInt(br.readLine());
-                    if (choice >= 0 && choice <= 4) {
-                        break;
-                    }
-                    System.out.print("Invalid choice\nRe-enter your choice: ");
-                } catch (Exception e) {
-                    System.out.println("Error: " + e.getMessage());
-                }
-            }
-            switch (choice) {
-                case 1 -> {
-                    System.out.print("Enter customer ID: ");
-                    String id = br.readLine();
-
-                    System.out.print("Enter customer name: ");
-                    String name = br.readLine();
-
-                    System.out.print("1) Deposit \n2) Withdrawal \n3) Loan\nEnter service type: ");
-                    int type;
-                    while (true) {
-                        try {
-                            type = Integer.parseInt(br.readLine());
-                            if (type >= 1 && type <= 3) {
-                                break;
-                            }
-                            System.out.print("Invalid choice\nRe-enter service type: ");
-                        } catch (Exception e) {
-                            System.out.println("Error: " + e.getMessage());
-                        }
-                    }
-
-                    customers.offer(new Customer(id, name, TYPE.values()[type - 1], LocalTime.now()));
-                }
-                case 2 -> {
-                    Customer customer = customers.poll();
-                    if (customer != null) {
-                        System.out.println("Serving customer: " + customer.getName() + "\nService: "
-                                + customer.getServiceType().name());
-                    } else {
-                        System.out.println("No customers waiting.");
-                    }
-                }
-                case 3 -> {
-                    Customer next = customers.peek();
-                    if (next != null) {
-                        System.out.println("Next customer: " + next);
-                    } else {
-                        System.out.println("Queue is empty");
-                    }
-                }
-                case 4 -> {
-                    if (customers.isEmpty()) {
-                        System.out.println("Queue is empty");
-                    } else {
-                        System.out.println("Customer in queue: ");
-                        customers.forEach(System.out::println);
-                    }
-                }
-                case 0 -> isExit = true;
-                default -> System.out.println("Invalid choice\nRe-enter your choice: ");
-            }
+    public static void serveCustomer(Queue<Customer> customers) {
+        Customer customer = customers.poll();
+        if (customer != null) {
+            System.out.println("Serving customer: " + customer.getName() + "\nService: " + customer.getServiceType());
+        } else {
+            System.out.println("No customers waiting.");
         }
+    }
+
+    public static void viewNextCustomer(Queue<Customer> customers) {
+        Customer next = customers.peek();
+        if (next != null) {
+            System.out.println("Next customer: " + next);
+        } else {
+            System.out.println("No customers waiting.");
+        }
+    }
+
+    public static void displayWaitingList(Queue<Customer> customers) {
+        if (customers.isEmpty()) {
+            System.out.println("Queue is empty");
+        } else {
+            System.out.println("Customers in queue: ");
+            customers.forEach(System.out::println);
+        }
+    }
+
+    public static void main(String[] args) {
+        Queue<Customer> customers = new ArrayDeque<>();
+
+        addCustomer(customers, "C001", "Alice", "Deposit");
+        addCustomer(customers, "C002", "Bob", "Withdrawal");
+        addCustomer(customers, "C003", "Charlie", "Loan");
+        addCustomer(customers, "C004", "Diana", "Deposit");
+
+        System.out.println("=== Waiting list after adding customers ===");
+        displayWaitingList(customers);
+
+        System.out.println("\n=== View next customer (without serving) ===");
+        viewNextCustomer(customers);
+
+        System.out.println("\n=== Serve a customer ===");
+        serveCustomer(customers);
+
+        System.out.println("\n=== Waiting list after serving one customer ===");
+        displayWaitingList(customers);
+
+        System.out.println("\n=== Serve remaining customers one by one ===");
+        serveCustomer(customers);
+        serveCustomer(customers);
+        serveCustomer(customers);
+
+        System.out.println("\n=== Attempt to serve when queue is empty ===");
+        serveCustomer(customers);
+
+        System.out.println("\n=== Attempt to view next when queue is empty ===");
+        viewNextCustomer(customers);
     }
 }

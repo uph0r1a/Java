@@ -1,6 +1,7 @@
 import java.io.BufferedReader;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -25,7 +26,12 @@ public class Ex18 {
         System.out.print("Enter a string: ");
         String str = br.readLine();
 
-        try (DataOutputStream dos = new DataOutputStream(new FileOutputStream("data.dat"))) {
+        File dir = new File("files");
+        if (!dir.exists()) {
+            dir.mkdirs();
+        }
+
+        try (DataOutputStream dos = new DataOutputStream(new FileOutputStream("files/data.dat"))) {
             dos.writeInt(i);
             dos.writeDouble(d);
             dos.writeBoolean(b);
@@ -35,7 +41,7 @@ public class Ex18 {
             System.out.println("Error: " + e.getMessage());
         }
 
-        try (DataInputStream dis = new DataInputStream(new FileInputStream("data.dat"))) {
+        try (DataInputStream dis = new DataInputStream(new FileInputStream("files/data.dat"))) {
             System.out.println("\nData successfully read:\nInteger: " + dis.readInt() + "\nDouble: " + dis.readDouble()
                     + "\nBoolean: " + dis.readBoolean() + "\nCharacter: " + dis.readChar() + "\nString: "
                     + dis.readUTF());

@@ -1,4 +1,4 @@
-public class Ex23 {
+public class Ex4 {
     public static void main(String[] args) {
         
     }

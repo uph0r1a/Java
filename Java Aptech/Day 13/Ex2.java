@@ -1,34 +1,26 @@
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
 import java.util.Comparator;
 import java.util.PriorityQueue;
 
 public class Ex2 {
-    public enum STATUS {
-        OPEN,
-        RESOLVED
-    }
-
     public static class SupportTicket {
-        private String ticketID, customerName, issueDescription;
+        private int ticketId;
+        private String customerName, issueDescription, status;
         private int priority;
-        private STATUS status;
 
-        public SupportTicket(String ticketID, String customerName, String issueDescription, int priority) {
-            this.ticketID = ticketID;
+        public SupportTicket(int ticketId, String customerName, String issueDescription, int priority) {
+            this.ticketId = ticketId;
             this.customerName = customerName;
             this.issueDescription = issueDescription;
             this.priority = priority;
-            this.status = STATUS.OPEN;
+            this.status = "OPEN";
         }
 
-        public String getTicketID() {
-            return ticketID;
+        public int getTicketId() {
+            return ticketId;
         }
 
-        public void setTicketID(String ticketID) {
-            this.ticketID = ticketID;
+        public void setTicketId(int ticketId) {
+            this.ticketId = ticketId;
         }
 
         public String getCustomerName() {
@@ -55,116 +47,88 @@ public class Ex2 {
             this.priority = priority;
         }
 
-        public STATUS getStatus() {
+        public String getStatus() {
             return status;
         }
 
-        public void setStatus(STATUS status) {
+        public void setStatus(String status) {
             this.status = status;
         }
 
         @Override
         public String toString() {
-            return "Ticket ID: " + ticketID + "\nCustomer Name: " + customerName + "\nIssue Description: "
+            return "Ticket ID: " + ticketId + "\nCustomer Name: " + customerName + "\nIssue Description: "
                     + issueDescription + "\nPriority: " + priority + "\nStatus: " + status + "\n";
         }
     }
 
-    public static void main(String[] args) throws IOException {
-        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+    public static void createTicket(PriorityQueue<SupportTicket> tickets, int ticketId, String customerName,
+            String issueDescription, int priority) {
+        tickets.offer(new SupportTicket(ticketId, customerName, issueDescription, priority));
+    }
 
-        Comparator<SupportTicket> byPriorityThenTicketId = Comparator.comparingInt(SupportTicket::getPriority)
-                .thenComparing(SupportTicket::getTicketID);
-        PriorityQueue<SupportTicket> tickets = new PriorityQueue<>(byPriorityThenTicketId);
-        boolean isExit = false;
-
-        while (!isExit) {
-            System.out.print("""
-                    1.  Create new ticket
-                    2.  Process highest priority ticket
-                    3.  Display all ticket
-                    4.  Number of ticket per priority
-                    0.  Exit
-                    Enter your choice:\s""");
-            int choice;
-            while (true) {
-                try {
-                    choice = Integer.parseInt(br.readLine());
-                    if (choice >= 0 && choice <= 4) {
-                        break;
-                    }
-                    System.out.print("Invalid choice\nRe-enter your choice: ");
-                } catch (Exception e) {
-                    System.out.println("Error: " + e.getMessage());
-                }
-            }
-
-            switch (choice) {
-                case 1 -> {
-                    System.out.print("Enter ticket ID: ");
-                    String id = br.readLine();
-
-                    System.out.print("Enter customer name: ");
-                    String name = br.readLine();
-
-                    System.out.print("Enter issue description: ");
-                    String desc = br.readLine();
-
-                    System.out.print("Enter priority: ");
-                    int priority;
-                    while (true) {
-                        try {
-                            priority = Integer.parseInt(br.readLine());
-                            if (priority >= 1 && priority <= 5) {
-                                break;
-                            }
-                            System.out.print("Invalid priority\nRe-enter priority: ");
-                        } catch (Exception e) {
-                            System.out.println("Error: " + e.getMessage());
-                        }
-                    }
-
-                    tickets.offer(new SupportTicket(id, name, desc, priority));
-                }
-                case 2 -> {
-                    if (!tickets.isEmpty()) {
-                        SupportTicket ticket = tickets.poll();
-                        ticket.setStatus(STATUS.RESOLVED);
-                        System.out.println("Ticket process completed\nTicket ID: " + ticket.getTicketID()
-                                + "\nCustomer name: " + ticket.getCustomerName() + "\nIssue description: "
-                                + ticket.getIssueDescription() + "\nPriority: " + ticket.getPriority() + "\nStatus: "
-                                + ticket.getStatus().name());
-                    } else {
-                        System.out.println("Queue is empty");
-                    }
-                }
-                case 3 -> {
-                    if (!tickets.isEmpty()) {
-                        System.out.println("Ticket in queue: ");
-                        PriorityQueue<SupportTicket> temp = new PriorityQueue<>(tickets);
-                        while (!temp.isEmpty()) {
-                            System.out.println(temp.poll());
-                        }
-                    } else {
-                        System.out.println("Queue is empty");
-                    }
-                }
-                case 4 -> {
-                    if (!tickets.isEmpty()) {
-                        int[] counts = new int[5];
-                        for (SupportTicket ticket : tickets) {
-                            counts[ticket.getPriority() - 1]++;
-                        }
-                        for (int i = 0; i < 5; i++) {
-                            System.out.println("Priority " + (i + 1) + ": " + counts[i]);
-                        }
-                    } else {
-                        System.out.println("Queue is empty");
-                    }
-                }
-                case 0 -> isExit = true;
-                default -> System.out.print("Invalid choice\nRe-enter your choice: ");
-            }
+    public static void processHighestPriority(PriorityQueue<SupportTicket> tickets) {
+        SupportTicket ticket = tickets.poll();
+        if (ticket == null) {
+            System.out.println("Queue is empty");
+            return;
         }
+        ticket.setStatus("RESOLVED");
+        System.out.println("Ticket processed:\n" + ticket);
+    }
+
+    public static void displayTicketsInPriorityOrder(PriorityQueue<SupportTicket> tickets,
+            Comparator<SupportTicket> comparator) {
+        if (tickets.isEmpty()) {
+            System.out.println("Queue is empty");
+            return;
+        }
+        PriorityQueue<SupportTicket> copy = new PriorityQueue<>(comparator);
+        copy.addAll(tickets);
+        System.out.println("Tickets in priority order:");
+        while (!copy.isEmpty()) {
+            System.out.println(copy.poll());
+        }
+    }
+
+    public static void countByPriority(PriorityQueue<SupportTicket> tickets) {
+        if (tickets.isEmpty()) {
+            System.out.println("Queue is empty");
+            return;
+        }
+        int[] counts = new int[5];
+        for (SupportTicket ticket : tickets) {
+            counts[ticket.getPriority() - 1]++;
+        }
+        for (int i = 0; i < 5; i++) {
+            System.out.println("Priority " + (i + 1) + ": " + counts[i]);
+        }
+    }
+
+    public static void main(String[] args) {
+        Comparator<SupportTicket> byPriorityThenTicketId = Comparator.comparingInt(SupportTicket::getPriority)
+                .thenComparingInt(SupportTicket::getTicketId);
+        PriorityQueue<SupportTicket> tickets = new PriorityQueue<>(byPriorityThenTicketId);
+
+        createTicket(tickets, 101, "Alice", "Cannot log in", 2);
+        createTicket(tickets, 102, "Bob", "Payment failed", 1);
+        createTicket(tickets, 103, "Charlie", "Slow performance", 2); // ties with Alice's priority
+        createTicket(tickets, 104, "Diana", "Feature request", 5);
+        createTicket(tickets, 105, "Evan", "Data missing", 1); // ties with Bob's priority
+
+        System.out.println("=== All tickets in priority order ===");
+        displayTicketsInPriorityOrder(tickets, byPriorityThenTicketId);
+
+        System.out.println("\n=== Count of tickets per priority ===");
+        countByPriority(tickets);
+
+        System.out.println("\n=== Process highest priority ticket ===");
+        processHighestPriority(tickets);
+
+        System.out.println("\n=== Remaining tickets in priority order ===");
+        displayTicketsInPriorityOrder(tickets, byPriorityThenTicketId);
+
+        System.out.println("\n=== Count of tickets per priority (after processing) ===");
+        countByPriority(tickets);
     }
 }

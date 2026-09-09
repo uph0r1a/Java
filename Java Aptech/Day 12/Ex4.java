@@ -6,14 +6,16 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class Ex4 {
-    public static class Product {
+    public static class CartItem {
         private String productId, productName;
         private double sellingPrice;
+        private int quantity;
 
-        public Product(String productId, String productName, double sellingPrice) {
+        public CartItem(String productId, String productName, double sellingPrice, int quantity) {
             this.productId = productId;
             this.productName = productName;
             this.sellingPrice = sellingPrice;
+            this.quantity = quantity;
         }
 
         public String getProductId() {
@@ -39,24 +41,6 @@ public class Ex4 {
         public void setSellingPrice(double sellingPrice) {
             this.sellingPrice = sellingPrice;
         }
-    }
-
-    public static class CartItem {
-        private Product product;
-        private int quantity;
-
-        public CartItem(Product product, int quantity) {
-            this.product = product;
-            this.quantity = quantity;
-        }
-
-        public Product getProduct() {
-            return product;
-        }
-
-        public void setProduct(Product product) {
-            this.product = product;
-        }
 
         public int getQuantity() {
             return quantity;
@@ -75,6 +59,7 @@ public class Ex4 {
 
         while (!isExit) {
             System.out.print("""
+                    ===== SHOPPING CART MANAGEMENT =====
                     1.  Add Item
                     2.  Remove item
                     3.  Total cost
@@ -99,14 +84,15 @@ public class Ex4 {
                     System.out.print("Enter product ID: ");
                     String id = br.readLine();
 
-                    Product product;
+                    String name;
+                    double price;
                     if (items.containsKey(id)) {
-                        product = items.get(id).getProduct();
+                        name = items.get(id).getProductName();
+                        price = items.get(id).getSellingPrice();
                     } else {
                         System.out.print("Enter item name: ");
-                        String name = br.readLine();
+                        name = br.readLine();
 
-                        double price;
                         while (true) {
                             System.out.print("Enter selling price: ");
                             try {
@@ -119,8 +105,6 @@ public class Ex4 {
                                 System.out.println("Error: " + e.getMessage());
                             }
                         }
-
-                        product = new Product(id, name, price);
                     }
 
                     System.out.print("Enter item stock to add: ");
@@ -128,17 +112,17 @@ public class Ex4 {
                     while (true) {
                         try {
                             stock = Integer.parseInt(br.readLine());
-                            if (stock >= 0) {
+                            if (stock > 0) {
                                 break;
                             }
-                            System.out.print("Stock cant be negative\nRe-enter stock to add: ");
+                            System.out.print("Stock must be greater than 0\nRe-enter stock to add: ");
                         } catch (Exception e) {
                             System.out.print("Error: " + e.getMessage() + "\nRe-enter stock to add: ");
                         }
                     }
 
                     int newQuantity = items.containsKey(id) ? items.get(id).getQuantity() + stock : stock;
-                    items.put(id, new CartItem(product, newQuantity));
+                    items.put(id, new CartItem(id, name, price, newQuantity));
                 }
                 case 2 -> {
                     if (!items.isEmpty()) {
@@ -174,7 +158,7 @@ public class Ex4 {
                         int newQuantity = item.getQuantity() - stock;
                         if (newQuantity <= 0) {
                             items.remove(id);
-                            System.out.println("Item '" + item.getProduct().getProductName() + "' removed from cart.");
+                            System.out.println("Item '" + item.getProductName() + "' removed from cart.");
                         } else {
                             item.setQuantity(newQuantity);
                         }
@@ -185,7 +169,7 @@ public class Ex4 {
                 case 3 -> {
                     if (!items.isEmpty()) {
                         double total = items.values().stream()
-                                .mapToDouble(item -> item.getProduct().getSellingPrice() * item.getQuantity()).sum();
+                                .mapToDouble(item -> item.getSellingPrice() * item.getQuantity()).sum();
                         System.out.println("Total cost: " + total);
                     } else {
                         System.out.println("No item yet");
@@ -193,11 +177,10 @@ public class Ex4 {
                 }
                 case 4 -> {
                     if (!items.isEmpty()) {
-                        items.values().stream().sorted(Comparator.comparing(item -> item.getProduct().getProductName()))
-                                .forEach(item -> System.out.println("Item ID: " + item.getProduct().getProductId()
-                                        + "\nItem name: " + item.getProduct().getProductName() + "\nSelling price: "
-                                        + item.getProduct().getSellingPrice() + "\nQuantity: " + item.getQuantity()
-                                        + "\n"));
+                        items.values().stream().sorted(Comparator.comparing(CartItem::getProductName))
+                                .forEach(item -> System.out.println("Item ID: " + item.getProductId() + "\nItem name: "
+                                        + item.getProductName() + "\nSelling price: " + item.getSellingPrice()
+                                        + "\nQuantity: " + item.getQuantity() + "\n"));
                     } else {
                         System.out.println("No item yet");
                     }
