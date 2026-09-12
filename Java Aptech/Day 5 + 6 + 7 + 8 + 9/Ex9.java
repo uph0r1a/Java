@@ -105,7 +105,8 @@ public class Ex9 {
         private String expirationDate;
         private boolean isPerishable;
 
-        public Food(String id, String name, double price, int quantity, String expirationDate, boolean isPerishable) {
+        public Food(String id, String name, double price, int quantity, String expirationDate,
+                boolean isPerishable) {
             super(id, name, price, quantity);
             this.expirationDate = expirationDate;
             this.isPerishable = isPerishable;
@@ -232,7 +233,7 @@ public class Ex9 {
             }
 
             System.out.print("Enter product name: ");
-            String name = br.readLine();
+            String name = br.readLine().strip();
 
             System.out.print("Enter product price: ");
             double price;
@@ -281,7 +282,7 @@ public class Ex9 {
                     System.out.print("Enter expiration date (uuuu-MM-dd): ");
                     String expDate;
                     while (true) {
-                        expDate = br.readLine();
+                        expDate = br.readLine().strip();
                         if (isValidDate(expDate, pattern)) {
                             break;
                         }
@@ -308,10 +309,10 @@ public class Ex9 {
                 }
                 case 2 -> {
                     System.out.print("Enter warranty period: ");
-                    String warrantyPeriod = br.readLine();
+                    String warrantyPeriod = br.readLine().strip();
 
                     System.out.print("Enter brand: ");
-                    String brand = br.readLine();
+                    String brand = br.readLine().strip();
 
                     Electronics electronics = new Electronics(id, name, price, quantity, warrantyPeriod, brand);
                     products.put(electronics.getId(), electronics);
@@ -319,10 +320,10 @@ public class Ex9 {
                 }
                 case 3 -> {
                     System.out.print("Enter material: ");
-                    String material = br.readLine();
+                    String material = br.readLine().strip();
 
                     System.out.print("Enter usage: ");
-                    String usage = br.readLine();
+                    String usage = br.readLine().strip();
 
                     Household household = new Household(id, name, price, quantity, material, usage);
                     products.put(household.getId(), household);
@@ -371,7 +372,8 @@ public class Ex9 {
             System.out.print("Enter product name: ");
             String name = br.readLine().strip();
 
-            List<Product> results = products.values().stream().filter(p -> p.getName().equalsIgnoreCase(name)).toList();
+            List<Product> results = products.values().stream()
+                    .filter(p -> p.getName().equalsIgnoreCase(name)).toList();
 
             if (results.isEmpty()) {
                 System.out.println("No product found with that name");
@@ -396,9 +398,9 @@ public class Ex9 {
                 }
                 System.out.print("Invalid category\nRe-enter category (food/electronics/household): ");
             }
+            final String c = category;
 
-            final String c = category.toLowerCase();
-            List<Product> results = products.values().stream().filter(p -> switch (c) {
+            List<Product> results = products.values().stream().filter(p -> switch (c.toLowerCase()) {
                 case "food" -> p instanceof Food;
                 case "electronics" -> p instanceof Electronics;
                 case "household" -> p instanceof Household;
@@ -430,7 +432,7 @@ public class Ex9 {
                 System.out.print("Enter new expiration date (uuuu-MM-dd): ");
                 String newDate;
                 while (true) {
-                    newDate = br.readLine();
+                    newDate = br.readLine().strip();
                     if (isValidDate(newDate, pattern)) {
                         break;
                     }
@@ -457,7 +459,7 @@ public class Ex9 {
                 System.out.println("This product is not an Electronics item");
             } else {
                 System.out.print("Enter additional warranty period: ");
-                String additionalPeriod = br.readLine();
+                String additionalPeriod = br.readLine().strip();
                 electronics.extendWarranty(additionalPeriod);
             }
         }
@@ -478,7 +480,7 @@ public class Ex9 {
                 System.out.println("This product is not a Household item");
             } else {
                 System.out.print("Enter new usage: ");
-                String newUsage = br.readLine();
+                String newUsage = br.readLine().strip();
                 household.updateUsage(newUsage);
                 System.out.println("Usage updated");
             }

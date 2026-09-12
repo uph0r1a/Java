@@ -104,10 +104,10 @@ public class Ex12 {
             }
 
             System.out.print("Enter doctor name: ");
-            String name = br.readLine();
+            String name = br.readLine().strip();
 
             System.out.print("Enter doctor specialization: ");
-            String specialization = br.readLine();
+            String specialization = br.readLine().strip();
 
             System.out.print("Enter doctor salary: ");
             float salary;
@@ -124,7 +124,7 @@ public class Ex12 {
             }
 
             System.out.print("Enter doctor expertise: ");
-            String expertise = br.readLine();
+            String expertise = br.readLine().strip();
 
             System.out.print("Enter years of experience: ");
             int year;
@@ -163,8 +163,8 @@ public class Ex12 {
         public Surgeon() {
         }
 
-        public Surgeon(String doctorID, String doctorName, String specialization, float salary, int numberOfSurgeries,
-                String hospitalName) {
+        public Surgeon(String doctorID, String doctorName, String specialization, float salary,
+                int numberOfSurgeries, String hospitalName) {
             super(doctorID, doctorName, specialization, salary);
             this.numberOfSurgeries = numberOfSurgeries;
             this.hospitalName = hospitalName;
@@ -199,10 +199,10 @@ public class Ex12 {
             }
 
             System.out.print("Enter doctor name: ");
-            String dName = br.readLine();
+            String dName = br.readLine().strip();
 
             System.out.print("Enter doctor specialization: ");
-            String specialization = br.readLine();
+            String specialization = br.readLine().strip();
 
             System.out.print("Enter doctor salary: ");
             float salary;
@@ -233,7 +233,7 @@ public class Ex12 {
             }
 
             System.out.print("Enter hospital name: ");
-            String hName = br.readLine();
+            String hName = br.readLine().strip();
 
             setDoctorID(id);
             setDoctorName(dName);
@@ -332,7 +332,8 @@ public class Ex12 {
                     if (specialists.isEmpty()) {
                         System.out.println("No specialist doctor yet");
                     } else {
-                        specialists.stream().sorted(Comparator.comparingDouble(SpecialistDoctor::getSalary).reversed())
+                        specialists.stream()
+                                .sorted(Comparator.comparingDouble(SpecialistDoctor::getSalary).reversed())
                                 .forEach(SpecialistDoctor::display);
                     }
                 }

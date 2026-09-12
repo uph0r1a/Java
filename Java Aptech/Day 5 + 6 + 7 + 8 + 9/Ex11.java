@@ -205,7 +205,7 @@ public class Ex11 {
             System.out.print("Enter book id: ");
             String id;
             while (true) {
-                id = br.readLine();
+                id = br.readLine().strip();
                 if (!library.containsKey(id)) {
                     break;
                 }
@@ -216,7 +216,7 @@ public class Ex11 {
             String title = br.readLine().strip();
 
             System.out.print("Enter book author: ");
-            String author = br.readLine();
+            String author = br.readLine().strip();
 
             System.out.print("Enter book price: ");
             double price;
@@ -249,7 +249,7 @@ public class Ex11 {
             System.out.print("Enter book type (Textbook/Novel/Reference book): ");
             String type;
             while (true) {
-                type = br.readLine();
+                type = br.readLine().strip();
                 if (type.equalsIgnoreCase("textbook") || type.equalsIgnoreCase("novel")
                         || type.equalsIgnoreCase("reference book")) {
                     break;
@@ -260,17 +260,17 @@ public class Ex11 {
             switch (type.toLowerCase()) {
                 case "textbook" -> {
                     System.out.print("Enter book subject: ");
-                    String subject = br.readLine();
+                    String subject = br.readLine().strip();
 
                     System.out.print("Enter academic level: ");
-                    String level = br.readLine();
+                    String level = br.readLine().strip();
 
                     library.put(id, new Textbook(id, title, author, price, quantity, subject, level));
                     System.out.println("Textbook added successfully");
                 }
                 case "novel" -> {
                     System.out.print("Enter book genre: ");
-                    String genre = br.readLine();
+                    String genre = br.readLine().strip();
 
                     int bestSeller;
                     while (true) {
@@ -291,10 +291,10 @@ public class Ex11 {
                 }
                 case "reference book" -> {
                     System.out.print("Enter book field of study: ");
-                    String field = br.readLine();
+                    String field = br.readLine().strip();
 
                     System.out.print("Enter book edition: ");
-                    String edition = br.readLine();
+                    String edition = br.readLine().strip();
 
                     library.put(id, new ReferenceBook(id, title, author, price, quantity, field, edition));
                     System.out.println("Reference book added successfully");
@@ -327,7 +327,8 @@ public class Ex11 {
             System.out.print("Enter book title: ");
             String title = br.readLine().strip();
 
-            List<Book> results = library.values().stream().filter(b -> b.getTitle().equalsIgnoreCase(title)).toList();
+            List<Book> results = library.values().stream()
+                    .filter(b -> b.getTitle().equalsIgnoreCase(title)).toList();
 
             if (results.isEmpty()) {
                 System.out.println("No book found with that title");
@@ -345,15 +346,15 @@ public class Ex11 {
             System.out.print("Enter book type (Textbook/Novel/Reference book): ");
             String type;
             while (true) {
-                type = br.readLine();
+                type = br.readLine().strip();
                 if (type.equalsIgnoreCase("textbook") || type.equalsIgnoreCase("novel")
                         || type.equalsIgnoreCase("reference book")) {
                     break;
                 }
                 System.out.print("Invalid type\nRe-enter book type (Textbook/Novel/Reference book): ");
             }
-
             final String t = type;
+
             List<Book> results = library.values().stream().filter(b -> switch (t.toLowerCase()) {
                 case "textbook" -> b instanceof Textbook;
                 case "novel" -> b instanceof Novel;
@@ -375,7 +376,7 @@ public class Ex11 {
             }
 
             System.out.print("Enter book id: ");
-            String id = br.readLine();
+            String id = br.readLine().strip();
             Book book = library.get(id);
 
             if (book == null) {
@@ -384,7 +385,7 @@ public class Ex11 {
                 System.out.println("This book is not a Textbook");
             } else {
                 System.out.print("Enter academic level: ");
-                String level = br.readLine();
+                String level = br.readLine().strip();
                 textbook.updateAcademicLevel(level);
                 System.out.println("Academic level updated");
             }
@@ -397,7 +398,7 @@ public class Ex11 {
             }
 
             System.out.print("Enter book id: ");
-            String id = br.readLine();
+            String id = br.readLine().strip();
             Book book = library.get(id);
 
             if (book == null) {
@@ -417,7 +418,7 @@ public class Ex11 {
             }
 
             System.out.print("Enter book id: ");
-            String id = br.readLine();
+            String id = br.readLine().strip();
             Book book = library.get(id);
 
             if (book == null) {
@@ -426,7 +427,7 @@ public class Ex11 {
                 System.out.println("This book is not a Reference book");
             } else {
                 System.out.print("Enter book edition: ");
-                String edition = br.readLine();
+                String edition = br.readLine().strip();
                 referenceBook.updateEdition(edition);
                 System.out.println("Edition updated");
             }

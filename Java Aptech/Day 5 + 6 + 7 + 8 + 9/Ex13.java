@@ -102,7 +102,7 @@ public class Ex13 {
             }
 
             System.out.print("Enter product name: ");
-            String name = br.readLine();
+            String name = br.readLine().strip();
 
             System.out.print("Enter product year: ");
             int year;
@@ -136,7 +136,7 @@ public class Ex13 {
             String speed = br.readLine().strip();
 
             System.out.print("Enter product producer: ");
-            String producer = br.readLine();
+            String producer = br.readLine().strip();
 
             setProID(id);
             setProName(name);
@@ -195,7 +195,7 @@ public class Ex13 {
             }
 
             System.out.print("Enter product name: ");
-            String name = br.readLine();
+            String name = br.readLine().strip();
 
             System.out.print("Enter product year: ");
             int year;
@@ -229,7 +229,7 @@ public class Ex13 {
             String type = br.readLine().strip();
 
             System.out.print("Enter product publisher: ");
-            String publisher = br.readLine();
+            String publisher = br.readLine().strip();
 
             setProID(id);
             setProName(name);

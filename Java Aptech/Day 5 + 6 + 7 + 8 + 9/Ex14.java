@@ -76,7 +76,7 @@ public class Ex14 {
             System.out.println("Done");
         }
 
-        System.out.println("\n--- Assert for a positive number ---\nEnter a positive number: ");
+        System.out.print("\n--- Assert for a positive number ---\nEnter a positive number: ");
         int eight = sc.nextInt();
         try {
             assert eight > 0 : "value must be positive";
