@@ -2,80 +2,108 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.regex.Pattern;
 
 public class Ex6 {
     public static BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 
-    private static final String PHONE_REGEX = "^(\\+?1)?[2-9]\\d{2}[2-9]\\d{2}\\d{4}$";
-    private static final Pattern PHONE_PATTERN = Pattern.compile(PHONE_REGEX);
-
-    public static boolean isValidPhoneNumber(String phoneNumber) {
-        if (phoneNumber == null) {
-            return false;
-        }
-        String cleanedNumber = phoneNumber.replaceAll("[\\s\\-()]", "");
-        
-        return PHONE_PATTERN.matcher(cleanedNumber).matches();
-    }
-
     public static void addContact(Map<String, String> c) throws IOException {
-        System.out.println("Enter contact name: ");
-        String name = br.readLine();
+        System.out.print("Enter contact name: ");
+        String name = br.readLine().strip();
 
-        System.out.println("Enter contact phone number: ");
+        System.out.print("Enter contact phone number: ");
         String number;
         while (true) {
-            try {
-                number = br.readLine();
-                if (isValidPhoneNumber(number)) {
-                    break;
-                }
-                System.out.println("Invalid phone number\nRe-enter phone number: ");
-            } catch (Exception e) {
-                System.out.println("Error: "+ e.getMessage());
+            number = br.readLine().strip();
+            if (!number.isEmpty()) {
+                break;
             }
+            System.out.print("Phone number cannot be empty\nRe-enter phone number: ");
         }
 
         c.put(name, number);
+        System.out.println("Contact added successfully");
     }
 
     public static void removeContact(Map<String, String> c) throws IOException {
         if (c.isEmpty()) {
             System.out.println("No contact yet");
         } else {
-            System.out.println("Enter contact name: ");
-            String name = br.readLine();
+            System.out.print("Enter contact name: ");
+            String name = br.readLine().strip();
 
-            if (c.containsKey(name)) {
-                c.remove(name);
+            if (c.remove(name) != null) {
+                System.out.println("Contact removed successfully");
             } else {
                 System.out.println("No contact with this name");
             }
         }
     }
 
-    public static void searchContact(Map<String, String> c) throws IOException{
+    public static void searchContact(Map<String, String> c) throws IOException {
         if (c.isEmpty()) {
             System.out.println("No contact yet");
         } else {
-            System.out.println("Enter contact name: ");
-            String name = br.readLine();
+            System.out.print("Enter contact name: ");
+            String name = br.readLine().strip();
 
             if (c.containsKey(name)) {
-                System.out.println("Name: "+ name+ "\nPhone number: "+ c.get(name));
+                System.out.println("Name: " + name + "\nPhone number: " + c.get(name));
             } else {
                 System.out.println("No contact with this name");
             }
         }
     }
 
-    public static void main(String[] args) {
+    public static void sortContact(Map<String, String> c) {
+        if (c.isEmpty()) {
+            System.out.println("No contact yet");
+            return;
+        }
+
+        List<String> sortedNames = c.keySet().stream().sorted().toList();
+
+        System.out.println("Contacts sorted by name:");
+        for (String name : sortedNames) {
+            System.out.println(name + " -> " + c.get(name));
+        }
+    }
+
+    public static void main(String[] args) throws IOException {
         Map<String, String> contacts = new HashMap<>();
-        contacts.put("Alice", "123-4567");
-        contacts.put("Bob", "987-6543");
-        System.out.println(contacts.get("Alice"));
-        contacts.remove("Bob");
+        boolean isExit = false;
+
+        while (!isExit) {
+            System.out.print("""
+                    ===== CONTACT LIST =====
+                    1. Add contact
+                    2. Remove contact
+                    3. Search contact
+                    4. Sort and display contacts
+                    5. Exit
+                    Enter your choice:\s""");
+            int choice;
+            while (true) {
+                try {
+                    choice = Integer.parseInt(br.readLine());
+                    if (choice >= 1 && choice <= 5) {
+                        break;
+                    }
+                    System.out.print("Invalid choice\nRe-enter your choice: ");
+                } catch (Exception e) {
+                    System.out.println("Error: " + e.getMessage());
+                }
+            }
+
+            switch (choice) {
+                case 1 -> addContact(contacts);
+                case 2 -> removeContact(contacts);
+                case 3 -> searchContact(contacts);
+                case 4 -> sortContact(contacts);
+                case 5 -> isExit = true;
+                default -> System.out.print("Invalid choice\nRe-enter your choice: ");
+            }
+        }
     }
 }
