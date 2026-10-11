@@ -416,4 +416,73 @@ public class OrderDAOTest {
     public void escapeLikeEscapesTheThreeSpecialCharacters() {
         assertEquals("a\\%b\\_c\\\\d", OrderDAO.escapeLike("a%b_c\\d"));
     }
+
+    // ---- bank transfer ("Chuyển khoản") -------------------------------------------------------
+
+    private Order paidByTransfer(BigDecimal total, Integer customerId) {
+        Order order = paidOrderTotaling(total, customerId);
+        order.setPaymentMethod(PaymentMethod.TRANSFER);
+        return order;
+    }
+
+    @Test
+    public void aBankTransferOrderIsSavedAndReadBackAsTransfer() {
+        Product product = newProduct(10, new BigDecimal("40000"));
+        Order saved = orderDAO.insert(paidByTransfer(new BigDecimal("80000"), null), List.of(lineFor(product, 2)));
+
+        Order reloaded = orderDAO.findById(saved.getId()).orElseThrow();
+        assertEquals(PaymentMethod.TRANSFER, reloaded.getPaymentMethod());
+        assertEquals(OrderStatus.PAID, reloaded.getStatus());
+        Product afterSale = productDAO.findAll().stream().filter(p -> p.getId() == product.getId()).findFirst().orElseThrow();
+        assertEquals("a transfer sale takes stock like any other sale", 8, afterSale.getStock());
+    }
+
+    @Test
+    public void payingAnOpenOrderByTransferStoresTheMethod() {
+        Product product = newProduct(10, new BigDecimal("25000"));
+        Order open = new Order();
+        open.setOrderDate(LocalDateTime.now());
+        open.setStatus(OrderStatus.OPEN);
+        open.setSubtotal(BigDecimal.ZERO);
+        open.setDiscount(BigDecimal.ZERO);
+        open.setTotal(BigDecimal.ZERO);
+        Order saved = orderDAO.insert(open, List.of());
+
+        Order paid = orderDAO.payExistingOrder(saved.getId(), null, PaymentMethod.TRANSFER,
+                BigDecimal.ZERO, new BigDecimal("50000"), List.of(lineFor(product, 2)));
+
+        assertEquals(PaymentMethod.TRANSFER, paid.getPaymentMethod());
+        assertEquals(OrderStatus.PAID, paid.getStatus());
+        assertEquals(PaymentMethod.TRANSFER, orderDAO.findById(saved.getId()).orElseThrow().getPaymentMethod());
+    }
+
+    @Test
+    public void cancellingABankTransferOrderPutsStockAndPointsBack() {
+        Product product = newProduct(10, new BigDecimal("20000"));
+        Customer customer = newCustomer();
+        Order saved = orderDAO.insert(paidByTransfer(new BigDecimal("60000"), customer.getId()), List.of(lineFor(product, 3)));
+        assertEquals(LoyaltyPolicy.pointsFor(new BigDecimal("60000")),
+                customerDAO.findById(customer.getId()).orElseThrow().getLoyaltyPoints());
+
+        orderDAO.cancelPaidOrder(saved.getId());
+
+        assertEquals(OrderStatus.CANCELLED, orderDAO.findById(saved.getId()).orElseThrow().getStatus());
+        Product reloaded = productDAO.findAll().stream().filter(p -> p.getId() == product.getId()).findFirst().orElseThrow();
+        assertEquals(10, reloaded.getStock());
+        assertEquals(0, customerDAO.findById(customer.getId()).orElseThrow().getLoyaltyPoints());
+    }
+
+    @Test
+    public void bankTransferSalesCountInTheReportTotals() {
+        ReportDAO reports = new ReportDAO();
+        java.time.LocalDate today = java.time.LocalDate.now();
+        ReportDAO.Summary before = reports.summary(today, today);
+        Product product = newProduct(10, new BigDecimal("30000"));
+
+        orderDAO.insert(paidByTransfer(new BigDecimal("30000"), null), List.of(lineFor(product, 1)));
+
+        ReportDAO.Summary after = reports.summary(today, today);
+        assertEquals(before.paidOrders() + 1, after.paidOrders());
+        assertEquals(before.revenue().add(new BigDecimal("30000")), after.revenue());
+    }
 }

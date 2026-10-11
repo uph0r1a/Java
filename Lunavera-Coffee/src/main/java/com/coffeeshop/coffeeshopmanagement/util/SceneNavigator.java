@@ -8,6 +8,7 @@ import javafx.scene.Scene;
 import javafx.stage.Stage;
 
 import java.io.IOException;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -21,7 +22,14 @@ public final class SceneNavigator {
     private static final Logger LOGGER = Logger.getLogger(SceneNavigator.class.getName());
     private static final String LOGIN_FXML = "/fxml/dangnhap.fxml";
 
+    /** Run on every screen right after it is loaded and before it is shown (HelloApplication sets it). */
+    private static Consumer<Parent> screenDecorator = root -> { };
+
     private SceneNavigator() {
+    }
+
+    public static void setScreenDecorator(Consumer<Parent> decorator) {
+        screenDecorator = decorator == null ? root -> { } : decorator;
     }
 
     /** Switches the scene of the window that raised the given ActionEvent. */
@@ -45,13 +53,28 @@ public final class SceneNavigator {
         try {
             FXMLLoader loader = new FXMLLoader(SceneNavigator.class.getResource(fxmlPath));
             Parent root = loader.load();
-            Scene scene = new Scene(root);
-            stage.setScene(scene);
+            showScreen(stage, root);
         } catch (IOException e) {
             LOGGER.log(Level.SEVERE, "Failed to load screen: " + fxmlPath, e);
             AlertUtil.error("Lỗi điều hướng",
                     "Không thể mở màn hình được yêu cầu. Vui lòng thử lại hoặc liên hệ quản trị viên.");
         }
+    }
+
+    /**
+     * Puts a loaded screen into the window: decorates it (sidebar extras), wraps it so it fits the display
+     * (ScreenFit, TODO 2.4), and sizes/centres the window. The window's title-bar size is measured from the
+     * scene it has now, before it is replaced.
+     */
+    private static void showScreen(Stage stage, Parent root) {
+        screenDecorator.accept(root);
+        Scene old = stage.getScene();
+        boolean measurable = stage.isShowing() && old != null;
+        double chromeW = measurable ? Math.max(0, stage.getWidth() - old.getWidth()) : 0;
+        double chromeH = measurable ? Math.max(0, stage.getHeight() - old.getHeight()) : 0;
+        ScreenFit fit = ScreenFit.wrap(root);
+        stage.setScene(ScreenFit.newScene(fit, chromeW, chromeH));
+        ScreenFit.fitStage(stage, fit, chromeW, chromeH);
     }
 
     public static <T> T switchSceneAndGetController(Stage stage, String fxmlPath) {
@@ -63,8 +86,7 @@ public final class SceneNavigator {
         try {
             FXMLLoader loader = new FXMLLoader(SceneNavigator.class.getResource(fxmlPath));
             Parent root = loader.load();
-            Scene scene = new Scene(root);
-            stage.setScene(scene);
+            showScreen(stage, root);
             return loader.getController();
         } catch (IOException e) {
             LOGGER.log(Level.SEVERE, "Failed to load screen: " + fxmlPath, e);

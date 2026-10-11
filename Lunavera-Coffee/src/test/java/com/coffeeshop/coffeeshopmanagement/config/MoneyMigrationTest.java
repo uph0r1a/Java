@@ -94,7 +94,7 @@ public class MoneyMigrationTest {
                             + "JOIN employees e ON e.id = o.employee_id WHERE o.id = 1 AND p.id = 1"));
             assertEquals("loyalty points kept", 5, one(c, "SELECT loyalty_points FROM customers WHERE id = 1"));
 
-            Path backupDir = Path.of(System.getProperty("user.home"), ".lunavera-coffee", "backups");
+            Path backupDir = com.coffeeshop.coffeeshopmanagement.util.DataPaths.backupsDir();
             try (Stream<Path> files = Files.exists(backupDir) ? Files.list(backupDir) : Stream.empty()) {
                 assertTrue("an automatic pre-migration backup was written",
                         files.anyMatch(p -> p.getFileName().toString().startsWith("pre-migration-v1-")));

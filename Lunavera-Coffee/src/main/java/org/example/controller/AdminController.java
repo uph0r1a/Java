@@ -236,6 +236,11 @@ public class AdminController {
         chooser.setInitialFileName("lunavera-backup-" +
                 java.time.LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmm")) + ".db");
         chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("SQLite database", "*.db"));
+        // Start outside the app's data folder: a backup stored next to the live data is not a real backup.
+        java.io.File startFolder = new java.io.File(System.getProperty("user.home"));
+        if (startFolder.isDirectory()) {
+            chooser.setInitialDirectory(startFolder);
+        }
         java.io.File file = chooser.showSaveDialog(backupButton.getScene().getWindow());
         if (file == null) return;
         backupButton.setDisable(true);
@@ -243,8 +248,13 @@ public class AdminController {
                 () -> { com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig.backupTo(file.toPath()); return file; },
                 saved -> {
                     backupButton.setDisable(false);
+                    String warning = com.coffeeshop.coffeeshopmanagement.util.DataPaths.isInsideDataDir(saved.toPath())
+                            ? "\n\nLưu ý: bản sao này nằm ngay trong thư mục dữ liệu của ứng dụng. Nếu thư mục đó bị xóa hoặc hỏng thì bản sao cũng mất. Hãy chép nó sang ổ USB hoặc máy khác."
+                            : "";
                     AlertUtil.info("Sao lưu thành công", "Đã lưu bản sao dữ liệu vào:\n" + saved.getAbsolutePath() +
-                            "\n\nĐể khôi phục: đóng ứng dụng rồi thay file ~/.lunavera-coffee/lunavera.db bằng bản sao này.");
+                            "\n\nĐể khôi phục: đóng ứng dụng rồi thay file "
+                            + com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig.databaseFile()
+                            + " bằng bản sao này." + warning);
                 },
                 error -> {
                     backupButton.setDisable(false);
@@ -1248,9 +1258,10 @@ public class AdminController {
                     // database copied to another machine/user still finds its product images.
                     String fileName = com.coffeeshop.coffeeshopmanagement.util.ImageStorage.storeNewFile(picked);
                     pickedImagePath[0] = fileName;
-                    imagePathLabel.setText(fileName);
+                    // The stored name is a random string now; show the name of the file that was picked.
+                    imagePathLabel.setText(picked.getName());
                     // Old image is now replaced in the form; delete its file so re-picking an
-                    // image repeatedly doesn't leave orphans in ~/.lunavera-coffee/images. Only
+                    // image repeatedly doesn't leave orphans in the data/images folder. Only
                     // happens once the new copy has actually succeeded.
                     com.coffeeshop.coffeeshopmanagement.util.ImageStorage.deleteQuietly(previousPath);
                 } catch (IOException ex) {

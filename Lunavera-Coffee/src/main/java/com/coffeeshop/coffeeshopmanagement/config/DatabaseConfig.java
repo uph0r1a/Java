@@ -2,6 +2,7 @@ package com.coffeeshop.coffeeshopmanagement.config;
 
 import com.coffeeshop.coffeeshopmanagement.model.Role;
 import com.coffeeshop.coffeeshopmanagement.service.PasswordUtil;
+import com.coffeeshop.coffeeshopmanagement.util.DataPaths;
 
 import java.io.File;
 import java.nio.file.Path;
@@ -17,15 +18,16 @@ import java.util.logging.Logger;
 /**
  * Owns the SQLite connection string and one-time schema/seed setup.
  *
- * The database file lives under the user's home directory (~/.lunavera-coffee/lunavera.db)
- * rather than the project folder, so data survives regardless of the working directory the
- * app is launched from and is not accidentally wiped by a Maven "clean".
+ * The database file lives in the app's data folder ({@code data/lunavera.db} next to the project by
+ * default; see {@link DataPaths} for how to move it). The first time a new version starts, data
+ * left in the old {@code ~/.lunavera-coffee} folder is copied across (the old folder is kept).
+ * Keep {@code data/} out of git: it holds customer phone numbers and password hashes.
  */
 public final class DatabaseConfig {
 
     private static final Logger LOGGER = Logger.getLogger(DatabaseConfig.class.getName());
-    private static final String DB_FILE_NAME = "lunavera.db";
-    /** Seeded for the very first login only; the app prompts to change it (see DefaultPasswordPrompt). */
+    private static final String DB_FILE_NAME = DataPaths.DATABASE_FILE_NAME;
+    /** Seeded for the very first login only; the app forces a change right after that login (see PasswordChangeDialog). */
     public static final String DEFAULT_ADMIN_PASSWORD = "Admin@123";
     /** v1: money columns are INTEGER dong instead of REAL (see MoneyMigration). */
     static final int CURRENT_SCHEMA_VERSION = 1;
@@ -34,17 +36,24 @@ public final class DatabaseConfig {
     private DatabaseConfig() {
     }
 
-    private static String resolveDbUrl() {
-        Path dir = Path.of(System.getProperty("user.home"), ".lunavera-coffee");
+    private static Path resolveDbFile() {
+        DataPaths.migrateLegacyDataIfNeeded(); // before the first connection, so the copy is never open
+        Path dir = DataPaths.dataDir();
         File dirFile = dir.toFile();
         if (!dirFile.exists() && !dirFile.mkdirs()) {
             LOGGER.warning("Could not create data directory " + dir + "; falling back to working directory.");
-            return "jdbc:sqlite:" + DB_FILE_NAME;
+            return Path.of(DB_FILE_NAME).toAbsolutePath().normalize();
         }
-        return "jdbc:sqlite:" + dir.resolve(DB_FILE_NAME);
+        return dir.resolve(DB_FILE_NAME);
     }
 
-    private static final String DB_URL = resolveDbUrl();
+    private static final Path DB_FILE = resolveDbFile();
+    private static final String DB_URL = "jdbc:sqlite:" + DB_FILE;
+
+    /** The database file this run is using. */
+    public static Path databaseFile() {
+        return DB_FILE;
+    }
 
     /**
      * Opens a new short-lived connection. SQLite is file-based and handles many short
@@ -67,13 +76,28 @@ public final class DatabaseConfig {
     /**
      * Writes a consistent copy of the whole database to {@code target} using SQLite's
      * {@code VACUUM INTO} (safe while the app is running, unlike copying the file by hand).
-     * Restoring is manual: close the app and replace ~/.lunavera-coffee/lunavera.db with the backup.
+     * Restoring is manual: close the app and replace {@link #databaseFile()} with the backup.
+     *
+     * <p>Refuses to write onto the live database itself: the delete-then-write below would erase it.
      */
     public static void backupTo(java.nio.file.Path target) throws SQLException, java.io.IOException {
+        if (isLiveDatabase(target)) {
+            throw new java.io.IOException("Không thể ghi bản sao lưu đè lên chính cơ sở dữ liệu đang dùng ("
+                    + DB_FILE + "). Hãy chọn một tên tệp khác, tốt nhất ở thư mục ngoài thư mục dữ liệu.");
+        }
         java.nio.file.Files.deleteIfExists(target); // VACUUM INTO refuses to overwrite
         try (Connection connection = getConnection(); Statement statement = connection.createStatement()) {
             statement.execute("VACUUM INTO '" + target.toAbsolutePath().toString().replace("'", "''") + "'");
         }
+    }
+
+    private static boolean isLiveDatabase(java.nio.file.Path target) throws java.io.IOException {
+        java.nio.file.Path candidate = target.toAbsolutePath().normalize();
+        if (candidate.equals(DB_FILE.toAbsolutePath().normalize())) {
+            return true;
+        }
+        return java.nio.file.Files.exists(candidate) && java.nio.file.Files.exists(DB_FILE)
+                && java.nio.file.Files.isSameFile(candidate, DB_FILE);
     }
 
     /**
@@ -206,6 +230,8 @@ public final class DatabaseConfig {
 
             // Databases created before dine-in tables existed have no orders.table_number yet.
             addColumnIfMissing(connection, "orders", "table_number", "INTEGER");
+            // Why a discount was given (TODO 2.3); NULL for orders without one and for orders made before this existed.
+            addColumnIfMissing(connection, "orders", "discount_reason", "TEXT");
             }
 
             if (preexisting) {
@@ -218,7 +244,6 @@ public final class DatabaseConfig {
             seedDiningTables(connection);
             MenuSeeder.seedIfNeeded(connection);
             syncCategoriesAndProducts(connection);
-            DataCleanup.runIfNeeded(connection);
             initialized = true;
         } catch (SQLException e) {
             LOGGER.log(Level.SEVERE, "Database initialization failed", e);

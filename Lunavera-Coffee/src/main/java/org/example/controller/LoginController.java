@@ -144,7 +144,7 @@ public class LoginController {
         SessionGuard.startWatching(stage);
         SceneNavigator.switchScene(stage, target);
         if (usedDefaultPassword) {
-            javafx.application.Platform.runLater(() -> DefaultPasswordPrompt.show(user));
+            javafx.application.Platform.runLater(() -> PasswordChangeDialog.showForced(user, stage));
         }
     }
 

@@ -95,8 +95,9 @@ public class HoaDonController {
         discountLabel.setText(CurrencyUtil.format(order.getDiscount()));
         totalLabel.setText(CurrencyUtil.format(order.getTotal()));
         PaymentMethod method = order.getPaymentMethod();
-        paymentMethodLabel.setText(method == PaymentMethod.CASH ? "Tiền mặt"
-                : method == PaymentMethod.CARD ? "Thẻ" : "-");
+        // Only the method's name: the transfer QR picture is never printed on a receipt, because a
+        // paid receipt that still shows a payment QR could be scanned and paid a second time.
+        paymentMethodLabel.setText(PaymentMethod.labelOf(method));
 
         qrOrderIdLabel.setText("#" + order.getId());
         showQrCode(order);

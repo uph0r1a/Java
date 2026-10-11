@@ -1,0 +1,9 @@
+/*
+ * The one place that decides the font for the whole app. AppStyle adds this sheet to EVERY window's scene
+ * (screens, dialogs, alerts, menus, tooltips), so no other style sheet should set -fx-font-family.
+ * "Be Vietnam Pro" is bundled in resources/fonts (SIL Open Font License, see fonts/OFL.txt) and loaded at
+ * start-up, so Windows and Linux draw the same letters instead of whatever each machine happens to have.
+ */
+.root {
+    -fx-font-family: "Be Vietnam Pro";
+}

@@ -18,21 +18,28 @@ import static org.junit.Assert.assertTrue;
 public class ImageStorageTest {
 
     private String realUserHome;
+    private String realDataDir;
     private Path fakeHome;
 
     @Before
     public void useAThrowawayHomeDirectory() throws IOException {
-        // ImageStorage reads user.home directly (matches DatabaseConfig's own convention), so
-        // this points it at a temp directory rather than touching the real
-        // ~/.lunavera-coffee/images on whatever machine runs the tests.
+        // ImageStorage asks DataPaths for its folder (read on every call), so this points it at a
+        // temp directory rather than touching the real data/images folder.
         realUserHome = System.getProperty("user.home");
+        realDataDir = System.getProperty("lunavera.dataDir");
         fakeHome = Files.createTempDirectory("lunavera-image-test");
         System.setProperty("user.home", fakeHome.toString());
+        System.setProperty("lunavera.dataDir", fakeHome.resolve("data").toString());
     }
 
     @After
     public void restoreRealHomeDirectory() throws IOException {
         System.setProperty("user.home", realUserHome);
+        if (realDataDir == null) {
+            System.clearProperty("lunavera.dataDir");
+        } else {
+            System.setProperty("lunavera.dataDir", realDataDir);
+        }
         try (var walk = Files.walk(fakeHome)) {
             walk.sorted(java.util.Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
         }
@@ -96,5 +103,102 @@ public class ImageStorageTest {
         ImageStorage.deleteQuietly(null);
         ImageStorage.deleteQuietly("");
         ImageStorage.deleteQuietly("never-existed.png");
+    }
+
+    private File tempImage(String suffix, String content) throws IOException {
+        File source = Files.createTempFile("source", suffix).toFile();
+        Files.writeString(source.toPath(), content);
+        return source;
+    }
+
+    @Test
+    public void twoUploadsOfTheSameFileGetTwoDifferentNamesAndTwoFiles() throws IOException {
+        File source = tempImage(".png", "same bytes");
+
+        String first = ImageStorage.storeNewFile(source);
+        String second = ImageStorage.storeNewFile(source);
+
+        assertFalse("names must differ", first.equals(second));
+        assertTrue(ImageStorage.resolve(first).exists());
+        assertTrue(ImageStorage.resolve(second).exists());
+    }
+
+    @Test
+    public void storedNameDoesNotContainTheOriginalFileName() throws IOException {
+        // Spaces, brackets, Vietnamese letters and a very long name. A name the machine's file
+        // system cannot even create (a non-UTF-8 test machine) is skipped, not failed.
+        String[] originals = {
+                "Ca phe sua da - anh (1).JPG",
+                "Cà phê sữa đá - ảnh.JPG",
+                "x".repeat(150) + ".png"};
+        int tried = 0;
+        for (String original : originals) {
+            File source;
+            try {
+                source = new File(Files.createTempDirectory("orig").toFile(), original);
+                Files.writeString(source.toPath(), "x");
+            } catch (java.nio.file.InvalidPathException | IOException unsupportedHere) {
+                continue;
+            }
+            tried++;
+            String stored = ImageStorage.storeNewFile(source);
+
+            String baseName = original.substring(0, original.lastIndexOf('.'));
+            assertFalse("original name leaked into " + stored, stored.contains(baseName));
+            assertTrue("only safe characters: " + stored, stored.matches("[0-9a-f-]+\\.(png|jpg|jpeg)"));
+            assertTrue("lowercase extension: " + stored, stored.endsWith(original.endsWith(".png") ? ".png" : ".jpg"));
+        }
+        assertTrue("at least the plain ASCII name must have been tested", tried >= 1);
+    }
+
+    @Test
+    public void onlyPngAndJpegAreAccepted() throws IOException {
+        for (String suffix : new String[]{".png", ".PNG", ".jpg", ".jpeg", ".JpEg"}) {
+            assertNotNull(ImageStorage.resolve(ImageStorage.storeNewFile(tempImage(suffix, "x"))));
+        }
+        for (String suffix : new String[]{".gif", ".exe", ".webp", ".txt", ""}) {
+            try {
+                ImageStorage.storeNewFile(tempImage(suffix, "x"));
+                org.junit.Assert.fail("should have rejected " + suffix);
+            } catch (IOException expected) {
+                // rejected before anything was copied
+            }
+        }
+        File noExtension = new File(Files.createTempDirectory("noext").toFile(), "picture.");
+        Files.writeString(noExtension.toPath(), "x");
+        try {
+            ImageStorage.storeNewFile(noExtension);
+            org.junit.Assert.fail("a trailing dot is not an extension");
+        } catch (IOException expected) {
+            // fine
+        }
+    }
+
+    @Test
+    public void aNameCollisionNeverOverwritesAndRetriesWithANewName() throws IOException {
+        Path existing = ImageStorage.directory().resolve("taken.png");
+        Files.writeString(existing, "someone else's picture");
+        File source = tempImage(".png", "new picture");
+        java.util.Iterator<String> names = java.util.List.of("taken", "taken", "free").iterator();
+
+        String stored = ImageStorage.storeNewFile(source, names::next);
+
+        assertEquals("free.png", stored);
+        assertEquals("the existing file must be untouched", "someone else's picture", Files.readString(existing));
+        assertEquals("new picture", Files.readString(ImageStorage.resolve(stored).toPath()));
+    }
+
+    @Test(expected = IOException.class)
+    public void givesUpWhenEveryGeneratedNameIsTaken() throws IOException {
+        Files.writeString(ImageStorage.directory().resolve("busy.png"), "x");
+        ImageStorage.storeNewFile(tempImage(".png", "y"), () -> "busy");
+    }
+
+    @Test
+    public void oldStyleStoredNamesStillResolve() throws IOException {
+        // A name from before this change: <millis>_<original name>. Must keep working, untouched.
+        Path old = ImageStorage.directory().resolve("1728500000000_latte da.png");
+        Files.writeString(old, "old picture");
+        assertNotNull(ImageStorage.resolve("1728500000000_latte da.png"));
     }
 }

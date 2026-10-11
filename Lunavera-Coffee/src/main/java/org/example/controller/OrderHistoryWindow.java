@@ -149,8 +149,7 @@ public final class OrderHistoryWindow {
                 ? s.order().getOrderDate().format(TIME_FORMAT) : "-"));
         addColumn(OrderDAO.HistorySortKey.EMPLOYEE, column("Nhân viên", 150, s -> orDash(s.employeeName())));
         addColumn(OrderDAO.HistorySortKey.CUSTOMER, column("Khách hàng", 150, s -> s.customerName() != null ? s.customerName() : "Khách lẻ"));
-        addColumn(OrderDAO.HistorySortKey.PAYMENT, column("Thanh toán", 100, s -> s.order().getPaymentMethod() == PaymentMethod.CARD
-                ? "Thẻ" : s.order().getPaymentMethod() == PaymentMethod.CASH ? "Tiền mặt" : "-"));
+        addColumn(OrderDAO.HistorySortKey.PAYMENT, column("Thanh toán", 100, s -> PaymentMethod.labelOf(s.order().getPaymentMethod())));
         addColumn(OrderDAO.HistorySortKey.TOTAL, column("Tổng tiền", 120, s -> CurrencyUtil.format(s.order().getTotal())));
         addColumn(OrderDAO.HistorySortKey.STATUS, column("Trạng thái", 120, s -> statusLabel(s.order().getStatus())));
     }

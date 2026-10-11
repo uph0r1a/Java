@@ -1,5 +1,4 @@
 .root {
-    -fx-font-family: "System";
 }
 
 /* =========================================================
@@ -70,7 +69,6 @@
 .login-title {
     -fx-text-fill: #3F5140;
 
-    -fx-font-family: "Georgia";
     -fx-font-size: 27px;
     -fx-font-weight: bold;
 }

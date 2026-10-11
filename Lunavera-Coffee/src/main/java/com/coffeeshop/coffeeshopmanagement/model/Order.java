@@ -15,9 +15,14 @@ public class Order {
     private PaymentMethod paymentMethod;
     private LocalDateTime paidAt;
     private Integer tableNumber;
+    /** Why a discount was given; null when there was none (TODO 2.3). */
+    private String discountReason;
 
     public Order() {
     }
+
+    public String getDiscountReason() { return discountReason; }
+    public void setDiscountReason(String discountReason) { this.discountReason = discountReason; }
 
     public Integer getTableNumber() { return tableNumber; }
     public void setTableNumber(Integer tableNumber) { this.tableNumber = tableNumber; }

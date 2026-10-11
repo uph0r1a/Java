@@ -1,5 +1,7 @@
 package com.coffeeshop.coffeeshopmanagement.config;
 
+import com.coffeeshop.coffeeshopmanagement.util.DataPaths;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -127,7 +129,7 @@ final class MoneyMigration {
      */
     private static void backupBeforeMigration() {
         try {
-            Path backupDir = Path.of(System.getProperty("user.home"), ".lunavera-coffee", "backups");
+            Path backupDir = DataPaths.backupsDir();
             Files.createDirectories(backupDir);
             String stamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
             Path target = backupDir.resolve("pre-migration-v1-" + stamp + ".db");

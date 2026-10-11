@@ -1,2 +1,4 @@
 .idea/
 target/
+# The shop database (customer phone numbers, password hashes), pictures, logs and backups: never commit
+data/

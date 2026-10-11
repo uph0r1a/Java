@@ -7,8 +7,8 @@ import java.nio.file.Path;
 /**
  * All DAO tests share one throwaway SQLite database for the whole test JVM run.
  * {@code DatabaseConfig.DB_URL} is a {@code static final} field resolved the first time that
- * class is loaded, from the {@code user.home} system property at that moment - so
- * {@code user.home} must point at a fresh temp directory *before* anything touches
+ * class is loaded, from the {@code lunavera.dataDir} system property at that moment - so
+ * that property (and {@code user.home}) must point at a fresh temp directory *before* anything touches
  * {@code DatabaseConfig}, and every DAO test class must go through this one shared bootstrap
  * rather than each pointing at its own directory (only whichever test class happened to run
  * first would actually take effect; the rest would silently share its database instead of
@@ -29,7 +29,9 @@ public final class TestDatabaseSupport {
     static {
         try {
             TEMP_HOME = Files.createTempDirectory("lunavera-dao-test-home");
+            // user.home too: the one-time copy from ~/.lunavera-coffee must never find a real home folder.
             System.setProperty("user.home", TEMP_HOME.toString());
+            System.setProperty("lunavera.dataDir", TEMP_HOME.resolve("data").toString());
         } catch (IOException e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -43,6 +45,15 @@ public final class TestDatabaseSupport {
      *  DatabaseConfig.initialize() is itself idempotent. */
     public static void ensureReady() {
         Object forceStaticInit = TEMP_HOME;
+        // Safety net: if some test loaded DatabaseConfig before the temp folder was set, every database
+        // test in this run would be writing into the real data/ folder. Stop instead of polluting it.
+        Path live = com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig.databaseFile().toAbsolutePath().normalize();
+        Path realData = Path.of(System.getProperty("user.dir"), "data").toAbsolutePath().normalize();
+        if (live.startsWith(realData) && !TEMP_HOME.toAbsolutePath().normalize().startsWith(realData)) {
+            throw new IllegalStateException("A test started DatabaseConfig before the temp data folder was set; "
+                    + "it would use the real database " + live + ". Call TestDatabaseSupport.ensureReady() "
+                    + "(or touch TestDatabaseSupport.TEMP_HOME) in that test's @BeforeClass.");
+        }
         com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig.initialize();
     }
 }

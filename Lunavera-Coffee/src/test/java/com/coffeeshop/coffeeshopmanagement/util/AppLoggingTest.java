@@ -25,16 +25,9 @@ import static org.junit.Assert.assertTrue;
  */
 public class AppLoggingTest {
 
-    private static final Path TEMP_HOME;
-
-    static {
-        try {
-            TEMP_HOME = Files.createTempDirectory("lunavera-logging-test-home");
-            System.setProperty("user.home", TEMP_HOME.toString());
-        } catch (IOException e) {
-            throw new ExceptionInInitializerError(e);
-        }
-    }
+    /** The one throw-away folder every test class in the run shares (see TestDatabaseSupport). A second,
+     *  separate folder set here made the answer to "where is the data?" depend on which test ran first. */
+    private static final Path TEMP_HOME = com.coffeeshop.coffeeshopmanagement.dao.TestDatabaseSupport.TEMP_HOME;
 
     @Test
     public void installCreatesALogFileAndSomethingGetsWrittenToIt() throws IOException {
@@ -43,7 +36,7 @@ public class AppLoggingTest {
         Logger.getLogger(AppLoggingTest.class.getName()).info(marker);
         // FileHandler's parent (StreamHandler) flushes on every publish by default, so this
         // should already be on disk without needing an explicit flush/close from here.
-        Path logsDir = TEMP_HOME.resolve(".lunavera-coffee").resolve("logs");
+        Path logsDir = TEMP_HOME.resolve("data").resolve("logs");
         assertTrue("logs directory should have been created", Files.isDirectory(logsDir));
         boolean written = false;
         try (var files = Files.list(logsDir)) {

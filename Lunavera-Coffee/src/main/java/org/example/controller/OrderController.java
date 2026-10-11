@@ -17,11 +17,15 @@ import com.coffeeshop.coffeeshopmanagement.model.Product;
 import com.coffeeshop.coffeeshopmanagement.model.TableStatus;
 import com.coffeeshop.coffeeshopmanagement.service.CustomerService;
 import com.coffeeshop.coffeeshopmanagement.util.AlertUtil;
+import com.coffeeshop.coffeeshopmanagement.util.DataPaths;
 import com.coffeeshop.coffeeshopmanagement.util.TextLengthLimiter;
+import com.coffeeshop.coffeeshopmanagement.util.TransferQr;
 import com.coffeeshop.coffeeshopmanagement.util.Async;
 import com.coffeeshop.coffeeshopmanagement.util.ValidationUtil;
 import com.coffeeshop.coffeeshopmanagement.util.CurrencyUtil;
 import com.coffeeshop.coffeeshopmanagement.util.SceneNavigator;
+import com.coffeeshop.coffeeshopmanagement.model.Role;
+import com.coffeeshop.coffeeshopmanagement.service.DiscountPolicy;
 import com.coffeeshop.coffeeshopmanagement.util.Session;
 import com.coffeeshop.coffeeshopmanagement.util.SessionGuard;
 
@@ -39,6 +43,7 @@ import javafx.geometry.Pos;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonBar.ButtonData;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.ChoiceDialog;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
@@ -134,7 +139,7 @@ public class OrderController {
     private record TableOrderData(Order order, List<OrderItem> items, Customer customer) {
     }
 
-    private record PaymentResult(PaymentMethod method, BigDecimal discount, BigDecimal total) {
+    private record PaymentResult(PaymentMethod method, BigDecimal discount, String discountReason, BigDecimal total) {
     }
 
     // =================================================================== initialize
@@ -894,17 +899,33 @@ public class OrderController {
         AlertUtil.setCancelButton(dialog, ButtonType.CANCEL);
 
         ToggleGroup methodGroup = new ToggleGroup();
-        RadioButton cashRadio = new RadioButton("Tiền mặt");
+        RadioButton cashRadio = new RadioButton(PaymentMethod.CASH.label());
         cashRadio.setToggleGroup(methodGroup);
         cashRadio.setSelected(true);
-        RadioButton cardRadio = new RadioButton("Thẻ");
+        RadioButton cardRadio = new RadioButton(PaymentMethod.CARD.label());
         cardRadio.setToggleGroup(methodGroup);
+        RadioButton transferRadio = new RadioButton(PaymentMethod.TRANSFER.label());
+        transferRadio.setToggleGroup(methodGroup);
 
         TextField discountField = new TextField("0");
+        TextField discountReasonField = new TextField();
+        discountReasonField.setPromptText("Bắt buộc khi có giảm giá");
+        TextLengthLimiter.limit(discountReasonField, DiscountPolicy.REASON_MAX_LENGTH);
+        // Only worth asking for a reason when there is a discount.
+        discountReasonField.setDisable(true);
+        discountField.textProperty().addListener((obs, o, n) -> {
+            BigDecimal typed = parseNonNegative(n);
+            discountReasonField.setDisable(typed == null || typed.signum() == 0);
+        });
+        Role currentRole = Session.getCurrentRole();
+        BigDecimal maxDiscount = DiscountPolicy.maxDiscount(currentRole, subtotal);
+        Label discountHint = new Label(currentRole == Role.ADMIN ? "Quản trị viên: không giới hạn."
+                : "Nhân viên được giảm tối đa " + DiscountPolicy.STAFF_MAX_PERCENT + "% (" + CurrencyUtil.format(maxDiscount) + ").");
+        discountHint.setStyle("-fx-font-size: 11px; -fx-text-fill: #5b7e45;");
         TextField cashReceivedField = new TextField();
         TextLengthLimiter.limit(discountField, TextLengthLimiter.NUMBER_MAX);
         TextLengthLimiter.limit(cashReceivedField, TextLengthLimiter.NUMBER_MAX);
-        cashReceivedField.disableProperty().bind(cardRadio.selectedProperty());
+        cashReceivedField.disableProperty().bind(cashRadio.selectedProperty().not()); // only cash has "tiền khách đưa"
         Label totalPreviewLabel = new Label(CurrencyUtil.format(subtotal));
         Label changePreviewLabel = new Label(CurrencyUtil.format(BigDecimal.ZERO));
 
@@ -923,6 +944,7 @@ public class OrderController {
         discountField.textProperty().addListener((obs, o, n) -> updatePreview.run());
         cashReceivedField.textProperty().addListener((obs, o, n) -> updatePreview.run());
         cardRadio.selectedProperty().addListener((obs, o, n) -> updatePreview.run());
+        transferRadio.selectedProperty().addListener((obs, o, n) -> updatePreview.run());
         updatePreview.run();
 
         GridPane grid = new GridPane();
@@ -930,15 +952,33 @@ public class OrderController {
         grid.setVgap(10);
         grid.setPadding(new Insets(20));
         grid.addRow(0, new Label("Tạm tính:"), new Label(CurrencyUtil.format(subtotal)));
-        grid.addRow(1, new Label("Giảm giá:"), discountField);
-        grid.addRow(2, new Label("Thành tiền:"), totalPreviewLabel);
-        grid.addRow(3, new Label("Phương thức:"), new HBox(14, cashRadio, cardRadio));
-        grid.addRow(4, new Label("Tiền khách đưa:"), cashReceivedField);
-        grid.addRow(5, new Label("Tiền thối lại:"), changePreviewLabel);
+        grid.addRow(1, new Label("Giảm giá:"), new VBox(2, discountField, discountHint));
+        grid.addRow(2, new Label("Lý do giảm giá:"), discountReasonField);
+        grid.addRow(3, new Label("Thành tiền:"), totalPreviewLabel);
+        grid.addRow(4, new Label("Phương thức:"), new HBox(14, cashRadio, cardRadio, transferRadio));
+        grid.addRow(5, new Label("Tiền khách đưa:"), cashReceivedField);
+        grid.addRow(6, new Label("Tiền thối lại:"), changePreviewLabel);
+
+        // Bank transfer: the shop's own QR picture and the amount, shown only for this method.
+        // The cashier must tick that the money arrived before the order can be paid.
+        CheckBox transferReceivedBox = new CheckBox("Tôi đã nhận đủ tiền trong tài khoản");
+        VBox transferBox = buildTransferBox(totalPreviewLabel, transferReceivedBox);
+        transferBox.visibleProperty().bind(transferRadio.selectedProperty());
+        transferBox.managedProperty().bind(transferRadio.selectedProperty());
+        grid.add(transferBox, 0, 7, 2, 1);
         dialog.getDialogPane().setContent(grid);
 
         PaymentResult[] pendingResult = {null};
         Button confirmButton = (Button) dialog.getDialogPane().lookupButton(confirmButtonType);
+        transferRadio.selectedProperty().addListener((obs, was, isNow) -> {
+            confirmButton.setText(isNow ? "Đã nhận tiền - hoàn tất" : "Xác nhận thanh toán");
+            // The dialog was sized for the short layout; grow or shrink it when the QR appears or goes.
+            javafx.application.Platform.runLater(() -> {
+                if (dialog.getDialogPane().getScene() != null && dialog.getDialogPane().getScene().getWindow() != null) {
+                    dialog.getDialogPane().getScene().getWindow().sizeToScene();
+                }
+            });
+        });
         confirmButton.addEventFilter(ActionEvent.ACTION, event -> {
             BigDecimal discount = parseNonNegative(discountField.getText());
             if (discount == null) {
@@ -946,13 +986,28 @@ public class OrderController {
                 event.consume();
                 return;
             }
-            if (discount.compareTo(subtotal) > 0) {
-                AlertUtil.warning("Giảm giá không hợp lệ", "Giảm giá không được lớn hơn tạm tính.");
+            String discountProblem = switch (DiscountPolicy.check(currentRole, subtotal, discount, discountReasonField.getText())) {
+                case OK -> null;
+                case NEGATIVE -> "Vui lòng nhập một số hợp lệ.";
+                case ABOVE_SUBTOTAL -> "Giảm giá không được lớn hơn tạm tính.";
+                case ABOVE_STAFF_LIMIT -> "Nhân viên chỉ được giảm tối đa " + DiscountPolicy.STAFF_MAX_PERCENT + "% ("
+                        + CurrencyUtil.format(maxDiscount) + "). Hãy nhờ quản trị viên đăng nhập để giảm nhiều hơn.";
+                case REASON_REQUIRED -> "Vui lòng nhập lý do giảm giá.";
+                case REASON_TOO_LONG -> "Lý do giảm giá tối đa " + DiscountPolicy.REASON_MAX_LENGTH + " ký tự.";
+            };
+            if (discountProblem != null) {
+                AlertUtil.warning("Giảm giá không hợp lệ", discountProblem);
                 event.consume();
                 return;
             }
             BigDecimal total = subtotal.subtract(discount);
-            PaymentMethod method = cashRadio.isSelected() ? PaymentMethod.CASH : PaymentMethod.CARD;
+            PaymentMethod method = cashRadio.isSelected() ? PaymentMethod.CASH
+                    : transferRadio.isSelected() ? PaymentMethod.TRANSFER : PaymentMethod.CARD;
+            if (method == PaymentMethod.TRANSFER && !transferReceivedBox.isSelected()) {
+                AlertUtil.warning("Chưa xác nhận", "Vui lòng tick xác nhận đã nhận đủ tiền chuyển khoản trước khi hoàn tất.");
+                event.consume();
+                return;
+            }
             if (method == PaymentMethod.CASH) {
                 BigDecimal received = parseNonNegative(cashReceivedField.getText());
                 if (received == null) {
@@ -966,13 +1021,54 @@ public class OrderController {
                     return;
                 }
             }
-            pendingResult[0] = new PaymentResult(method, discount, total);
+            pendingResult[0] = new PaymentResult(method, discount,
+                    DiscountPolicy.reasonToStore(discount, discountReasonField.getText()), total);
         });
 
         dialog.showAndWait();
         if (pendingResult[0] != null) {
             completeOrder(pendingResult[0]);
         }
+    }
+
+    /**
+     * The block shown for "Chuyển khoản": the amount to transfer, the shop's QR picture (or a
+     * clear note when the picture has not been added - never a made-up code), the order code to
+     * use as the transfer note, and the "money received" tick box.
+     */
+    private VBox buildTransferBox(Label totalPreviewLabel, CheckBox transferReceivedBox) {
+        Label title = new Label("Số tiền khách cần chuyển:");
+        Label amount = new Label();
+        amount.textProperty().bind(totalPreviewLabel.textProperty());
+        amount.setStyle("-fx-font-size: 22px; -fx-font-weight: bold;");
+
+        javafx.scene.Node picture;
+        Optional<String> imageUrl = TransferQr.findImageUrl();
+        if (imageUrl.isPresent()) {
+            javafx.scene.image.ImageView view = new javafx.scene.image.ImageView(
+                    new javafx.scene.image.Image(imageUrl.get(), 240, 240, true, true));
+            view.setFitWidth(240);
+            view.setFitHeight(240);
+            view.setPreserveRatio(true);
+            picture = view;
+        } else {
+            Label missing = new Label("Chưa có ảnh QR chuyển khoản. Hãy đặt ảnh tên \"qr-transfer.png\" vào thư mục:\n"
+                    + DataPaths.dataDir() + "\nrồi mở lại cửa sổ thanh toán.");
+            missing.setWrapText(true);
+            missing.setMaxWidth(320);
+            picture = missing;
+        }
+
+        VBox box = new VBox(8, title, amount, picture);
+        if (activeOpenOrder != null && activeOpenOrder.getId() > 0) {
+            Label note = new Label("Nội dung chuyển khoản: DH" + String.format("%06d", activeOpenOrder.getId()));
+            note.setStyle("-fx-font-weight: bold;");
+            box.getChildren().add(note);
+        }
+        box.getChildren().add(transferReceivedBox);
+        box.setAlignment(Pos.CENTER);
+        box.setPadding(new Insets(6, 0, 0, 0));
+        return box;
     }
 
     private BigDecimal parseNonNegative(String text) {
@@ -1009,7 +1105,7 @@ public class OrderController {
                     if (openOrder != null && openOrder.getId() > 0) {
                         // Also frees the table, in the same transaction.
                         savedOrder = orderDAO.payExistingOrder(openOrder.getId(), customerId,
-                                payment.method(), payment.discount(), payment.total(), items);
+                                payment.method(), payment.discount(), payment.discountReason(), payment.total(), items);
                     } else {
                         Order order = new Order();
                         order.setOrderDate(LocalDateTime.now());
@@ -1018,6 +1114,7 @@ public class OrderController {
                         order.setStatus(OrderStatus.PAID);
                         order.setSubtotal(subtotal);
                         order.setDiscount(payment.discount());
+                        order.setDiscountReason(payment.discountReason());
                         order.setTotal(payment.total());
                         order.setPaymentMethod(payment.method());
                         order.setPaidAt(LocalDateTime.now());

@@ -32,7 +32,7 @@ public class OrderDAO {
 
     public Order insert(Order order, List<OrderItem> items) {
         String orderSql = "INSERT INTO orders (order_date, employee_id, customer_id, status, subtotal, discount, " +
-                "total, payment_method, paid_at, table_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                "total, payment_method, paid_at, table_number, discount_reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         String itemSql = "INSERT INTO order_items (order_id, product_id, product_name, quantity, unit_price, line_total) " +
                 "VALUES (?, ?, ?, ?, ?, ?)";
         try (Connection connection = DatabaseConfig.getConnection()) {
@@ -49,6 +49,7 @@ public class OrderDAO {
                 statement.setString(8, order.getPaymentMethod() != null ? order.getPaymentMethod().name() : null);
                 statement.setString(9, order.getPaidAt() != null ? order.getPaidAt().toString() : null);
                 setNullableInt(statement, 10, order.getTableNumber());
+                statement.setString(11, order.getDiscountReason());
                 statement.executeUpdate();
                 try (ResultSet keys = statement.getGeneratedKeys()) {
                     keys.next();
@@ -166,8 +167,14 @@ public class OrderDAO {
      */
     public Order payExistingOrder(int orderId, Integer customerId, PaymentMethod method, BigDecimal discount,
                                   BigDecimal total, List<OrderItem> items) {
+        return payExistingOrder(orderId, customerId, method, discount, null, total, items);
+    }
+
+    /** Same, and also saves why the discount was given ({@code discountReason}, null when there is none). */
+    public Order payExistingOrder(int orderId, Integer customerId, PaymentMethod method, BigDecimal discount,
+                                  String discountReason, BigDecimal total, List<OrderItem> items) {
         String orderSql = "UPDATE orders SET status = 'PAID', paid_at = ?, payment_method = ?, discount = ?, total = ?, "
-                + "customer_id = COALESCE(?, customer_id) WHERE id = ? AND status = 'OPEN'";
+                + "customer_id = COALESCE(?, customer_id), discount_reason = ? WHERE id = ? AND status = 'OPEN'";
         String deleteItemsSql = "DELETE FROM order_items WHERE order_id = ?";
         String itemSql = "INSERT INTO order_items (order_id, product_id, product_name, quantity, unit_price, line_total) VALUES (?, ?, ?, ?, ?, ?)";
         try (Connection connection = DatabaseConfig.getConnection()) {
@@ -178,7 +185,8 @@ public class OrderDAO {
                 statement.setLong(3, Money.toDong(discount));
                 statement.setLong(4, Money.toDong(total));
                 setNullableInt(statement, 5, customerId);
-                statement.setInt(6, orderId);
+                statement.setString(6, discountReason);
+                statement.setInt(7, orderId);
                 if (statement.executeUpdate() == 0) {
                     connection.rollback();
                     throw new DataAccessException("Đơn #" + orderId
@@ -629,6 +637,11 @@ public class OrderDAO {
             int tableNumber = rs.getInt("table_number");
             order.setTableNumber(rs.wasNull() ? null : tableNumber);
         } catch (SQLException ignored) {
+        }
+        try {
+            order.setDiscountReason(rs.getString("discount_reason"));
+        } catch (SQLException ignored) {
+            // a query that does not select this column
         }
         return order;
     }
