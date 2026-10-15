@@ -72,7 +72,7 @@ public class Ex1 {
 
         public void inputCarInfo() throws IOException {
             for (int i = 0; i < 3; i++) {
-                System.out.println("Enter car model: ");
+                System.out.println("\nCar " + (i + 1) + ": \nEnter car model: ");
                 String model;
                 while (true) {
                     try {
@@ -129,14 +129,23 @@ public class Ex1 {
             return null;
         }
 
-        public void displayCars(){
-            for (Car car : cars) {
-                car.toString();
+        public void displayCars() {
+            if (cars.isEmpty()) {
+                System.out.println("No cars yet");
+            } else {
+                for (Car car : cars) {
+                    car.toString();
+                }
             }
         }
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
+        CarManager carManager = new CarManager();
 
+        carManager.inputCarInfo();
+        carManager.serializeCars();
+        carManager.deserializeCars();
+        carManager.displayCars();
     }
 }
