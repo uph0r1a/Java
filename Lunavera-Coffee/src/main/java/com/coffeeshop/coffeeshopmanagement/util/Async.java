@@ -45,6 +45,30 @@ public final class Async {
         ORDERED.execute(newTask(backgroundWork, onSuccess, onFailure));
     }
 
+    /**
+     * Waits until every {@link #runOrdered} job submitted so far has finished, but at most {@code maxMillis}: used when the
+     * window closes, so the last autosave of a cart is not lost with the daemon thread (TODO 3.24). Returns false on a timeout.
+     * Must not be called from a job that runs on that queue.
+     */
+    public static boolean flushOrdered(long maxMillis) {
+        try {
+            ORDERED.submit(() -> { }).get(maxMillis, java.util.concurrent.TimeUnit.MILLISECONDS);
+            return true;
+        } catch (java.util.concurrent.TimeoutException e) {
+            return false;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        } catch (java.util.concurrent.ExecutionException | java.util.concurrent.RejectedExecutionException e) {
+            return true;
+        }
+    }
+
+    /** For tests: queue a plain job on the ordered thread (a JavaFX Task needs the toolkit). */
+    static void runOrderedRaw(Runnable job) {
+        ORDERED.execute(job);
+    }
+
     private static <T> Task<T> newTask(Callable<T> backgroundWork, Consumer<T> onSuccess, Consumer<Throwable> onFailure) {
         Task<T> task = new Task<>() {
             @Override

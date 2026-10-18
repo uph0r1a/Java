@@ -65,6 +65,17 @@ public final class TransferQr {
         }
     }
 
+    /** Every {@code qr-transfer.png|jpg|jpeg} directly inside {@code folder}. */
+    static List<Path> allIn(Path folder) {
+        if (folder == null || !Files.isDirectory(folder)) return List.of();
+        try (Stream<Path> files = Files.list(folder)) {
+            return files.filter(Files::isRegularFile)
+                    .filter(p -> extensionRank(p.getFileName().toString()) >= 0).toList();
+        } catch (IOException e) {
+            return List.of();
+        }
+    }
+
     /** 0 for png, 1 for jpg, 2 for jpeg when the name is exactly qr-transfer.<ext>; -1 otherwise. */
     private static int extensionRank(String fileName) {
         int dot = fileName.lastIndexOf('.');

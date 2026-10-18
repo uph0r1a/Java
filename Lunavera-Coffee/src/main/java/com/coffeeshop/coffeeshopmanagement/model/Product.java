@@ -10,6 +10,8 @@ public class Product {
     private BigDecimal price;
     private BigDecimal cost;
     private int stock;
+    /** The stock number as it was when this object was read from the database; null for a product not read yet (TODO 3.2). */
+    private Integer loadedStock;
     private String description;
     private String imagePath;
     private boolean active;
@@ -37,6 +39,10 @@ public class Product {
 
     public int getStock() { return stock; }
     public void setStock(int stock) { this.stock = stock; }
+    public Integer getLoadedStock() { return loadedStock; }
+    public void setLoadedStock(Integer loadedStock) { this.loadedStock = loadedStock; }
+    /** True when this object was read from the database and its stock number was not changed since. */
+    public boolean isStockUntouchedSinceLoad() { return loadedStock != null && loadedStock == stock; }
 
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }

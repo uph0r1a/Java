@@ -82,4 +82,44 @@ public class ProductDAOTest {
         boolean stillThere = productDAO.findAll().stream().anyMatch(p -> p.getId() == product.getId());
         assertFalse(stillThere);
     }
+
+    // --- editing a product must not undo sales (TODO 3.2) ---
+
+    private Product reload(Product product) {
+        return productDAO.findAll().stream().filter(p -> p.getId() == product.getId()).findFirst().orElseThrow();
+    }
+
+    /** What a payment does while an edit dialog is open: the stock changes behind the dialog's back. */
+    private void saleTakesStockTo(Product product, int newStock) throws Exception {
+        try (java.sql.Connection connection = com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig.getConnection();
+             java.sql.PreparedStatement statement = connection.prepareStatement("UPDATE products SET stock = ? WHERE id = ?")) {
+            statement.setInt(1, newStock);
+            statement.setInt(2, product.getId());
+            statement.executeUpdate();
+        }
+    }
+
+    @Test
+    public void savingAProductWithoutTouchingItsStockKeepsSalesMadeSinceItWasRead() throws Exception {
+        Product created = newProduct(new BigDecimal("10000"), 10);
+        Product inDialog = reload(created);          // the dialog reads stock 10
+        saleTakesStockTo(created, 7);                // a sale of 3 is paid meanwhile
+        inDialog.setName("renamed-" + UUID.randomUUID());
+        productDAO.update(inDialog);                 // only the name was changed
+
+        assertEquals("the sold items must not come back", 7, reload(created).getStock());
+        productDAO.update(inDialog);                 // saving the same object again changes nothing either
+        assertEquals(7, reload(created).getStock());
+    }
+
+    @Test
+    public void aStockNumberTypedInIsStillWrittenAsGiven() throws Exception {
+        Product created = newProduct(new BigDecimal("10000"), 10);
+        Product inDialog = reload(created);
+        saleTakesStockTo(created, 7);
+        inDialog.setStock(25);                       // a stock-take: the person counted the shelf
+        productDAO.update(inDialog);
+
+        assertEquals(25, reload(created).getStock());
+    }
 }

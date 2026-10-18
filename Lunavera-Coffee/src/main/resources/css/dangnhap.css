@@ -265,3 +265,13 @@
 .password-eye:hover .password-eye-icon {
     -fx-stroke: #435443;
 }
+
+/* The small "where is the data" line at the bottom of the login screen (TODO 5.25). A dark pill keeps it readable on any picture. */
+.data-location {
+    -fx-background-color: rgba(0, 0, 0, 0.40);
+    -fx-background-radius: 10;
+    -fx-text-fill: white;
+    -fx-font-size: 11px;
+    -fx-padding: 4 12 4 12;
+}
+

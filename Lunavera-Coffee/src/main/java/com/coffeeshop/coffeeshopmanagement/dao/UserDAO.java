@@ -1,6 +1,9 @@
 package com.coffeeshop.coffeeshopmanagement.dao;
 
+import com.coffeeshop.coffeeshopmanagement.config.SqlStatus;
+import com.coffeeshop.coffeeshopmanagement.util.AppClock;
 import com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig;
+import com.coffeeshop.coffeeshopmanagement.util.DbTime;
 import com.coffeeshop.coffeeshopmanagement.model.AccountStatus;
 import com.coffeeshop.coffeeshopmanagement.model.Role;
 import com.coffeeshop.coffeeshopmanagement.model.User;
@@ -17,16 +20,25 @@ import java.util.Optional;
 
 public class UserDAO {
 
+    /**
+     * Finds the account a login name belongs to. The username is matched first (any capitals); only when no
+     * username matches is the text tried as an employee or customer phone, in its normalised form (so +84901234567
+     * and 0901234567 are the same). The order is fixed, so a phone shared by two people always opens the same
+     * (oldest) account instead of an arbitrary one (TODO 2.17).
+     */
     public Optional<User> findByUsername(String username) {
+        if (username == null) return Optional.empty();
+        String name = username.trim();
+        String phone = com.coffeeshop.coffeeshopmanagement.util.ValidationUtil.normalizePhone(name);
         String sql = "SELECT u.* FROM users u " +
                 "LEFT JOIN employees e ON u.employee_id = e.id " +
-                "LEFT JOIN customers c ON u.customer_id = c.id " +
-                "WHERE u.username = ? OR e.phone = ? OR c.phone = ? LIMIT 1";
+                "WHERE lower(u.username) = lower(?) OR e.phone = ? " +
+                "ORDER BY (lower(u.username) = lower(?)) DESC, u.id LIMIT 1";
         try (Connection connection = DatabaseConfig.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setString(1, username);
-            statement.setString(2, username);
-            statement.setString(3, username);
+            statement.setString(1, name);
+            statement.setString(2, phone);
+            statement.setString(3, name);
             try (ResultSet rs = statement.executeQuery()) {
                 if (rs.next()) {
                     return Optional.of(map(rs));
@@ -55,7 +67,7 @@ public Optional<User> findById(int id) {
     }
 
     public boolean existsByUsername(String username) {
-        String sql = "SELECT 1 FROM users WHERE username = ?";
+        String sql = "SELECT 1 FROM users WHERE lower(username) = lower(?)";
         try (Connection connection = DatabaseConfig.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, username);
@@ -68,8 +80,8 @@ public Optional<User> findById(int id) {
     }
 
     public User insert(User user) {
-        String sql = "INSERT INTO users (username, password_hash, role, status, employee_id, customer_id, created_at) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO users (username, password_hash, role, status, employee_id, customer_id, created_at, must_change_password) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
         try (Connection connection = DatabaseConfig.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             statement.setString(1, user.getUsername());
@@ -78,7 +90,8 @@ public Optional<User> findById(int id) {
             statement.setString(4, user.getStatus().name());
             setNullableInt(statement, 5, user.getEmployeeId());
             setNullableInt(statement, 6, user.getCustomerId());
-            statement.setString(7, LocalDateTime.now().toString());
+            statement.setString(7, DbTime.write(AppClock.now()));
+            statement.setInt(8, user.isMustChangePassword() ? 1 : 0);
             statement.executeUpdate();
             try (ResultSet keys = statement.getGeneratedKeys()) {
                 if (keys.next()) {
@@ -119,7 +132,8 @@ public Optional<User> findById(int id) {
     }
 
     public void updatePasswordHash(int userId, String passwordHash) {
-        String sql = "UPDATE users SET password_hash = ? WHERE id = ?";
+        // The person chose (or re-hashed) their own password: any "must change" mark is over (TODO 2A.18).
+        String sql = "UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?";
         try (Connection connection = DatabaseConfig.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, passwordHash);
@@ -144,7 +158,7 @@ public Optional<User> findById(int id) {
 
     /** Active ADMIN accounts - used to stop the last one being demoted or locked out. */
     public int countActiveAdmins() {
-        String sql = "SELECT COUNT(*) FROM users WHERE role = 'ADMIN' AND status = 'ACTIVE'";
+        String sql = "SELECT COUNT(*) FROM users WHERE role = " + SqlStatus.ROLE_ADMIN + " AND status = " + SqlStatus.ACTIVE;
         try (Connection connection = DatabaseConfig.getConnection();
              Statement statement = connection.createStatement();
              ResultSet rs = statement.executeQuery(sql)) {
@@ -189,7 +203,8 @@ public Optional<User> findById(int id) {
         int customerId = rs.getInt("customer_id");
         user.setCustomerId(rs.wasNull() ? null : customerId);
         String createdAt = rs.getString("created_at");
-        user.setCreatedAt(createdAt != null ? LocalDateTime.parse(createdAt) : null);
+        user.setCreatedAt(DbTime.parse(createdAt));
+        user.setMustChangePassword(rs.getInt("must_change_password") != 0);
         return user;
     }
 }

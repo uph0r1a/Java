@@ -9,6 +9,14 @@ import static org.junit.Assert.assertTrue;
 public class PasswordUtilTest {
 
     @Test
+    public void aHashWithAnAbsurdIterationCountIsRefusedQuickly() {
+        long start = System.nanoTime();
+        assertFalse(PasswordUtil.matches("x", "99999999:AAAAAAAAAAAAAAAAAAAAAA==:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="));
+        assertFalse(PasswordUtil.matches("x", "0:AAAAAAAAAAAAAAAAAAAAAA==:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="));
+        assertTrue("refused without doing the work", (System.nanoTime() - start) / 1_000_000 < 2_000);
+    }
+
+    @Test
     public void correctPasswordMatchesItsOwnHash() {
         String hash = PasswordUtil.hash("Correct1");
         assertTrue(PasswordUtil.matches("Correct1", hash));

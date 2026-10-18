@@ -1,5 +1,6 @@
 package com.coffeeshop.coffeeshopmanagement.dao;
 
+import com.coffeeshop.coffeeshopmanagement.util.AppClock;
 import com.coffeeshop.coffeeshopmanagement.model.Order;
 import com.coffeeshop.coffeeshopmanagement.model.OrderStatus;
 import com.coffeeshop.coffeeshopmanagement.model.PaymentMethod;
@@ -27,7 +28,7 @@ public class DiscountReasonDaoTest {
 
     private Order order(OrderStatus status, String reason) {
         Order o = new Order();
-        o.setOrderDate(LocalDateTime.now());
+        o.setOrderDate(AppClock.now());
         o.setStatus(status);
         o.setSubtotal(BigDecimal.valueOf(100_000));
         o.setDiscount(BigDecimal.valueOf(reason == null ? 0 : 10_000));
@@ -35,9 +36,19 @@ public class DiscountReasonDaoTest {
         o.setDiscountReason(reason);
         if (status == OrderStatus.PAID) {
             o.setPaymentMethod(PaymentMethod.CASH);
-            o.setPaidAt(LocalDateTime.now());
+            o.setPaidAt(AppClock.now());
         }
         return o;
+    }
+
+    /** One line worth 100,000 so a paid order adds up (subtotal 100,000). */
+    private static List<com.coffeeshop.coffeeshopmanagement.model.OrderItem> oneLine() {
+        com.coffeeshop.coffeeshopmanagement.model.OrderItem item = new com.coffeeshop.coffeeshopmanagement.model.OrderItem();
+        item.setProductName("Test");
+        item.setQuantity(1);
+        item.setUnitPrice(BigDecimal.valueOf(100_000));
+        item.setLineTotal(BigDecimal.valueOf(100_000));
+        return List.of(item);
     }
 
     private String storedReason(int orderId) throws Exception {
@@ -51,13 +62,13 @@ public class DiscountReasonDaoTest {
 
     @Test
     public void aNewPaidOrderKeepsItsDiscountReason() throws Exception {
-        Order saved = orderDAO.insert(order(OrderStatus.PAID, "Khách quen"), List.of());
+        Order saved = orderDAO.insert(order(OrderStatus.PAID, "Khách quen"), oneLine());
         assertEquals("Khách quen", storedReason(saved.getId()));
     }
 
     @Test
     public void anOrderWithoutADiscountHasNoReason() throws Exception {
-        Order saved = orderDAO.insert(order(OrderStatus.PAID, null), List.of());
+        Order saved = orderDAO.insert(order(OrderStatus.PAID, null), oneLine());
         assertNull(storedReason(saved.getId()));
     }
 
@@ -65,12 +76,13 @@ public class DiscountReasonDaoTest {
     public void payingAnOpenOrderSavesTheReason() throws Exception {
         Order open = orderDAO.insert(order(OrderStatus.OPEN, null), List.of());
         orderDAO.payExistingOrder(open.getId(), null, PaymentMethod.CASH, BigDecimal.valueOf(10_000),
-                "Sai món, quán xin lỗi", BigDecimal.valueOf(90_000), List.of());
+                "Sai món, quán xin lỗi", BigDecimal.valueOf(90_000), oneLine());
         assertEquals("Sai món, quán xin lỗi", storedReason(open.getId()));
     }
 
     @Test
     public void theSchemaHasTheColumnOnAnOldDatabaseToo() throws Exception {
+        TestDatabaseSupport.requireSqlite(); // uses PRAGMA table_info
         // initialize() is idempotent and adds the column with addColumnIfMissing; running it again must not fail.
         com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig.initialize();
         try (Connection c = com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig.getConnection();

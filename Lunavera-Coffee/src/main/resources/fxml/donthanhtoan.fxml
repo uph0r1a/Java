@@ -4,16 +4,28 @@
 <?import javafx.scene.control.*?>
 <?import javafx.scene.image.ImageView?>
 <?import javafx.scene.layout.*?>
+<?import java.net.URL?>
 
+<ScrollPane fx:id="scroller"
+            fitToWidth="true"
+            hbarPolicy="NEVER"
+            prefWidth="540.0"
+            prefHeight="820.0"
+            styleClass="invoice-scroller"
+            xmlns="http://javafx.com/javafx/21"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="com.coffeeshop.coffeeshopmanagement.controller.HoaDonController">
+
+<stylesheets>
+    <URL value="@../css/receipt.css"/>
+</stylesheets>
+
+<content>
 <VBox fx:id="invoiceRoot"
       prefWidth="520.0"
-      prefHeight="820.0"
       maxWidth="520.0"
       spacing="14.0"
-      styleClass="invoice-root"
-      xmlns="http://javafx.com/javafx/21"
-      xmlns:fx="http://javafx.com/fxml/1"
-      fx:controller="org.example.controller.HoaDonController">
+      styleClass="invoice-root">
 
     <padding>
         <Insets top="25.0"
@@ -38,6 +50,11 @@
 
         <Label text="Cảm ơn quý khách đã sử dụng dịch vụ"
                styleClass="invoice-subtitle"/>
+
+        <Label fx:id="statusBannerLabel"
+               visible="false"
+               managed="false"
+               styleClass="invoice-cancelled-banner"/>
 
     </VBox>
 
@@ -69,7 +86,6 @@
                styleClass="invoice-label"/>
 
         <Label fx:id="invoiceIdLabel"
-               text="#DH000124"
                GridPane.columnIndex="1"
                GridPane.rowIndex="0"
                styleClass="invoice-value"/>
@@ -82,10 +98,22 @@
                GridPane.rowIndex="1"
                styleClass="invoice-label"/>
 
-        <Label fx:id="tableLabel"
-               text="Bàn 2"
+        <Label fx:id="staffLabel"
                GridPane.columnIndex="1"
                GridPane.rowIndex="1"
+               styleClass="invoice-value"/>
+
+
+        <!-- BÀN -->
+
+        <Label text="Bàn:"
+               GridPane.columnIndex="0"
+               GridPane.rowIndex="2"
+               styleClass="invoice-label"/>
+
+        <Label fx:id="tableLabel"
+               GridPane.columnIndex="1"
+               GridPane.rowIndex="2"
                styleClass="invoice-value"/>
 
 
@@ -93,27 +121,26 @@
 
         <Label text="Khách hàng:"
                GridPane.columnIndex="0"
-               GridPane.rowIndex="2"
+               GridPane.rowIndex="3"
                styleClass="invoice-label"/>
 
         <Label fx:id="customerLabel"
-               text="Khách lẻ"
                GridPane.columnIndex="1"
-               GridPane.rowIndex="2"
+               GridPane.rowIndex="3"
                styleClass="invoice-value"/>
 
 
         <!-- THỜI GIAN -->
 
-        <Label text="Thời gian:"
+        <Label fx:id="timeCaptionLabel"
+               text="Thanh toán lúc:"
                GridPane.columnIndex="0"
-               GridPane.rowIndex="3"
+               GridPane.rowIndex="4"
                styleClass="invoice-label"/>
 
         <Label fx:id="orderTimeLabel"
-               text="26/09/2026 17:25"
                GridPane.columnIndex="1"
-               GridPane.rowIndex="3"
+               GridPane.rowIndex="4"
                styleClass="invoice-value"/>
 
     </GridPane>
@@ -131,7 +158,7 @@
 
 
     <TableView fx:id="invoiceDetailTable"
-               prefHeight="260.0"
+               fixedCellSize="30.0"
                VBox.vgrow="NEVER"
                styleClass="invoice-table">
 
@@ -177,11 +204,12 @@
         <HBox alignment="CENTER_LEFT">
 
             <Label text="Tạm tính"
+                   maxWidth="Infinity"
                    styleClass="total-label"
                    HBox.hgrow="ALWAYS"/>
 
             <Label fx:id="subtotalLabel"
-                   text="150.000 đ"
+                  
                    styleClass="total-value"/>
 
         </HBox>
@@ -190,14 +218,21 @@
         <HBox alignment="CENTER_LEFT">
 
             <Label text="Giảm giá"
+                   maxWidth="Infinity"
                    styleClass="total-label"
                    HBox.hgrow="ALWAYS"/>
 
             <Label fx:id="discountLabel"
-                   text="0 đ"
+                  
                    styleClass="total-value"/>
 
         </HBox>
+
+        <Label fx:id="discountReasonLabel"
+               visible="false"
+               managed="false"
+               wrapText="true"
+               styleClass="invoice-subtitle"/>
 
 
         <Separator/>
@@ -206,11 +241,12 @@
         <HBox alignment="CENTER_LEFT">
 
             <Label text="TỔNG TIỀN"
+                   maxWidth="Infinity"
                    styleClass="grand-total-label"
                    HBox.hgrow="ALWAYS"/>
 
             <Label fx:id="totalLabel"
-                   text="150.000 đ"
+                  
                    styleClass="grand-total-value"/>
 
         </HBox>
@@ -229,7 +265,6 @@
                styleClass="invoice-label"/>
 
         <Label fx:id="paymentMethodLabel"
-               text="Tiền mặt"
                styleClass="payment-method"/>
 
     </HBox>
@@ -260,7 +295,6 @@
 
 
         <Label fx:id="qrOrderIdLabel"
-               text="DH000124"
                styleClass="qr-order-id"/>
 
 
@@ -311,3 +345,5 @@
     </HBox>
 
 </VBox>
+</content>
+</ScrollPane>

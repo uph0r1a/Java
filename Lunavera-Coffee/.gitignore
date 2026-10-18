@@ -1,4 +1,27 @@
-.idea/
+# Build output
 target/
-# The shop database (customer phone numbers, password hashes), pictures, logs and backups: never commit
-data/
+out/
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+
+# The shop's real data must never reach git: it holds customer phone numbers, password hashes and the
+# database password (see README, "Where your data is"). `data/` is the default folder; -Dlunavera.dataDir may
+# point anywhere, so the file types are listed as well.
+/data/
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+logs/
+backups/
+snapshots/
+database.properties
+# (database.properties.example is the template and stays in git)
+
+# Operating-system files
+.DS_Store
+Thumbs.db
+desktop.ini

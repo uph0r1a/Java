@@ -92,4 +92,18 @@ public class ReceiptQrTest {
         QrCode qr = QrCode.encodeText(ReceiptQr.payload(order()));
         assertTrue(qr.getSize() <= 41);
     }
+
+    @Test
+    public void payloadUsesTheTimeOfPaymentWhenKnown() {
+        Order order = order();
+        order.setPaidAt(LocalDateTime.of(2026, 10, 10, 16, 45));
+        assertEquals("16:45 10/10/2026", ReceiptQr.payload(order).split("\n")[3]);
+    }
+
+    @Test
+    public void cancelledOrderIsMarkedInTheQr() {
+        Order order = order();
+        order.setStatus(com.coffeeshop.coffeeshopmanagement.model.OrderStatus.CANCELLED);
+        assertEquals("Hoa don #12 (DA HUY)", ReceiptQr.payload(order).split("\n")[1]);
+    }
 }

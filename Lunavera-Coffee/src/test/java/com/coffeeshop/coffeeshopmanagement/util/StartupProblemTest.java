@@ -40,4 +40,31 @@ public class StartupProblemTest {
         assertTrue(text.contains("boom"));
         assertTrue(text.contains("data"));
     }
+
+    private static com.coffeeshop.coffeeshopmanagement.config.DatabaseSettings settings(String type) {
+        java.util.Properties p = new java.util.Properties();
+        p.setProperty("db.type", type);
+        return com.coffeeshop.coffeeshopmanagement.config.DatabaseSettings.fromProperties(p, key -> null);
+    }
+
+    @org.junit.Test
+    public void aSqliteShopGetsNoServerHint() {
+        org.junit.Assert.assertEquals("", StartupProblem.serverHint(settings("sqlite"), true));
+        org.junit.Assert.assertEquals("", StartupProblem.serverHint(settings("sqlite"), false));
+    }
+
+    @org.junit.Test
+    public void aMariaDbShopIsToldWhatToCheck() {
+        String hint = StartupProblem.serverHint(settings("mariadb"), true);
+        org.junit.Assert.assertTrue(hint, hint.contains("MariaDB/MySQL"));
+        org.junit.Assert.assertTrue(hint, hint.contains("database.properties"));
+        org.junit.Assert.assertFalse("the settings file exists, so no copy-the-example advice", hint.contains("database.properties.example"));
+    }
+
+    @org.junit.Test
+    public void aMissingSettingsFileIsExplainedWithTheExampleAndTheSqliteOption() {
+        String hint = StartupProblem.serverHint(settings("mariadb"), false);
+        org.junit.Assert.assertTrue(hint, hint.contains("database.properties.example"));
+        org.junit.Assert.assertTrue(hint, hint.contains("db.type=sqlite"));
+    }
 }

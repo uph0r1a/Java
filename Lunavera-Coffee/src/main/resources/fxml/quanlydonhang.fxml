@@ -30,7 +30,7 @@
             stylesheets="@../css/quanlydonhang.css"
             xmlns="http://javafx.com/javafx/21"
             xmlns:fx="http://javafx.com/fxml/1"
-            fx:controller="org.example.controller.OrderController">
+            fx:controller="com.coffeeshop.coffeeshopmanagement.controller.OrderController">
 
     <!-- ========================================================= -->
     <!-- SIDEBAR -->

@@ -1,0 +1,25 @@
+# TODO 6.20: ask GitHub to look for newer versions of the pinned dependencies, and open a pull request for each.
+# A pull request is only a proposal: read the release notes, run `mvn clean test` (the CI does), and click through
+# the screens once before merging. Nothing is updated by itself.
+version: 2
+updates:
+  # pom.xml: JavaFX, sqlite-jdbc, mariadb-java-client, slf4j, JUnit and the Maven plugins
+  - package-ecosystem: "maven"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 5
+    ignore:
+      # JavaFX 21 is the long-term-support line; the next majors are short-lived. Move up on purpose, not by proposal.
+      - dependency-name: "org.openjfx:*"
+        update-types: ["version-update:semver-major"]
+    groups:
+      javafx:
+        patterns:
+          - "org.openjfx:*"
+
+  # .github/workflows/*.yml: the actions the CI uses (checkout, setup-java, ...)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"

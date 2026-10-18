@@ -16,10 +16,19 @@ import java.util.Optional;
 public class EmployeeDAO {
 
     public Employee insert(Employee employee) {
+        try (Connection connection = DatabaseConfig.getConnection()) {
+            return insert(connection, employee);
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to create employee", e);
+        }
+    }
+
+    /** Same as {@link #insert(Employee)} on a connection the caller owns (for one transaction with the account row). */
+    public Employee insert(Connection connection, Employee employee) {
+        employee.setPhone(blankToNull(com.coffeeshop.coffeeshopmanagement.util.ValidationUtil.normalizePhone(employee.getPhone())));
         String sql = "INSERT INTO employees (full_name, phone, email, address, position, salary, hire_date, active) " +
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-        try (Connection connection = DatabaseConfig.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+        try (PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             bind(statement, employee);
             statement.executeUpdate();
             try (ResultSet keys = statement.getGeneratedKeys()) {
@@ -29,20 +38,39 @@ public class EmployeeDAO {
             }
             return employee;
         } catch (SQLException e) {
-            throw new DataAccessException("Failed to create employee", e);
+            throw duplicatePhoneOr(e, "Failed to create employee");
         }
     }
 
+    /**
+     * The database's unique-phone rule (TODO 2.17) becomes a clear message when two tills save the same phone at once.
+     * Recognised by error code, not message text (TODO 6.36); the employees table has no other unique rule.
+     */
+    private static DataAccessException duplicatePhoneOr(SQLException e, String fallback) {
+        return UniqueViolation.isUnique(e)
+                ? new DataAccessException("Số điện thoại này đã thuộc về một nhân viên khác.", e)
+                : new DataAccessException(fallback, e);
+    }
+
     public void update(Employee employee) {
+        try (Connection connection = DatabaseConfig.getConnection()) {
+            update(connection, employee);
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to update employee", e);
+        }
+    }
+
+    /** Same as {@link #update(Employee)} on a connection the caller owns. */
+    public void update(Connection connection, Employee employee) {
+        employee.setPhone(blankToNull(com.coffeeshop.coffeeshopmanagement.util.ValidationUtil.normalizePhone(employee.getPhone())));
         String sql = "UPDATE employees SET full_name=?, phone=?, email=?, address=?, position=?, salary=?, " +
                 "hire_date=?, active=? WHERE id=?";
-        try (Connection connection = DatabaseConfig.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
             bind(statement, employee);
             statement.setInt(9, employee.getId());
             statement.executeUpdate();
         } catch (SQLException e) {
-            throw new DataAccessException("Failed to update employee", e);
+            throw duplicatePhoneOr(e, "Failed to update employee");
         }
     }
 
@@ -101,8 +129,29 @@ public class EmployeeDAO {
         }
     }
 
+    /** True when another employee (not {@code excludeId}) already has this phone, compared in normalised form. */
+    public boolean existsByPhone(String phone, int excludeId) {
+        String normalized = com.coffeeshop.coffeeshopmanagement.util.ValidationUtil.normalizePhone(phone);
+        if (normalized == null || normalized.isBlank()) return false;
+        String sql = "SELECT 1 FROM employees WHERE phone = ? AND id <> ?";
+        try (Connection connection = DatabaseConfig.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, normalized);
+            statement.setInt(2, excludeId);
+            try (ResultSet rs = statement.executeQuery()) {
+                return rs.next();
+            }
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to check employee phone", e);
+        }
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value;
+    }
+
     private void bind(PreparedStatement statement, Employee employee) throws SQLException {
-        statement.setString(1, employee.getFullName());
+        statement.setString(1, com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.nfc(employee.getFullName()));
         statement.setString(2, employee.getPhone());
         statement.setString(3, employee.getEmail());
         statement.setString(4, employee.getAddress());

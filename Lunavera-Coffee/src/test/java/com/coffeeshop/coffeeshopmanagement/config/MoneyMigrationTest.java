@@ -106,4 +106,38 @@ public class MoneyMigrationTest {
             assertEquals(1, one(c, "PRAGMA user_version"));
         }
     }
+
+    @Test
+    public void theOrderKeepsItsTableNumberAndDiscountReasonThroughTheMigration() throws Exception {
+        Path file = Files.createTempFile("lunavera-old-db-late-columns", ".db");
+        try (Connection c = DriverManager.getConnection("jdbc:sqlite:" + file.toAbsolutePath())) {
+            buildOldDatabase(c);
+            try (Statement st = c.createStatement()) { // an old database that was already opened by a newer app version
+                st.execute("ALTER TABLE orders ADD COLUMN table_number INTEGER");
+                st.execute("ALTER TABLE orders ADD COLUMN discount_reason TEXT");
+                st.execute("UPDATE orders SET table_number = 7, discount_reason = 'khach quen' WHERE id = 1");
+            }
+
+            MoneyMigration.runIfNeeded(c, 1);
+
+            assertEquals("table number kept", 7, one(c, "SELECT table_number FROM orders WHERE id = 1"));
+            assertEquals("discount reason kept", 1, one(c, "SELECT discount_reason = 'khach quen' FROM orders WHERE id = 1"));
+            assertEquals(45000, one(c, "SELECT total FROM orders WHERE id = 1"));
+        }
+    }
+
+    @Test
+    public void anOldDatabaseThatNeverHadThoseColumnsGetsThemEmpty() throws Exception {
+        Path file = Files.createTempFile("lunavera-old-db-no-late-columns", ".db");
+        try (Connection c = DriverManager.getConnection("jdbc:sqlite:" + file.toAbsolutePath())) {
+            buildOldDatabase(c); // no table_number, no discount_reason
+
+            MoneyMigration.runIfNeeded(c, 1);
+
+            assertEquals("both columns exist after the migration", 2,
+                    one(c, "SELECT COUNT(*) FROM pragma_table_info('orders') WHERE name IN ('table_number', 'discount_reason')"));
+            assertEquals(1, one(c, "SELECT table_number IS NULL AND discount_reason IS NULL FROM orders WHERE id = 1"));
+            assertEquals("nothing else was lost", 45000, one(c, "SELECT total FROM orders WHERE id = 1"));
+        }
+    }
 }

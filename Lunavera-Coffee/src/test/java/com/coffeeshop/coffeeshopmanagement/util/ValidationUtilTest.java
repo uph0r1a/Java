@@ -30,7 +30,12 @@ public class ValidationUtilTest {
         assertFalse(ValidationUtil.isValidPhone(""));
         assertFalse(ValidationUtil.isValidPhone("12345")); // too short
         assertFalse(ValidationUtil.isValidPhone("091234567890123")); // too long
-        assertFalse(ValidationUtil.isValidPhone("091-234-5678")); // punctuation not allowed
+        assertTrue(ValidationUtil.isValidPhone("091-234-5678")); // separators are fine (TODO 3.30)
+        assertTrue(ValidationUtil.isValidPhone("0901 234 567"));
+        assertTrue(ValidationUtil.isValidPhone("+84 901.234.567"));
+        assertFalse(ValidationUtil.isValidPhone("09O1234567"));
+        assertFalse("an 11-digit number is a typo (TODO 3.15)", ValidationUtil.isValidPhone("01234567890"));
+        assertFalse(ValidationUtil.isValidPhone("+8491234567890"));
         assertFalse(ValidationUtil.isValidPhone("abcdefghij"));
     }
 
@@ -66,16 +71,19 @@ public class ValidationUtilTest {
 
     @Test
     public void validPasswords() {
-        assertTrue(ValidationUtil.isValidPassword("abc123"));
         assertTrue(ValidationUtil.isValidPassword("Correct1"));
+        assertTrue(ValidationUtil.isValidPassword("Tra-sua-9x"));
     }
 
     @Test
     public void invalidPasswords() {
         assertFalse(ValidationUtil.isValidPassword(null));
-        assertFalse(ValidationUtil.isValidPassword("abc12")); // one under the length minimum
-        assertFalse(ValidationUtil.isValidPassword("abcdef")); // no digit
-        assertFalse(ValidationUtil.isValidPassword("123456")); // no letter
+        assertFalse(ValidationUtil.isValidPassword("abc1234")); // one under the length minimum (8, TODO 2A.20)
+        assertFalse(ValidationUtil.isValidPassword("abcdefgh")); // no digit
+        assertFalse(ValidationUtil.isValidPassword("12345678")); // no letter
+        assertFalse(ValidationUtil.isValidPassword("matkhau1")); // on the common list
+        assertFalse(ValidationUtil.isValidPassword("Password123")); // common, any letter case
+        assertFalse(ValidationUtil.isValidPassword("Lunavera2026")); // the shop's own name
     }
 
     @Test

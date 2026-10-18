@@ -73,4 +73,46 @@ public class DiscountPolicyTest {
         assertNull(DiscountPolicy.reasonToStore(d(1000), "  "));
         assertEquals("Khách quen", DiscountPolicy.reasonToStore(d(1000), "  Khách quen "));
     }
+
+    // ---- TODO 6.45: messageFor and require, used by the payment service ----
+
+    @Test
+    public void everyRefusalHasAMessageAndOkHasNone() {
+        for (Result r : Result.values()) {
+            if (r == Result.OK) {
+                assertThrows(IllegalArgumentException.class, () -> DiscountPolicy.messageFor(r, Role.EMPLOYEE, d(100_000)));
+            } else {
+                String message = DiscountPolicy.messageFor(r, Role.EMPLOYEE, d(100_000));
+                assertFalse(r.name(), message == null || message.isBlank());
+            }
+        }
+    }
+
+    @Test
+    public void theStaffLimitMessageNamesThePercentage() {
+        String message = DiscountPolicy.messageFor(Result.ABOVE_STAFF_LIMIT, Role.EMPLOYEE, d(100_000));
+        assertTrue(message, message.contains(DiscountPolicy.STAFF_MAX_PERCENT + "%"));
+    }
+
+    @Test
+    public void requireDoesNothingWhenTheDiscountIsAllowed() {
+        DiscountPolicy.require(Role.EMPLOYEE, d(100_000), d(10_000), "Khách quen");
+        DiscountPolicy.require(Role.ADMIN, d(100_000), d(100_000), "Quà tặng");
+        DiscountPolicy.require(Role.EMPLOYEE, d(100_000), d(0), null);
+    }
+
+    @Test
+    public void requireRefusesWithTheSameWordingTheDialogShows() {
+        com.coffeeshop.coffeeshopmanagement.dao.DataAccessException e = assertThrows(
+                com.coffeeshop.coffeeshopmanagement.dao.DataAccessException.class,
+                () -> DiscountPolicy.require(Role.EMPLOYEE, d(100_000), d(10_001), "x"));
+        assertEquals(DiscountPolicy.messageFor(Result.ABOVE_STAFF_LIMIT, Role.EMPLOYEE, d(100_000)), e.getMessage());
+    }
+
+    @Test
+    public void aMissingRoleOrSubtotalFailsClosed() {
+        assertEquals(Result.ABOVE_STAFF_LIMIT, DiscountPolicy.check(null, d(100_000), d(50_000), "x"));
+        assertEquals(Result.ABOVE_SUBTOTAL, DiscountPolicy.check(Role.ADMIN, null, d(1), "x"));
+    }
 }
+

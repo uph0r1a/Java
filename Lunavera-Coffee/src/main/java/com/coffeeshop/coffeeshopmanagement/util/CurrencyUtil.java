@@ -8,13 +8,15 @@ import java.util.Locale;
 /** Formats money the way the existing UI labels do: "12.000đ" (dot thousands separator, no decimals). */
 public final class CurrencyUtil {
 
-    private static final DecimalFormat FORMAT;
-
-    static {
+    /**
+     * {@link DecimalFormat} keeps working state inside the object and is not thread-safe, so every thread gets its own
+     * copy (TODO 6.19). Before, one shared instance was fine only because the UI thread was the one caller.
+     */
+    private static final ThreadLocal<DecimalFormat> FORMAT = ThreadLocal.withInitial(() -> {
         DecimalFormatSymbols symbols = new DecimalFormatSymbols(Locale.US);
         symbols.setGroupingSeparator('.');
-        FORMAT = new DecimalFormat("#,##0", symbols);
-    }
+        return new DecimalFormat("#,##0", symbols);
+    });
 
     private CurrencyUtil() {
     }
@@ -23,6 +25,6 @@ public final class CurrencyUtil {
         if (amount == null) {
             amount = BigDecimal.ZERO;
         }
-        return FORMAT.format(amount) + "đ";
+        return FORMAT.get().format(amount) + "đ";
     }
 }

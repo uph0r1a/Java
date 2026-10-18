@@ -14,7 +14,7 @@
             stylesheets="@../css/quanlysanpham.css"
             xmlns="http://javafx.com/javafx/21"
             xmlns:fx="http://javafx.com/fxml/1"
-            fx:controller="org.example.controller.AdminController">
+            fx:controller="com.coffeeshop.coffeeshopmanagement.controller.ProductController">
 
     <!-- SIDEBAR -->
     <left>
@@ -240,6 +240,10 @@
                                          text="Thao tác"
                                          prefWidth="120"/>
                         </columns>
+
+                        <columnResizePolicy>
+                        <TableView fx:constant="CONSTRAINED_RESIZE_POLICY"/>
+                    </columnResizePolicy>
 
                         <placeholder>
                             <Label text="Chưa có sản phẩm"

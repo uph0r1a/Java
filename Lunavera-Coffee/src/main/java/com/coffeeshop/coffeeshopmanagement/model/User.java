@@ -16,6 +16,8 @@ public class User {
     private Integer employeeId;
     private Integer customerId;
     private LocalDateTime createdAt;
+    /** True after an admin created the account or reset its password: the person must choose their own at the next login (TODO 2A.18). */
+    private boolean mustChangePassword;
 
     public User() {
     }
@@ -52,6 +54,9 @@ public class User {
 
     public Integer getCustomerId() { return customerId; }
     public void setCustomerId(Integer customerId) { this.customerId = customerId; }
+
+    public boolean isMustChangePassword() { return mustChangePassword; }
+    public void setMustChangePassword(boolean mustChangePassword) { this.mustChangePassword = mustChangePassword; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

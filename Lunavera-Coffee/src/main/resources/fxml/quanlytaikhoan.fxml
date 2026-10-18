@@ -7,6 +7,7 @@
 <?import javafx.scene.control.Separator?>
 <?import javafx.scene.control.TableColumn?>
 <?import javafx.scene.control.TableView?>
+<?import javafx.scene.control.Tooltip?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.HBox?>
@@ -15,7 +16,7 @@
 <?import javafx.scene.image.Image?>
 <?import javafx.scene.image.ImageView?>
 
-<BorderPane fx:id="QuanLyTaiKhoanRoot" maxHeight="1000" maxWidth="1600" prefHeight="1000" prefWidth="1600" stylesheets="@../css/quanlytaikhoan.css" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="org.example.controller.AdminController">
+<BorderPane fx:id="QuanLyTaiKhoanRoot" maxHeight="1000" maxWidth="1600" prefHeight="1000" prefWidth="1600" stylesheets="@../css/quanlytaikhoan.css" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.coffeeshop.coffeeshopmanagement.controller.AccountController">
 
     <!-- SIDEBAR -->
     <left>
@@ -201,7 +202,9 @@
                     <HBox alignment="CENTER_LEFT">
                         <Label styleClass="section-title" text="▣   Chi tiết tài khoản" />
                         <Region HBox.hgrow="ALWAYS" />
-                        <Button fx:id="closeDetailButton" mnemonicParsing="false" onAction="#handleCloseDetail" styleClass="close-button" text="×" />
+                        <Button fx:id="closeDetailButton" mnemonicParsing="false" onAction="#handleCloseDetail" styleClass="close-button" text="×">
+                     <tooltip><Tooltip text="Đóng"/></tooltip>
+                  </Button>
                     </HBox>
 
                     <!-- ================= PROFILE ================= -->
@@ -248,6 +251,30 @@
                             <Label styleClass="info-label" text="Ngày tạo" />
                             <Region HBox.hgrow="ALWAYS" />
                             <Label fx:id="detailCreatedDateLabel" styleClass="info-value" text="-" />
+                        </HBox>
+
+                        <HBox>
+                            <Label styleClass="info-label" text="Chức vụ" />
+                            <Region HBox.hgrow="ALWAYS" />
+                            <Label fx:id="detailPositionLabel" styleClass="info-value" text="-" wrapText="true" maxWidth="170" />
+                        </HBox>
+
+                        <HBox>
+                            <Label styleClass="info-label" text="Ngày vào làm" />
+                            <Region HBox.hgrow="ALWAYS" />
+                            <Label fx:id="detailHireDateLabel" styleClass="info-value" text="-" wrapText="true" maxWidth="170" />
+                        </HBox>
+
+                        <HBox>
+                            <Label styleClass="info-label" text="Lương" />
+                            <Region HBox.hgrow="ALWAYS" />
+                            <Label fx:id="detailSalaryLabel" styleClass="info-value" text="-" wrapText="true" maxWidth="170" />
+                        </HBox>
+
+                        <HBox>
+                            <Label styleClass="info-label" text="Địa chỉ" />
+                            <Region HBox.hgrow="ALWAYS" />
+                            <Label fx:id="detailAddressLabel" styleClass="info-value" text="-" wrapText="true" maxWidth="170" />
                         </HBox>
                     </VBox>
 

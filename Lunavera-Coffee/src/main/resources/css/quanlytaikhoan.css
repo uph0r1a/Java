@@ -6,32 +6,12 @@
     -fx-background-color: #F4F1E8;
 }
 
-
 /* ==================== SIDEBAR ==================== */
 
 .sidebar {
     -fx-background-color: #e4eed6;
     -fx-border-color: #cbdbba;
     -fx-border-width: 0 1px 0 0;
-}
-
-.logo-section {
-    -fx-background-color: transparent;
-    -fx-padding: 18px 15px 12px 15px;
-}
-
-.logo-title {
-    -fx-text-fill: #224416;
-    -fx-font-size: 28px;
-    -fx-font-weight: bold;
-    -fx-effect: dropshadow(gaussian, rgba(34, 68, 22, 0.15), 4, 0, 0, 1);
-}
-
-.logo-subtitle {
-    -fx-text-fill: #4b7833;
-    -fx-font-size: 11px;
-    -fx-font-weight: bold;
-    -fx-letter-spacing: 3px;
 }
 
 .sidebar-separator {
@@ -42,10 +22,6 @@
 .sidebar-separator .line {
     -fx-border-color: #d1dfc1;
     -fx-border-width: 0.5px;
-}
-
-.menu-container {
-    -fx-padding: 8px 12px;
 }
 
 /* Menu Button */
@@ -80,10 +56,6 @@
     -fx-text-fill: #ffffff;
 }
 
-.sidebar-bottom {
-    -fx-padding: 10px 16px 20px 16px;
-}
-
 .logout-button {
     -fx-background-color: #d9e8c6;
     -fx-background-radius: 8px;
@@ -104,14 +76,13 @@
     -fx-border-color: #b0cb93;
 }
 
-.sidebar-footer, .coffee-slogan {
+.sidebar-footer {
     -fx-text-fill: #5b7e45;
     -fx-font-size: 12px;
     -fx-font-style: italic;
     -fx-line-spacing: 4px;
     -fx-padding: 6px 0 0 0;
 }
-
 
 /* =========================================================
    MAIN CONTENT
@@ -121,7 +92,6 @@
     -fx-background-color: #F7F5EE;
     -fx-padding: 18px 22px 22px 22px;
 }
-
 
 /* =========================================================
    HEADER
@@ -183,7 +153,6 @@
     -fx-font-size: 16px;
 }
 
-
 /* =========================================================
    STATISTICS
 ========================================================= */
@@ -237,7 +206,6 @@
     -fx-text-fill: #A0A495;
 }
 
-
 /* =========================================================
    SEARCH + FILTER
 ========================================================= */
@@ -290,7 +258,6 @@
     -fx-font-size: 12px;
 }
 
-
 /* =========================================================
    PRIMARY BUTTON
 ========================================================= */
@@ -313,7 +280,6 @@
     -fx-background-color: #4F604A;
 }
 
-
 /* =========================================================
    ACCOUNT AREA
 ========================================================= */
@@ -321,7 +287,6 @@
 .account-area {
     -fx-padding: 0;
 }
-
 
 /* =========================================================
    TABLE CARD
@@ -346,7 +311,6 @@
     -fx-font-size: 11px;
     -fx-text-fill: #8D9585;
 }
-
 
 /* =========================================================
    ACCOUNT TABLE
@@ -423,7 +387,6 @@
     -fx-text-fill: #A0A495;
 }
 
-
 /* =========================================================
    TABLE SCROLLBAR
 ========================================================= */
@@ -451,7 +414,6 @@
     -fx-background-color: transparent;
     -fx-padding: 0;
 }
-
 
 /* =========================================================
    PAGINATION
@@ -492,7 +454,6 @@
     -fx-font-weight: bold;
 }
 
-
 /* =========================================================
    DETAIL CARD
 ========================================================= */
@@ -519,7 +480,6 @@
     -fx-background-color: #EEF1E7;
     -fx-text-fill: #4F604A;
 }
-
 
 /* =========================================================
    PROFILE
@@ -560,7 +520,6 @@
     -fx-font-weight: bold;
 }
 
-
 /* =========================================================
    INFORMATION
 ========================================================= */
@@ -579,7 +538,6 @@
     -fx-text-fill: #4E5C4D;
 }
 
-
 /* =========================================================
    STATUS
 ========================================================= */
@@ -592,7 +550,6 @@
     -fx-font-size: 10px;
     -fx-font-weight: bold;
 }
-
 
 /* =========================================================
    PERMISSION
@@ -616,7 +573,6 @@
     -fx-font-size: 10px;
     -fx-text-fill: #63705F;
 }
-
 
 /* =========================================================
    ACTION BUTTONS
@@ -661,7 +617,6 @@
     -fx-background-color: #4F604A;
 }
 
-
 /* =========================================================
    GENERAL FOCUS
 ========================================================= */
@@ -672,7 +627,6 @@
     -fx-focus-color: transparent;
     -fx-faint-focus-color: transparent;
 }
-
 
 /* =========================================================
    COMBO BOX POPUP
@@ -698,7 +652,6 @@
     -fx-background-color: #E2E9DA;
     -fx-text-fill: #4F604A;
 }
-
 
 /* =========================================================
    TOOLTIP

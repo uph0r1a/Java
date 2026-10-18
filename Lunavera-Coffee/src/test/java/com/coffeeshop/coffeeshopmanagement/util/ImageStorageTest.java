@@ -152,11 +152,11 @@ public class ImageStorageTest {
     }
 
     @Test
-    public void onlyPngAndJpegAreAccepted() throws IOException {
-        for (String suffix : new String[]{".png", ".PNG", ".jpg", ".jpeg", ".JpEg"}) {
+    public void onlyPictureTypesAreAccepted() throws IOException {
+        for (String suffix : new String[]{".png", ".PNG", ".jpg", ".jpeg", ".JpEg", ".jfif", ".gif", ".bmp"}) {
             assertNotNull(ImageStorage.resolve(ImageStorage.storeNewFile(tempImage(suffix, "x"))));
         }
-        for (String suffix : new String[]{".gif", ".exe", ".webp", ".txt", ""}) {
+        for (String suffix : new String[]{".exe", ".webp", ".txt", ""}) {
             try {
                 ImageStorage.storeNewFile(tempImage(suffix, "x"));
                 org.junit.Assert.fail("should have rejected " + suffix);
@@ -200,5 +200,41 @@ public class ImageStorageTest {
         Path old = ImageStorage.directory().resolve("1728500000000_latte da.png");
         Files.writeString(old, "old picture");
         assertNotNull(ImageStorage.resolve("1728500000000_latte da.png"));
+    }
+
+    @Test
+    public void jfifIsStoredUnderAJpgName() throws IOException {
+        String stored = ImageStorage.storeNewFile(tempImage(".jfif", "x"));
+        assertTrue(stored, stored.endsWith(".jpg"));
+    }
+
+    @Test
+    public void deleteQuietlyLeavesAFileOutsideTheImagesFolderAlone() throws IOException {
+        // An old product row may hold a full path to somebody's own photo (TODO 2.18).
+        File outside = tempImage(".png", "my holiday photo");
+        ImageStorage.deleteQuietly(outside.getAbsolutePath());
+        assertTrue("a file outside data/images must not be deleted", outside.exists());
+    }
+
+    // A real 1x1 PNG.
+    private static final byte[] TINY_PNG = java.util.Base64.getDecoder().decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==");
+
+    // (A real picture being accepted needs the JavaFX toolkit to decode it, which unit tests do not start;
+    // it was checked in a real window instead. These cases are refused with or without the toolkit.)
+
+    @Test
+    public void aTextFileWithAPngNameIsRefused() throws IOException {
+        assertNotNull(ImageStorage.pictureProblem(tempImage(".png", "not a picture")));
+    }
+
+    @Test
+    public void anEmptyOrHugeFileIsRefused() throws IOException {
+        assertNotNull(ImageStorage.pictureProblem(tempImage(".png", "")));
+        File huge = Files.createTempFile("huge", ".png").toFile();
+        try (java.io.RandomAccessFile f = new java.io.RandomAccessFile(huge, "rw")) {
+            f.setLength(ImageStorage.MAX_PICTURE_BYTES + 1);
+        }
+        assertNotNull(ImageStorage.pictureProblem(huge));
     }
 }

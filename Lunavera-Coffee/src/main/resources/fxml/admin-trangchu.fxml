@@ -28,7 +28,7 @@
             stylesheets="@../css/admin-trangchu.css"
             xmlns="http://javafx.com/javafx/21"
             xmlns:fx="http://javafx.com/fxml/1"
-            fx:controller="org.example.controller.AdminController"
+            fx:controller="com.coffeeshop.coffeeshopmanagement.controller.AdminDashboardController"
             styleClass="dashboard">
 
     <!-- SIDEBAR -->
@@ -126,6 +126,30 @@
                         styleClass="secondary-button"
                         onAction="#handleBackupData"/>
                 <Region prefWidth="10.0"/>
+
+                <Button fx:id="restoreButton"
+                        text="⤒  Khôi phục dữ liệu"
+                        prefHeight="42.0"
+                        styleClass="secondary-button"
+                        onAction="#handleRestoreData"/>
+                <Region prefWidth="10.0"/>
+
+                <Button fx:id="transferQrButton"
+                        text="▦  Mã QR chuyển khoản"
+                        prefHeight="42.0"
+                        styleClass="secondary-button"
+                        onAction="#handleSetTransferQr"/>
+                <Region prefWidth="10.0"/>
+
+                <!-- Shown only when the shop's database is MariaDB/MySQL (set in AdminDashboardController.initialize). -->
+                <HBox fx:id="phpMyAdminBox" visible="false" managed="false" alignment="CENTER_LEFT">
+                    <Button fx:id="phpMyAdminButton"
+                            text="⛁  Mở phpMyAdmin"
+                            prefHeight="42.0"
+                            styleClass="secondary-button"
+                            onAction="#handleOpenPhpMyAdmin"/>
+                    <Region prefWidth="10.0"/>
+                </HBox>
 
                 <Button fx:id="reportButton"
                         text="▤  Báo cáo doanh thu"
@@ -324,6 +348,13 @@
                                    text="0"
                                    styleClass="order-status-value"/>
                         </HBox>
+
+                        <Label fx:id="staleOrderLabel"
+                               text=""
+                               wrapText="true"
+                               visible="false"
+                               managed="false"
+                               styleClass="stale-order-warning"/>
                     </VBox>
 
                     <!-- TIÊU ĐỀ PHẦN ĐƠN HÀNG GẦN ĐÂY / TRONG NGÀY -->

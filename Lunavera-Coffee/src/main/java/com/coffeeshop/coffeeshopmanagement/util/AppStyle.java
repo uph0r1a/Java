@@ -15,7 +15,7 @@ import java.util.logging.Logger;
  * with Windows has no glyphs for many Vietnamese letters (they were drawn as empty squares), so the app bundles
  * "Be Vietnam Pro" and every window uses it.
  *
- * <p>{@link #install()} (called once from {@code HelloApplication.start}) loads the font files and then adds
+ * <p>{@link #install()} (called once from {@code LunaveraApplication.start}) loads the font files and then adds
  * {@code /css/app.css} to the scene of <em>every</em> window that ever opens: screens, code-built windows,
  * dialogs, alerts, context menus and tooltips. That way no screen can forget it and no style sheet needs its own
  * {@code -fx-font-family}.

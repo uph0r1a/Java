@@ -3,6 +3,13 @@ package com.coffeeshop.coffeeshopmanagement.util;
 import org.junit.Test;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static org.junit.Assert.assertEquals;
 
@@ -32,5 +39,38 @@ public class CurrencyUtilTest {
         // Money in this app is whole VND; a stray fractional value from a calculation must
         // still display as a clean integer amount.
         assertEquals("100đ", CurrencyUtil.format(new BigDecimal("99.6")));
+    }
+
+    /** TODO 6.19: a shared DecimalFormat mixes up digits when two threads format at once; one per thread does not. */
+    @Test
+    public void formattingFromManyThreadsAtOnceStaysCorrect() throws Exception {
+        int threads = 8;
+        int rounds = 20_000;
+        ExecutorService pool = Executors.newFixedThreadPool(threads);
+        try {
+            CountDownLatch start = new CountDownLatch(1);
+            List<Future<String>> results = new ArrayList<>();
+            for (int t = 0; t < threads; t++) {
+                final long amount = (t + 1) * 1_111_000L; // every thread formats its own, different, amount
+                final String expected = CurrencyUtil.format(new BigDecimal(amount));
+                Callable<String> task = () -> {
+                    start.await();
+                    for (int i = 0; i < rounds; i++) {
+                        String got = CurrencyUtil.format(new BigDecimal(amount));
+                        if (!expected.equals(got)) {
+                            return "expected " + expected + " but got " + got;
+                        }
+                    }
+                    return null;
+                };
+                results.add(pool.submit(task));
+            }
+            start.countDown();
+            for (Future<String> result : results) {
+                assertEquals(null, result.get());
+            }
+        } finally {
+            pool.shutdownNow();
+        }
     }
 }

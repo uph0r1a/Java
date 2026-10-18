@@ -177,4 +177,54 @@ public class DataPathsTest {
         assertFalse(DataPaths.migrateLegacyDataIfNeeded());
         assertFalse(Files.exists(legacy.resolve(".migrated-from-home")));
     }
+
+    // --- owner-only data folder (TODO 2A.4, 2A.14) ---
+
+    private static boolean posix() {
+        return java.nio.file.FileSystems.getDefault().supportedFileAttributeViews().contains("posix");
+    }
+
+    @Test
+    public void dataFolderBecomesOwnerOnlyWhereTheSystemSupportsIt() throws IOException {
+        Path folder = Files.createDirectories(data);
+        Path inside = Files.createFile(folder.resolve("lunavera.db"));
+        if (posix()) {
+            Files.setPosixFilePermissions(folder, java.nio.file.attribute.PosixFilePermissions.fromString("rwxr-xr-x"));
+            Files.setPosixFilePermissions(inside, java.nio.file.attribute.PosixFilePermissions.fromString("rw-r--r--"));
+            assertTrue(DataPaths.restrictToOwner(folder));
+            assertEquals("rwx------", java.nio.file.attribute.PosixFilePermissions.toString(Files.getPosixFilePermissions(folder)));
+            // only the folder is changed: the files in it keep their own rights (the closed folder already protects them)
+            assertEquals("rw-r--r--", java.nio.file.attribute.PosixFilePermissions.toString(Files.getPosixFilePermissions(inside)));
+            assertTrue("a second call changes nothing and still says yes", DataPaths.restrictToOwner(folder));
+        } else {
+            assertFalse("no POSIX rights on this system: nothing is changed", DataPaths.restrictToOwner(folder));
+        }
+    }
+
+    @Test
+    public void restrictingNothingOrAFileIsHarmless() throws IOException {
+        Path file = Files.createFile(Files.createDirectories(data).resolve("lunavera.db"));
+        assertFalse(DataPaths.restrictToOwner(null));
+        assertFalse(DataPaths.restrictToOwner(data.resolve("missing")));
+        assertFalse(DataPaths.restrictToOwner(file));
+    }
+
+    // --- temporary copies stay in data/tmp (TODO 2A.21) ---
+
+    @Test
+    public void temporaryCopiesAreMadeInsideTheDataFolderAndCleanedAtStartUp() throws IOException {
+        Path temp = DataPaths.createTempFile("lunavera-backup", ".db");
+        assertTrue("inside data/tmp, not the system temp folder", temp.startsWith(DataPaths.tmpDir()));
+        assertTrue(DataPaths.isInsideDataDir(temp));
+        Path other = DataPaths.createTempFile("lunavera-inspect", ".db");
+        assertEquals(2, DataPaths.cleanTmp());
+        assertFalse(Files.exists(temp));
+        assertFalse(Files.exists(other));
+        assertEquals("nothing left to clean", 0, DataPaths.cleanTmp());
+    }
+
+    @Test
+    public void cleaningWhenThereIsNoTmpFolderIsHarmless() {
+        assertEquals(0, DataPaths.cleanTmp());
+    }
 }

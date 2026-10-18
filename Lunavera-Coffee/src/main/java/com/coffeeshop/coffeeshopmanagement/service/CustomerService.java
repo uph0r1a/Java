@@ -32,11 +32,23 @@ public class CustomerService {
      * {@code null} for a missing or invalid phone: that order is a walk-in and no customer row is made.
      */
     public Customer findOrCreateByPhone(String name, String phone) {
-        if (!ValidationUtil.isValidPhone(phone)) return null;
+        return resolve(name, phone).customer();
+    }
+
+    /** The customer for a typed phone, and whether this call had to create the row. */
+    public record Resolved(Customer customer, boolean created) {}
+
+    /**
+     * Like {@link #findOrCreateByPhone}, but says whether the customer is new. The payment uses it: when the payment then
+     * fails, a customer made only for it is removed again instead of staying as an empty row (TODO 3.27).
+     */
+    public Resolved resolve(String name, String phone) {
+        if (!ValidationUtil.isValidPhone(phone)) return new Resolved(null, false);
+        phone = ValidationUtil.normalizePhone(phone);
         synchronized (LOCK) {
             Optional<Customer> existing = customerDAO.findByPhone(phone);
             if (existing.isPresent()) {
-                return existing.get();
+                return new Resolved(existing.get(), false);
             }
             Customer created = new Customer();
             String trimmed = name == null ? "" : name.trim();
@@ -44,11 +56,21 @@ public class CustomerService {
             created.setPhone(phone);
             created.setLoyaltyPoints(0);
             try {
-                return customerDAO.insert(created);
+                return new Resolved(customerDAO.insert(created), true);
             } catch (RuntimeException e) {
                 LOGGER.log(Level.WARNING, "Could not create customer", e);
-                return customerDAO.findByPhone(phone).orElse(null);
+                return new Resolved(customerDAO.findByPhone(phone).orElse(null), false);
             }
+        }
+    }
+
+    /** Removes a customer that was just created and has no orders, points or account (a failed payment's leftover). */
+    public void discardIfUnused(Customer customer) {
+        if (customer == null) return;
+        try {
+            customerDAO.deleteIfUnused(customer.getId());
+        } catch (RuntimeException e) {
+            LOGGER.log(Level.WARNING, "Could not remove the unused customer", e);
         }
     }
 }

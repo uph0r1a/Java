@@ -35,14 +35,68 @@ public class ProductDAO {
         }
     }
 
+    /**
+     * True when another product (id != excludeId; pass 0 when adding) in the same category already has this name, ignoring
+     * upper/lower case, accents' case and extra spaces (TODO 2.13: two "Latte" rows are confusing at the till). Compared in Java,
+     * because SQLite's LOWER() only understands plain ASCII letters, not Vietnamese ones.
+     */
+    public boolean existsByNameInCategory(String name, Integer categoryId, int excludeId) {
+        String wanted = normalizeName(name);
+        String sql = categoryId == null
+                ? "SELECT name FROM products WHERE category_id IS NULL AND id <> ?"
+                : "SELECT name FROM products WHERE category_id = ? AND id <> ?";
+        try (Connection connection = DatabaseConfig.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            int i = 1;
+            if (categoryId != null) statement.setInt(i++, categoryId);
+            statement.setInt(i, excludeId);
+            try (ResultSet rs = statement.executeQuery()) {
+                while (rs.next()) {
+                    if (normalizeName(rs.getString(1)).equals(wanted)) return true;
+                }
+            }
+            return false;
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to check product name", e);
+        }
+    }
+
+    /** How many products other than {@code excludeId} still point at this picture (a picture is deleted only when 0). */
+    public int countUsingImage(String imagePath, int excludeId) {
+        if (imagePath == null || imagePath.isBlank()) return 0;
+        String sql = "SELECT COUNT(*) FROM products WHERE image_path = ? AND id <> ?";
+        try (Connection connection = DatabaseConfig.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, imagePath);
+            statement.setInt(2, excludeId);
+            try (ResultSet rs = statement.executeQuery()) {
+                rs.next();
+                return rs.getInt(1);
+            }
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to check picture use", e);
+        }
+    }
+
+    static String normalizeName(String name) {
+        return com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.key(name);
+    }
+
     public void update(Product product) {
-        String sql = "UPDATE products SET name=?, category_id=?, price=?, cost=?, stock=?, description=?, " +
+        String sql = "UPDATE products SET name=?, category_id=?, price=?, cost=?, stock=COALESCE(?, stock), description=?, " +
                 "image_path=?, active=? WHERE id=?";
         try (Connection connection = DatabaseConfig.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
             bind(statement, product);
+            // Saving a product whose stock number the person did not change must not put the old number back over
+            // sales made since it was read (TODO 3.2): a NULL here keeps the stock the database holds now. A stock
+            // number that was typed in (a stock-take) is still written as given.
+            if (product.isStockUntouchedSinceLoad()) {
+                statement.setNull(5, Types.INTEGER);
+            }
             statement.setInt(9, product.getId());
             statement.executeUpdate();
+            product.setLoadedStock(product.getStock());
         } catch (SQLException e) {
             throw new DataAccessException("Failed to update product", e);
         }
@@ -149,7 +203,7 @@ public class ProductDAO {
     }
 
     private void bind(PreparedStatement statement, Product product) throws SQLException {
-        statement.setString(1, product.getName());
+        statement.setString(1, com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.nfc(product.getName()));
         if (product.getCategoryId() != null) {
             statement.setInt(2, product.getCategoryId());
         } else {
@@ -179,6 +233,7 @@ public class ProductDAO {
         long costDong = rs.getLong("cost");
         product.setCost(com.coffeeshop.coffeeshopmanagement.util.Money.fromDongOrNull(costDong, rs.wasNull()));
         product.setStock(rs.getInt("stock"));
+        product.setLoadedStock(product.getStock());
         product.setDescription(rs.getString("description"));
         product.setImagePath(rs.getString("image_path"));
         product.setActive(rs.getBoolean("active"));

@@ -21,6 +21,7 @@ public class BackupSafetyTest {
     @BeforeClass
     public static void setUpDatabase() {
         TestDatabaseSupport.ensureReady();
+        TestDatabaseSupport.requireSqlite();
     }
 
     private static long users() throws Exception {

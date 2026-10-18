@@ -16,11 +16,23 @@ import java.util.Optional;
 
 public class CategoryDAO {
 
+    /** Two names that differ only in letter case, spacing or how an accent is encoded are the same name (TODO 3.18). */
+    private void rejectDuplicateName(String name, int excludeId) {
+        String wanted = com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.key(name);
+        for (Category other : findAll()) {
+            if (other.getId() != excludeId
+                    && com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.key(other.getName()).equals(wanted)) {
+                throw new DataAccessException("Đã tồn tại danh mục với tên này");
+            }
+        }
+    }
+
     public Category insert(Category category) {
+        rejectDuplicateName(category.getName(), 0);
         String sql = "INSERT INTO categories (name, description, active) VALUES (?, ?, ?)";
         try (Connection connection = DatabaseConfig.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-            statement.setString(1, category.getName());
+            statement.setString(1, com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.nfc(category.getName()));
             statement.setString(2, category.getDescription());
             statement.setBoolean(3, category.isActive());
             statement.executeUpdate();
@@ -39,10 +51,11 @@ public class CategoryDAO {
     }
 
     public void update(Category category) {
+        rejectDuplicateName(category.getName(), category.getId());
         String sql = "UPDATE categories SET name = ?, description = ?, active = ? WHERE id = ?";
         try (Connection connection = DatabaseConfig.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setString(1, category.getName());
+            statement.setString(1, com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.nfc(category.getName()));
             statement.setString(2, category.getDescription());
             statement.setBoolean(3, category.isActive());
             statement.setInt(4, category.getId());
@@ -150,8 +163,7 @@ public class CategoryDAO {
     }
 
     private boolean isUniqueConstraintViolation(SQLException e) {
-        String message = e.getMessage();
-        return message != null && message.toUpperCase().contains("UNIQUE");
+        return UniqueViolation.isUnique(e); // by error code, not message text (TODO 6.40)
     }
 
     private Category map(ResultSet rs) throws SQLException {

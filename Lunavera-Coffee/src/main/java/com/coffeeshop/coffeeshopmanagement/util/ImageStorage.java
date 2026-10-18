@@ -37,7 +37,7 @@ public final class ImageStorage {
     }
 
     /** Picture types that may be stored; anything else is rejected before a byte is copied. */
-    private static final Set<String> ALLOWED_EXTENSIONS = Set.of("png", "jpg", "jpeg");
+    private static final Set<String> ALLOWED_EXTENSIONS = Set.of("png", "jpg", "jpeg", "jfif", "jpe", "gif", "bmp");
     private static final int MAX_NAME_ATTEMPTS = 5;
 
     /**
@@ -60,7 +60,11 @@ public final class ImageStorage {
     static String storeNewFile(File source, Supplier<String> baseNames) throws IOException {
         String extension = extensionOf(source.getName());
         if (!ALLOWED_EXTENSIONS.contains(extension)) {
-            throw new IOException("Chỉ hỗ trợ ảnh PNG hoặc JPG (tệp \"" + source.getName() + "\" không hợp lệ).");
+            throw new IOException("Chỉ hỗ trợ ảnh PNG, JPG, JFIF, GIF hoặc BMP (tệp \"" + source.getName() + "\" không hợp lệ).");
+        }
+        // JavaFX reads JFIF/JPE as JPEG; store them under the usual name (TODO 2.58).
+        if (extension.equals("jfif") || extension.equals("jpe")) {
+            extension = "jpg";
         }
         Path dir = directory();
         for (int attempt = 0; attempt < MAX_NAME_ATTEMPTS; attempt++) {
@@ -78,6 +82,32 @@ public final class ImageStorage {
     }
 
     /** Lowercase extension without the dot, or an empty string when there is none. */
+    /** Pictures above this size are refused: the list decodes every picture and a huge one makes the app slow (TODO 3.12). */
+    public static final long MAX_PICTURE_BYTES = 8L * 1024 * 1024;
+
+    /**
+     * Looks at a picked file before it is copied: not empty, not larger than {@link #MAX_PICTURE_BYTES}, and the content
+     * really decodes as a picture (a renamed text file with a .png name is refused). Returns the problem in Vietnamese, or
+     * null when the picture is fine.
+     */
+    public static String pictureProblem(File file) {
+        if (file == null || !file.isFile()) return "Không đọc được tệp ảnh.";
+        long size = file.length();
+        if (size == 0) return "Tệp ảnh trống.";
+        if (size > MAX_PICTURE_BYTES) {
+            return "Ảnh quá lớn (" + (size / 1024 / 1024) + " MB). Hãy chọn ảnh nhỏ hơn " + (MAX_PICTURE_BYTES / 1024 / 1024) + " MB.";
+        }
+        try {
+            javafx.scene.image.Image image = new javafx.scene.image.Image(file.toURI().toString(), false);
+            if (image.isError() || image.getWidth() <= 0 || image.getHeight() <= 0) {
+                return "Tệp này không phải là ảnh hợp lệ.";
+            }
+        } catch (RuntimeException e) {
+            return "Tệp này không phải là ảnh hợp lệ.";
+        }
+        return null;
+    }
+
     private static String extensionOf(String fileName) {
         int dot = fileName.lastIndexOf('.');
         return dot < 0 || dot == fileName.length() - 1
@@ -100,11 +130,23 @@ public final class ImageStorage {
         return candidate.exists() ? candidate : null;
     }
 
+    /** True when {@code file} really lies inside the managed images folder (symbolic links and ".." resolved). */
+    static boolean isInsideImagesFolder(File file) {
+        try {
+            Path dir = directoryPath().toRealPath();
+            return file.toPath().toRealPath().startsWith(dir);
+        } catch (IOException | RuntimeException e) {
+            return false;
+        }
+    }
+
     /** Best-effort delete - never throws. A missing file, an old value that never resolves, or
-     *  a locked file on the OS shouldn't block saving/deleting the product record itself. */
+     *  a locked file on the OS shouldn't block saving/deleting the product record itself.
+     *  Only files inside the managed images folder are ever deleted: an old product row that holds a full path to
+     *  somebody's own photo elsewhere on the disk leaves that photo alone (TODO 2.18). */
     public static void deleteQuietly(String stored) {
         File file = resolve(stored);
-        if (file == null) {
+        if (file == null || !isInsideImagesFolder(file)) {
             return;
         }
         try {

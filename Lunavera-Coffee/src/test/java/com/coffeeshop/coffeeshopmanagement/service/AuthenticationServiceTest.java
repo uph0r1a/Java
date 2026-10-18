@@ -58,18 +58,24 @@ public class AuthenticationServiceTest {
     }
 
     @Test
-    public void fiveWrongAttemptsBlockEvenTheCorrectPasswordForAWhile() {
-        for (int i = 0; i < 5; i++) {
+    public void repeatedWrongAttemptsMakeEvenTheCorrectPasswordWaitAMoment() {
+        for (int i = 0; i < 3; i++) {
             assertEquals(LoginStatus.INVALID_CREDENTIALS, service.login("staff1", "Wrong123").status());
         }
         LoginResult blocked = service.login("staff1", "Correct1");
         assertEquals(LoginStatus.TOO_MANY_ATTEMPTS, blocked.status());
-        assertEquals(30, blocked.retryAfterSeconds());
+        assertEquals(1, blocked.retryAfterSeconds());
     }
 
     @Test
     public void guessingAnUnknownUsernameIsThrottledToo() {
-        for (int i = 0; i < 5; i++) service.login("ghost", "Wrong123");
+        for (int i = 0; i < 3; i++) service.login("ghost", "Wrong123");
         assertEquals(LoginStatus.TOO_MANY_ATTEMPTS, service.login("ghost", "Wrong123").status());
+    }
+
+    @Test
+    public void aLegacyCustomerAccountCanNeverSignIn() {
+        user.setRole(com.coffeeshop.coffeeshopmanagement.model.Role.CUSTOMER);
+        assertEquals(LoginStatus.INVALID_CREDENTIALS, service.login("staff1", "Correct1").status());
     }
 }

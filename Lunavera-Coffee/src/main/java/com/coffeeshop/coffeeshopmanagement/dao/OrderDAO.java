@@ -1,12 +1,16 @@
 package com.coffeeshop.coffeeshopmanagement.dao;
 
+import com.coffeeshop.coffeeshopmanagement.config.SqlStatus;
+import com.coffeeshop.coffeeshopmanagement.util.AppClock;
 import com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig;
 import com.coffeeshop.coffeeshopmanagement.model.Order;
 import com.coffeeshop.coffeeshopmanagement.model.OrderItem;
 import com.coffeeshop.coffeeshopmanagement.model.OrderStatus;
 import com.coffeeshop.coffeeshopmanagement.model.PaymentMethod;
 import com.coffeeshop.coffeeshopmanagement.service.LoyaltyPolicy;
+import com.coffeeshop.coffeeshopmanagement.util.DbTime;
 import com.coffeeshop.coffeeshopmanagement.util.Money;
+import com.coffeeshop.coffeeshopmanagement.util.Permissions;
 
 import java.math.BigDecimal;
 import java.sql.Connection;
@@ -24,22 +28,30 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Order persistence, plus the aggregate/reporting queries the dashboards need. Order
- * creation (POS checkout) is not wired to any screen yet - see progress.md - but the
- * schema and this DAO are ready for that screen to be built against.
+ * Order persistence: the order saved for a table while it is being typed ({@link #saveOrUpdateOpenOrder},
+ * {@link #updateIfStillOpen}), payment ({@link #payExistingOrder}, normally reached through {@code CheckoutService}),
+ * cancelling a paid order ({@link #cancelPaidOrder}), the searchable history, and the aggregate queries the dashboards and
+ * reports use. Used by the till ({@code OrderController}), the history window, the customer screen and the services.
  */
 public class OrderDAO {
 
     public Order insert(Order order, List<OrderItem> items) {
+        if (order.getStatus() == OrderStatus.PAID) {
+            // A sale that is saved as paid must add up (TODO 2.25); open orders are autosaved as they are typed.
+            order.setSubtotal(checkTotals(order.getDiscount(), order.getTotal(), items));
+        }
         String orderSql = "INSERT INTO orders (order_date, employee_id, customer_id, status, subtotal, discount, " +
-                "total, payment_method, paid_at, table_number, discount_reason) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                "total, payment_method, paid_at, table_number, discount_reason, paid_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         String itemSql = "INSERT INTO order_items (order_id, product_id, product_name, quantity, unit_price, line_total) " +
                 "VALUES (?, ?, ?, ?, ?, ?)";
         try (Connection connection = DatabaseConfig.getConnection()) {
             connection.setAutoCommit(false);
+            if (order.getStatus() == OrderStatus.OPEN && order.getTableNumber() != null) {
+                rejectIfTableHasOpenOrder(connection, order.getTableNumber()); // TODO 3.22
+            }
             int orderId;
             try (PreparedStatement statement = connection.prepareStatement(orderSql, Statement.RETURN_GENERATED_KEYS)) {
-                statement.setString(1, order.getOrderDate().toString());
+                statement.setString(1, DbTime.write(order.getOrderDate()));
                 setNullableInt(statement, 2, order.getEmployeeId());
                 setNullableInt(statement, 3, order.getCustomerId());
                 statement.setString(4, order.getStatus().name());
@@ -47,9 +59,11 @@ public class OrderDAO {
                 statement.setLong(6, Money.toDong(order.getDiscount()));
                 statement.setLong(7, Money.toDong(order.getTotal()));
                 statement.setString(8, order.getPaymentMethod() != null ? order.getPaymentMethod().name() : null);
-                statement.setString(9, order.getPaidAt() != null ? order.getPaidAt().toString() : null);
+                statement.setString(9, DbTime.write(order.getPaidAt()));
                 setNullableInt(statement, 10, order.getTableNumber());
                 statement.setString(11, order.getDiscountReason());
+                // The one who creates a paid order is also the one who took the money.
+                setNullableInt(statement, 12, order.getStatus() == OrderStatus.PAID ? order.getEmployeeId() : null);
                 statement.executeUpdate();
                 try (ResultSet keys = statement.getGeneratedKeys()) {
                     keys.next();
@@ -72,14 +86,19 @@ public class OrderDAO {
             // would drive stock below zero fails as a whole (nothing saved) instead of going negative.
             if (order.getStatus() == OrderStatus.PAID) {
                 try (PreparedStatement statement = connection.prepareStatement(
-                        "UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?")) {
+                        "UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ? AND active = 1")) {
                     for (OrderItem item : items) {
                         if (item.getProductId() == null) continue;
                         statement.setInt(1, item.getQuantity());
                         statement.setInt(2, item.getProductId());
                         statement.setInt(3, item.getQuantity());
                         if (statement.executeUpdate() == 0) {
+                            boolean off = isSwitchedOff(connection, item.getProductId());
                             connection.rollback();
+                            if (off) {
+                                throw new DataAccessException("\"" + item.getProductName()
+                                        + "\" đã ngừng bán nên không thể thanh toán. Hãy xóa món này khỏi đơn.");
+                            }
                             throw new DataAccessException("\"" + item.getProductName()
                                     + "\" không đủ tồn kho để hoàn tất đơn. Vui lòng kiểm tra lại số lượng.");
                         }
@@ -99,25 +118,87 @@ public class OrderDAO {
                     }
                 }
             }
+            if (order.getStatus() == OrderStatus.PAID && order.getTableNumber() != null) {
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "UPDATE dining_tables SET status = " + SqlStatus.EMPTY + ", current_order_id = NULL WHERE table_number = ?")) {
+                    statement.setInt(1, order.getTableNumber());
+                    statement.executeUpdate();
+                }
+            }
             connection.commit();
             order.setId(orderId);
             return order;
         } catch (SQLException e) {
+            if (order.getStatus() == OrderStatus.OPEN && order.getTableNumber() != null
+                    && UniqueViolation.isUnique(e)) {
+                // Two tills saved the same table at the same moment and the database's one-open-order rule (TODO 3.22) caught it.
+                throw new DataAccessException("Bàn " + order.getTableNumber()
+                        + " vừa có đơn chưa thanh toán từ máy khác. Hãy mở lại đơn đó thay vì tạo đơn mới.", e);
+            }
             throw new DataAccessException("Failed to save order", e);
+        }
+    }
+
+    /**
+     * A table has at most one OPEN order (TODO 3.22): a second one made the table map and the order that opens disagree.
+     * Checked inside the insert's transaction. This is a check, not a database rule, so two tills inserting for the same
+     * free table at the very same moment on a shared MariaDB server could still both pass; a database-level unique rule
+     * (partial index on SQLite, generated column on MariaDB) is left for a run that can test both.
+     */
+    private static void rejectIfTableHasOpenOrder(Connection connection, int tableNumber) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT id FROM orders WHERE table_number = ? AND status = " + SqlStatus.OPEN + " ORDER BY id DESC LIMIT 1")) {
+            statement.setInt(1, tableNumber);
+            try (ResultSet rs = statement.executeQuery()) {
+                if (rs.next()) {
+                    int existing = rs.getInt(1);
+                    connection.rollback();
+                    throw new DataAccessException("Bàn " + tableNumber + " đang có đơn chưa thanh toán (#" + existing
+                            + "). Hãy mở lại đơn đó thay vì tạo đơn mới.");
+                }
+            }
         }
     }
 
     public Order saveOrUpdateOpenOrder(Order order, List<OrderItem> items) {
         if (order.getId() <= 0) {
             order.setStatus(OrderStatus.OPEN);
-            Order saved = insert(order, items);
-            if (saved.getTableNumber() != null) {
-                new TableDAO().updateStatus(saved.getTableNumber(), com.coffeeshop.coffeeshopmanagement.model.TableStatus.OCCUPIED, saved.getId());
-            }
-            return saved;
+            // The table is occupied because it now has an OPEN order (TableDAO.findAll derives it); no second write (TODO 2.53).
+            return insert(order, items);
         }
-        String updateOrderSql = "UPDATE orders SET subtotal = ?, discount = ?, total = ?, customer_id = ? WHERE id = ? AND status = 'OPEN'";
-        String deleteItemsSql = "DELETE FROM order_items WHERE order_id = ?";
+        updateIfStillOpen(order, items);
+        return order;
+    }
+
+    /** The lines of an order as saved, in the order they were saved (row id), for {@link OrderItemDiff}. */
+    private static List<OrderItem> readItems(Connection connection, int orderId) throws SQLException {
+        List<OrderItem> saved = new ArrayList<>();
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT id, product_id, product_name, quantity, unit_price, line_total FROM order_items WHERE order_id = ? ORDER BY id")) {
+            statement.setInt(1, orderId);
+            try (ResultSet rs = statement.executeQuery()) {
+                while (rs.next()) {
+                    OrderItem item = new OrderItem();
+                    item.setId(rs.getInt(1));
+                    int productId = rs.getInt(2);
+                    item.setProductId(rs.wasNull() ? null : productId);
+                    item.setProductName(rs.getString(3));
+                    item.setQuantity(rs.getInt(4));
+                    item.setUnitPrice(Money.fromDong(rs.getLong(5)));
+                    item.setLineTotal(Money.fromDong(rs.getLong(6)));
+                    saved.add(item);
+                }
+            }
+        }
+        return saved;
+    }
+
+    /**
+     * Brings an open order's lines to the given list (only the difference is written, see {@link OrderItemDiff}). Returns false (and writes nothing) when the order is no longer OPEN because it was paid
+     * or cancelled somewhere else in the meantime, so the screen can tell the cashier at once (TODO 3.28).
+     */
+    public boolean updateIfStillOpen(Order order, List<OrderItem> items) {
+        String updateOrderSql = "UPDATE orders SET subtotal = ?, discount = ?, total = ?, customer_id = ? WHERE id = ? AND status = " + SqlStatus.OPEN;
         String insertItemSql = "INSERT INTO order_items (order_id, product_id, product_name, quantity, unit_price, line_total) VALUES (?, ?, ?, ?, ?, ?)";
         try (Connection connection = DatabaseConfig.getConnection()) {
             connection.setAutoCommit(false);
@@ -131,27 +212,51 @@ public class OrderDAO {
                     // The order is no longer OPEN (paid or cancelled in the meantime). A late autosave
                     // must not touch the items of a finished order.
                     connection.rollback();
-                    return order;
+                    return false;
                 }
             }
-            try (PreparedStatement statement = connection.prepareStatement(deleteItemsSql)) {
-                statement.setInt(1, order.getId());
-                statement.executeUpdate();
-            }
-            try (PreparedStatement statement = connection.prepareStatement(insertItemSql)) {
-                for (OrderItem item : items) {
-                    statement.setInt(1, order.getId());
-                    setNullableInt(statement, 2, item.getProductId());
-                    statement.setString(3, item.getProductName());
-                    statement.setInt(4, item.getQuantity());
-                    statement.setLong(5, Money.toDong(item.getUnitPrice()));
-                    statement.setLong(6, Money.toDong(item.getLineTotal()));
-                    statement.addBatch();
+            // Only the difference is written (TODO 6.37), not "delete everything and insert it again" on every autosave.
+            OrderItemDiff plan = OrderItemDiff.plan(readItems(connection, order.getId()), items);
+            if (!plan.deletes.isEmpty()) {
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "DELETE FROM order_items WHERE id = ? AND order_id = ?")) {
+                    for (int rowId : plan.deletes) {
+                        statement.setInt(1, rowId);
+                        statement.setInt(2, order.getId());
+                        statement.addBatch();
+                    }
+                    statement.executeBatch();
                 }
-                statement.executeBatch();
+            }
+            if (!plan.updates.isEmpty()) {
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "UPDATE order_items SET quantity = ?, line_total = ? WHERE id = ? AND order_id = ?")) {
+                    for (OrderItemDiff.Change change : plan.updates) {
+                        statement.setInt(1, change.item.getQuantity());
+                        statement.setLong(2, Money.toDong(change.item.getLineTotal()));
+                        statement.setInt(3, change.rowId);
+                        statement.setInt(4, order.getId());
+                        statement.addBatch();
+                    }
+                    statement.executeBatch();
+                }
+            }
+            if (!plan.inserts.isEmpty()) {
+                try (PreparedStatement statement = connection.prepareStatement(insertItemSql)) {
+                    for (OrderItem item : plan.inserts) {
+                        statement.setInt(1, order.getId());
+                        setNullableInt(statement, 2, item.getProductId());
+                        statement.setString(3, item.getProductName());
+                        statement.setInt(4, item.getQuantity());
+                        statement.setLong(5, Money.toDong(item.getUnitPrice()));
+                        statement.setLong(6, Money.toDong(item.getLineTotal()));
+                        statement.addBatch();
+                    }
+                    statement.executeBatch();
+                }
             }
             connection.commit();
-            return order;
+            return true;
         } catch (SQLException e) {
             throw new DataAccessException("Failed to update open order #" + order.getId(), e);
         }
@@ -173,20 +278,34 @@ public class OrderDAO {
     /** Same, and also saves why the discount was given ({@code discountReason}, null when there is none). */
     public Order payExistingOrder(int orderId, Integer customerId, PaymentMethod method, BigDecimal discount,
                                   String discountReason, BigDecimal total, List<OrderItem> items) {
-        String orderSql = "UPDATE orders SET status = 'PAID', paid_at = ?, payment_method = ?, discount = ?, total = ?, "
-                + "customer_id = COALESCE(?, customer_id), discount_reason = ? WHERE id = ? AND status = 'OPEN'";
+        return payExistingOrder(orderId, customerId, method, discount, discountReason, total, items, null);
+    }
+
+    /**
+     * Checks that the figures it was given add up before anything is written (TODO 2.25): at least one line, every
+     * line positive and equal to price x quantity, a discount between 0 and the subtotal, and a total equal to
+     * subtotal - discount. The subtotal is saved too, and {@code paidByEmployeeId} records who took the money (TODO 2.47).
+     */
+    public Order payExistingOrder(int orderId, Integer customerId, PaymentMethod method, BigDecimal discount,
+                                  String discountReason, BigDecimal total, List<OrderItem> items, Integer paidByEmployeeId) {
+        BigDecimal subtotal = checkTotals(discount, total, items);
+        String orderSql = "UPDATE orders SET status = " + SqlStatus.PAID + ", paid_at = ?, payment_method = ?, discount = ?, total = ?, "
+                + "customer_id = COALESCE(?, customer_id), discount_reason = ?, subtotal = ?, paid_by = ? "
+                + "WHERE id = ? AND status = " + SqlStatus.OPEN;
         String deleteItemsSql = "DELETE FROM order_items WHERE order_id = ?";
         String itemSql = "INSERT INTO order_items (order_id, product_id, product_name, quantity, unit_price, line_total) VALUES (?, ?, ?, ?, ?, ?)";
         try (Connection connection = DatabaseConfig.getConnection()) {
             connection.setAutoCommit(false);
             try (PreparedStatement statement = connection.prepareStatement(orderSql)) {
-                statement.setString(1, LocalDateTime.now().toString());
+                statement.setString(1, DbTime.write(AppClock.now()));
                 statement.setString(2, method != null ? method.name() : null);
                 statement.setLong(3, Money.toDong(discount));
                 statement.setLong(4, Money.toDong(total));
                 setNullableInt(statement, 5, customerId);
                 statement.setString(6, discountReason);
-                statement.setInt(7, orderId);
+                statement.setLong(7, Money.toDong(subtotal));
+                setNullableInt(statement, 8, paidByEmployeeId);
+                statement.setInt(9, orderId);
                 if (statement.executeUpdate() == 0) {
                     connection.rollback();
                     throw new DataAccessException("Đơn #" + orderId
@@ -224,14 +343,19 @@ public class OrderDAO {
                 statement.executeBatch();
             }
             try (PreparedStatement statement = connection.prepareStatement(
-                    "UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?")) {
+                    "UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ? AND active = 1")) {
                 for (OrderItem item : items) {
                     if (item.getProductId() == null) continue;
                     statement.setInt(1, item.getQuantity());
                     statement.setInt(2, item.getProductId());
                     statement.setInt(3, item.getQuantity());
                     if (statement.executeUpdate() == 0) {
+                        boolean off = isSwitchedOff(connection, item.getProductId());
                         connection.rollback();
+                        if (off) {
+                            throw new DataAccessException("\"" + item.getProductName()
+                                    + "\" đã ngừng bán nên không thể thanh toán. Hãy xóa món này khỏi đơn.");
+                        }
                         throw new DataAccessException("\"" + item.getProductName()
                                 + "\" không đủ tồn kho để hoàn tất đơn. Vui lòng kiểm tra lại số lượng.");
                     }
@@ -250,7 +374,7 @@ public class OrderDAO {
             }
             if (tableNumber != null) {
                 try (PreparedStatement statement = connection.prepareStatement(
-                        "UPDATE dining_tables SET status = 'EMPTY', current_order_id = NULL WHERE table_number = ?")) {
+                        "UPDATE dining_tables SET status = " + SqlStatus.EMPTY + ", current_order_id = NULL WHERE table_number = ?")) {
                     statement.setInt(1, tableNumber);
                     statement.executeUpdate();
                 }
@@ -262,9 +386,46 @@ public class OrderDAO {
         }
     }
 
-    /** Makes the text match literally in a LIKE ... ESCAPE '\\' query: a typed % or _ is not a wildcard. */
+    /** Validates the lines and totals of a sale and returns the subtotal (sum of the lines). */
+    static BigDecimal checkTotals(BigDecimal discount, BigDecimal total, List<OrderItem> items) {
+        if (items == null || items.isEmpty()) {
+            throw new DataAccessException("Đơn hàng không có sản phẩm nào, không thể thanh toán.");
+        }
+        BigDecimal subtotal = BigDecimal.ZERO;
+        for (OrderItem item : items) {
+            if (item.getQuantity() <= 0) {
+                throw new DataAccessException("Số lượng của \"" + item.getProductName() + "\" không hợp lệ.");
+            }
+            if (item.getUnitPrice() == null || item.getUnitPrice().signum() < 0) {
+                throw new DataAccessException("Đơn giá của \"" + item.getProductName() + "\" không hợp lệ.");
+            }
+            BigDecimal expected = item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
+            if (item.getLineTotal() == null || item.getLineTotal().compareTo(expected) != 0) {
+                throw new DataAccessException("Thành tiền của \"" + item.getProductName() + "\" không khớp đơn giá x số lượng.");
+            }
+            subtotal = subtotal.add(expected);
+        }
+        if (discount == null || discount.signum() < 0 || discount.compareTo(subtotal) > 0) {
+            throw new DataAccessException("Giảm giá phải từ 0 đến tổng tiền hàng.");
+        }
+        if (total == null || total.compareTo(subtotal.subtract(discount)) != 0) {
+            throw new DataAccessException("Tổng tiền không khớp với các dòng hàng và giảm giá.");
+        }
+        return subtotal;
+    }
+
+    /** True for digits only, no leading zero, at most 9 digits: the text then means "order number N" (TODO 3.35). */
+    static boolean looksLikeOrderNumber(String typed) {
+        return typed != null && typed.matches("[1-9][0-9]{0,8}");
+    }
+
+    /**
+     * Makes the text match literally in a {@code LIKE ... ESCAPE '!'} query: a typed %, _ or ! is not a wildcard.
+     * The escape character is "!" rather than a backslash because MariaDB/MySQL treat a backslash inside a quoted
+     * string as an escape of their own, so the same SQL would not mean the same thing in both databases.
+     */
     static String escapeLike(String text) {
-        return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+        return text.replace("!", "!!").replace("%", "!%").replace("_", "!_");
     }
 
     public Optional<Order> findById(int id) {
@@ -283,15 +444,24 @@ public class OrderDAO {
         return Optional.empty();
     }
 
-    /** All orders created today, newest first. */
+    /**
+     * The one rule for "which day is this order?" (TODO 3.5, 3.23): a sale belongs to the day it was PAID (that is when the
+     * money came in); an order that was never paid (still open, or abandoned) belongs to the day it was opened.
+     * An order opened at 23:50 and paid at 00:10 therefore counts on the second day everywhere.
+     */
+    public static final String EFFECTIVE_DAY = "DATE(COALESCE(paid_at, order_date))";
+
+    /** All orders of today by {@link #EFFECTIVE_DAY}, newest first. */
     public List<Order> findTodayOrders() {
         List<Order> result = new ArrayList<>();
-        String sql = "SELECT * FROM orders WHERE DATE(order_date) = DATE('now', 'localtime') ORDER BY id DESC";
+        String sql = "SELECT * FROM orders WHERE " + EFFECTIVE_DAY + " = ? ORDER BY id DESC";
         try (Connection connection = DatabaseConfig.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql);
-             ResultSet rs = statement.executeQuery()) {
-            while (rs.next()) {
-                result.add(map(rs));
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, AppClock.today().toString());
+            try (ResultSet rs = statement.executeQuery()) {
+                while (rs.next()) {
+                    result.add(map(rs));
+                }
             }
         } catch (SQLException e) {
             throw new DataAccessException("Failed to load today's orders", e);
@@ -301,7 +471,7 @@ public class OrderDAO {
 
     /** Find open order for a table if exists. */
     public Optional<Order> findOpenOrderByTable(int tableNumber) {
-        String sql = "SELECT * FROM orders WHERE table_number = ? AND status = 'OPEN' ORDER BY id DESC LIMIT 1";
+        String sql = "SELECT * FROM orders WHERE table_number = ? AND status = " + SqlStatus.OPEN + " ORDER BY id DESC LIMIT 1";
         try (Connection connection = DatabaseConfig.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setInt(1, tableNumber);
@@ -324,8 +494,17 @@ public class OrderDAO {
      *  not applied. Its own type rather than passing four loose parameters, since
      *  {@link #findHistoryPage} and {@link #countHistory} both need to build the exact same
      *  WHERE clause from it and must never drift apart. */
-    public record HistoryFilter(String keyword, OrderStatus status, LocalDate from, LocalDate to) {
+    public record HistoryFilter(String keyword, OrderStatus status, LocalDate from, LocalDate to, Integer customerId) {
         public static final HistoryFilter NONE = new HistoryFilter(null, null, null, null);
+
+        public HistoryFilter(String keyword, OrderStatus status, LocalDate from, LocalDate to) {
+            this(keyword, status, from, to, null);
+        }
+
+        /** Same filter limited to one customer's orders (TODO 4.4). */
+        public HistoryFilter forCustomer(int id) {
+            return new HistoryFilter(keyword, status, from, to, id);
+        }
     }
 
     private static final class FilterSql {
@@ -339,19 +518,38 @@ public class OrderDAO {
                 params.add(filter.status().name());
             }
             if (filter.from() != null) {
-                conditions.add("DATE(o.order_date) >= ?");
+                conditions.add("DATE(COALESCE(o.paid_at, o.order_date)) >= ?");
                 params.add(filter.from().toString());
             }
             if (filter.to() != null) {
-                conditions.add("DATE(o.order_date) <= ?");
+                conditions.add("DATE(COALESCE(o.paid_at, o.order_date)) <= ?");
                 params.add(filter.to().toString());
             }
+            if (filter.customerId() != null) {
+                conditions.add("o.customer_id = ?");
+                params.add(String.valueOf(filter.customerId()));
+            }
             if (filter.keyword() != null && !filter.keyword().isBlank()) {
-                conditions.add("(CAST(o.id AS TEXT) LIKE ? ESCAPE '\\' OR e.full_name LIKE ? ESCAPE '\\' OR c.full_name LIKE ? ESCAPE '\\')");
-                String like = "%" + escapeLike(filter.keyword().trim().replace("#", "")) + "%";
+                // The customer can be found by phone too (TODO 5.23): "+84 901 234 567" matches the stored "0901234567".
+                // A phone is only tried once the text has 4 digits, so "12" still means order #12 and not every phone with 12.
+                String typed = filter.keyword().trim().replace("#", "");
+                String compact = typed.replaceAll("[\\s.\\-()]", "");
+                String phone = com.coffeeshop.coffeeshopmanagement.util.ValidationUtil.isValidPhone(compact)
+                        ? com.coffeeshop.coffeeshopmanagement.util.ValidationUtil.normalizePhone(compact) : compact;
+                boolean phoneSearch = phone != null && phone.length() >= 4 && phone.chars().allMatch(Character::isDigit);
+                // Digits alone are an order number and match it exactly: "#12" finds order 12, not 112, 120 or 312 (TODO 3.35).
+                // A number with a leading zero or more than 9 digits is no order number here (it can still be a phone).
+                boolean orderNumber = looksLikeOrderNumber(typed);
+                conditions.add("(" + (orderNumber ? "o.id = ? OR " : "")
+                        + DatabaseConfig.searchKeySql("COALESCE(pe.full_name, e.full_name)") + " LIKE ? ESCAPE '!' OR "
+                        + DatabaseConfig.searchKeySql("c.full_name") + " LIKE ? ESCAPE '!'"
+                        + (phoneSearch ? " OR c.phone LIKE ? ESCAPE '!'" : "") + ")");
+                // Names are compared folded on both sides (TODO 3.31): "nguyen" and "NGUYỄN" both find "Nguyễn", "dao" finds "Đào".
+                String like = "%" + escapeLike(com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.searchKey(typed)) + "%";
+                if (orderNumber) params.add(typed);
                 params.add(like);
                 params.add(like);
-                params.add(like);
+                if (phoneSearch) params.add("%" + escapeLike(phone) + "%");
             }
             whereClause = conditions.isEmpty() ? "" : " WHERE " + String.join(" AND ", conditions);
         }
@@ -366,7 +564,8 @@ public class OrderDAO {
     }
 
     private static final String HISTORY_FROM =
-            " FROM orders o LEFT JOIN employees e ON o.employee_id = e.id LEFT JOIN customers c ON o.customer_id = c.id";
+            " FROM orders o LEFT JOIN employees e ON o.employee_id = e.id LEFT JOIN customers c ON o.customer_id = c.id"
+            + " LEFT JOIN employees pe ON o.paid_by = pe.id";
 
     /** One page of order history, newest first, matching {@code filter} - real server-side
      *  paging (TODO.md: the old {@code findHistory(int limit)} loaded up to 500 rows into
@@ -380,14 +579,21 @@ public class OrderDAO {
     /** Sortable columns of the history screen. Whitelisted here (never built from UI text) so
      *  the ORDER BY can't be used for SQL injection. */
     public enum HistorySortKey {
-        ID("o.id"), DATE("o.order_date"), EMPLOYEE("e.full_name COLLATE NOCASE"),
-        CUSTOMER("c.full_name COLLATE NOCASE"), PAYMENT("o.payment_method"),
-        TOTAL("o.total"), STATUS("o.status");
+        ID("o.id", false), DATE("o.order_date", false), EMPLOYEE("COALESCE(pe.full_name, e.full_name)", true),
+        CUSTOMER("c.full_name", true), PAYMENT("o.payment_method", false),
+        TOTAL("o.total", false), STATUS("o.status", false);
 
-        private final String sql;
+        private final String column;
+        private final boolean text;
 
-        HistorySortKey(String sql) {
-            this.sql = sql;
+        HistorySortKey(String column, boolean text) {
+            this.column = column;
+            this.text = text;
+        }
+
+        /** The ORDER BY expression; text columns sort ignoring capitalisation, which is spelled differently per database. */
+        String sql() {
+            return text ? DatabaseConfig.dialect().caseInsensitive(column) : column;
         }
     }
 
@@ -399,9 +605,9 @@ public class OrderDAO {
     public List<OrderSummary> findHistoryPage(HistoryFilter filter, HistorySort sort, int pageSize, int offset) {
         FilterSql filterSql = new FilterSql(filter);
         HistorySort effective = sort != null ? sort : HistorySort.NEWEST_FIRST;
-        String sql = "SELECT o.*, e.full_name AS employee_name, c.full_name AS customer_name"
+        String sql = "SELECT o.*, COALESCE(pe.full_name, e.full_name) AS employee_name, c.full_name AS customer_name"
                 + HISTORY_FROM + filterSql.whereClause
-                + " ORDER BY " + effective.key().sql + (effective.descending() ? " DESC" : " ASC")
+                + " ORDER BY " + effective.key().sql() + (effective.descending() ? " DESC" : " ASC")
                 + ", o.id DESC LIMIT ? OFFSET ?";
         List<OrderSummary> result = new ArrayList<>();
         try (Connection connection = DatabaseConfig.getConnection();
@@ -418,6 +624,15 @@ public class OrderDAO {
             throw new DataAccessException("Failed to load order history", e);
         }
         return result;
+    }
+
+    /** Most rows one export will write; a shop would need decades of orders to reach it. */
+    public static final int EXPORT_LIMIT = 200_000;
+
+    /** Every order matching {@code filter} in {@code sort} order (up to {@link #EXPORT_LIMIT}) for a CSV export (TODO 4.21). */
+    public List<OrderSummary> findAllForExport(HistoryFilter filter, HistorySort sort) {
+        Permissions.requireAdmin("export orders");
+        return findHistoryPage(filter, sort, EXPORT_LIMIT, 0);
     }
 
     /** Total rows matching {@code filter}, ignoring paging - for the page-count/"N đơn" label. */
@@ -443,6 +658,7 @@ public class OrderDAO {
      * step fails. The order row and its items are kept, so the history stays intact.
      */
     public void cancelPaidOrder(int orderId) {
+        com.coffeeshop.coffeeshopmanagement.util.Permissions.requireAdmin("refund a paid order");
         try (Connection connection = DatabaseConfig.getConnection()) {
             connection.setAutoCommit(false);
             try {
@@ -481,17 +697,22 @@ public class OrderDAO {
                     int points = LoyaltyPolicy.pointsFor(total);
                     if (points > 0) {
                         try (PreparedStatement statement = connection.prepareStatement(
-                                "UPDATE customers SET loyalty_points = MAX(0, loyalty_points - ?) WHERE id = ?")) {
+                                "UPDATE customers SET loyalty_points = CASE WHEN loyalty_points > ? THEN loyalty_points - ? ELSE 0 END "
+                                        + "WHERE id = ?")) {
                             statement.setInt(1, points);
-                            statement.setInt(2, customerId);
+                            statement.setInt(2, points);
+                            statement.setInt(3, customerId);
                             statement.executeUpdate();
                         }
                     }
                 }
                 try (PreparedStatement statement = connection.prepareStatement(
-                        "UPDATE orders SET status = 'CANCELLED' WHERE id = ?")) {
+                        "UPDATE orders SET status = " + SqlStatus.CANCELLED + " WHERE id = ? AND status = " + SqlStatus.PAID)) {
                     statement.setInt(1, orderId);
-                    statement.executeUpdate();
+                    if (statement.executeUpdate() == 0) {
+                        // Somebody else cancelled it between the read and this write: undo the restock/points above.
+                        throw new DataAccessException("Đơn hàng #" + orderId + " vừa được hủy ở nơi khác.");
+                    }
                 }
                 connection.commit();
             } catch (SQLException | RuntimeException e) {
@@ -528,8 +749,47 @@ public class OrderDAO {
         return items;
     }
 
+    /** The latest time recorded on any order (paid time, else opened time), or null when there are no orders. */
+    public LocalDateTime newestActivity() {
+        String sql = "SELECT MAX(COALESCE(paid_at, order_date)) FROM orders";
+        try (Connection connection = DatabaseConfig.getConnection();
+             Statement statement = connection.createStatement();
+             ResultSet rs = statement.executeQuery(sql)) {
+            if (!rs.next() || rs.getString(1) == null) return null;
+            return DbTime.parse(rs.getString(1));
+        } catch (SQLException | RuntimeException e) {
+            return null; // the check is only a courtesy
+        }
+    }
+
     public int countToday() {
-        return countWhere("status <> 'CANCELLED' AND DATE(order_date) = DATE('now', 'localtime')");
+        return countWhere("status <> " + SqlStatus.CANCELLED + " AND " + EFFECTIVE_DAY + " = ?", AppClock.today().toString());
+    }
+
+    /**
+     * OPEN orders that were started more than {@code age} ago, oldest first (TODO 2.11). Nothing closes an order whose table
+     * was never paid or emptied, so these are the ones to look at.
+     */
+    public List<Order> findStaleOpenOrders(java.time.Duration age) {
+        // The cutoff is written the way the database stores order_date (ISO text in SQLite, DATETIME text in MariaDB).
+        String cutoff = DbTime.write(AppClock.now().minus(age));
+        String sql = "SELECT * FROM orders WHERE status = " + SqlStatus.OPEN + " AND order_date < ? ORDER BY order_date";
+        try (Connection connection = DatabaseConfig.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, cutoff);
+            try (ResultSet rs = statement.executeQuery()) {
+                List<Order> orders = new ArrayList<>();
+                while (rs.next()) orders.add(map(rs));
+                return orders;
+            }
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to load stale open orders", e);
+        }
+    }
+
+    /** Orders that were paid and then refunded; tables emptied with an unpaid order are not counted (TODO 2.50). */
+    public int countRefunded() {
+        return countWhere("status = " + SqlStatus.CANCELLED + " AND paid_at IS NOT NULL");
     }
 
     public int countByStatus(OrderStatus status) {
@@ -547,13 +807,14 @@ public class OrderDAO {
     }
 
     public BigDecimal sumRevenueToday() {
-        String sql = "SELECT COALESCE(SUM(total), 0) FROM orders WHERE status = 'PAID' " +
-                "AND DATE(paid_at) = DATE('now', 'localtime')";
+        String sql = "SELECT COALESCE(SUM(total), 0) FROM orders WHERE status = " + SqlStatus.PAID + " AND " + EFFECTIVE_DAY + " = ?";
         try (Connection connection = DatabaseConfig.getConnection();
-             Statement statement = connection.createStatement();
-             ResultSet rs = statement.executeQuery(sql)) {
-            rs.next();
-            return Money.fromDong(rs.getLong(1)); // COALESCE(...,0) guarantees a non-null row
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, AppClock.today().toString());
+            try (ResultSet rs = statement.executeQuery()) {
+                rs.next();
+                return Money.fromDong(rs.getLong(1)); // COALESCE(...,0) guarantees a non-null row
+            }
         } catch (SQLException e) {
             throw new DataAccessException("Failed to sum today's revenue", e);
         }
@@ -561,12 +822,14 @@ public class OrderDAO {
 
     public int countDistinctCustomersToday() {
         String sql = "SELECT COUNT(DISTINCT customer_id) FROM orders " +
-                "WHERE customer_id IS NOT NULL AND status <> 'CANCELLED' AND DATE(order_date) = DATE('now', 'localtime')";
+                "WHERE customer_id IS NOT NULL AND status <> " + SqlStatus.CANCELLED + " AND " + EFFECTIVE_DAY + " = ?";
         try (Connection connection = DatabaseConfig.getConnection();
-             Statement statement = connection.createStatement();
-             ResultSet rs = statement.executeQuery(sql)) {
-            rs.next();
-            return rs.getInt(1);
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, AppClock.today().toString());
+            try (ResultSet rs = statement.executeQuery()) {
+                rs.next();
+                return rs.getInt(1);
+            }
         } catch (SQLException e) {
             throw new DataAccessException("Failed to count today's customers", e);
         }
@@ -578,19 +841,21 @@ public class OrderDAO {
      */
     public Map<LocalDate, BigDecimal> revenueForLast7Days() {
         Map<LocalDate, BigDecimal> byDate = new LinkedHashMap<>();
-        LocalDate today = LocalDate.now();
+        LocalDate today = AppClock.today();
         for (int i = 6; i >= 0; i--) {
             byDate.put(today.minusDays(i), BigDecimal.ZERO);
         }
-        String sql = "SELECT DATE(paid_at) AS d, SUM(total) AS revenue FROM orders " +
-                "WHERE status = 'PAID' AND paid_at IS NOT NULL AND DATE(paid_at) >= DATE('now', '-6 days', 'localtime') " +
-                "GROUP BY DATE(paid_at)";
+        String sql = "SELECT " + EFFECTIVE_DAY + " AS d, SUM(total) AS revenue FROM orders " +
+                "WHERE status = " + SqlStatus.PAID + " AND " + EFFECTIVE_DAY + " >= ? " +
+                "GROUP BY " + EFFECTIVE_DAY;
         try (Connection connection = DatabaseConfig.getConnection();
-             Statement statement = connection.createStatement();
-             ResultSet rs = statement.executeQuery(sql)) {
-            while (rs.next()) {
-                LocalDate date = LocalDate.parse(rs.getString("d"));
-                byDate.put(date, Money.fromDong(rs.getLong("revenue")));
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, today.minusDays(6).toString());
+            try (ResultSet rs = statement.executeQuery()) {
+                while (rs.next()) {
+                    LocalDate date = LocalDate.parse(rs.getString("d"));
+                    byDate.put(date, Money.fromDong(rs.getLong("revenue")));
+                }
             }
         } catch (SQLException e) {
             throw new DataAccessException("Failed to load 7-day revenue", e);
@@ -598,13 +863,17 @@ public class OrderDAO {
         return byDate;
     }
 
-    private int countWhere(String whereClause) {
+    private int countWhere(String whereClause, String... params) {
         String sql = "SELECT COUNT(*) FROM orders WHERE " + whereClause;
         try (Connection connection = DatabaseConfig.getConnection();
-             Statement statement = connection.createStatement();
-             ResultSet rs = statement.executeQuery(sql)) {
-            rs.next();
-            return rs.getInt(1);
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            for (int i = 0; i < params.length; i++) {
+                statement.setString(i + 1, params[i]);
+            }
+            try (ResultSet rs = statement.executeQuery()) {
+                rs.next();
+                return rs.getInt(1);
+            }
         } catch (SQLException e) {
             throw new DataAccessException("Failed to count orders", e);
         }
@@ -621,7 +890,7 @@ public class OrderDAO {
     private Order map(ResultSet rs) throws SQLException {
         Order order = new Order();
         order.setId(rs.getInt("id"));
-        order.setOrderDate(LocalDateTime.parse(rs.getString("order_date")));
+        order.setOrderDate(DbTime.parse(rs.getString("order_date")));
         int employeeId = rs.getInt("employee_id");
         order.setEmployeeId(rs.wasNull() ? null : employeeId);
         int customerId = rs.getInt("customer_id");
@@ -632,17 +901,26 @@ public class OrderDAO {
         order.setTotal(Money.fromDong(rs.getLong("total")));
         order.setPaymentMethod(PaymentMethod.fromDb(rs.getString("payment_method")));
         String paidAt = rs.getString("paid_at");
-        order.setPaidAt(paidAt != null ? LocalDateTime.parse(paidAt) : null);
-        try {
-            int tableNumber = rs.getInt("table_number");
-            order.setTableNumber(rs.wasNull() ? null : tableNumber);
-        } catch (SQLException ignored) {
-        }
+        order.setPaidAt(DbTime.parse(paidAt));
+        // Every caller selects the whole orders row (SELECT * / o.*), and the column is in the CREATE TABLE and added by a
+        // checked migration to older databases, so a failure here is a real error and must not be swallowed (TODO 6.12).
+        int tableNumber = rs.getInt("table_number");
+        order.setTableNumber(rs.wasNull() ? null : tableNumber);
         try {
             order.setDiscountReason(rs.getString("discount_reason"));
         } catch (SQLException ignored) {
             // a query that does not select this column
         }
         return order;
+    }
+
+    /** True when the product exists but was switched off ("ngừng bán"): the sale is refused, with a clearer message (TODO 3.34). */
+    private static boolean isSwitchedOff(Connection connection, int productId) throws SQLException {
+        try (PreparedStatement st = connection.prepareStatement("SELECT active FROM products WHERE id = ?")) {
+            st.setInt(1, productId);
+            try (ResultSet rs = st.executeQuery()) {
+                return rs.next() && rs.getInt(1) == 0;
+            }
+        }
     }
 }

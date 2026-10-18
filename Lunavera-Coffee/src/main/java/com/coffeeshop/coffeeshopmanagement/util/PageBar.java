@@ -23,6 +23,7 @@ public class PageBar extends HBox {
     private int currentPage = 1;
     private int totalItems;
     private boolean updating;
+    private String rememberKey;
     private Runnable onChange = () -> { };
 
     public PageBar(int defaultSize, int... sizes) {
@@ -38,6 +39,7 @@ public class PageBar extends HBox {
         sizeBox.setOnAction(e -> {
             if (updating) return;
             pageSize = parse(sizeBox.getValue());
+            if (rememberKey != null && sizeBox.getValue() != null) UiSettings.put(rememberKey, sizeBox.getValue());
             currentPage = 1;
             rebuild();
             onChange.run();
@@ -58,6 +60,17 @@ public class PageBar extends HBox {
         }
     }
 
+    /** Starts with the page size chosen last time under {@code key} and saves every later choice (TODO 5.9). */
+    public PageBar remember(String key) {
+        String saved = UiSettings.get(key, null);
+        if (saved != null && sizeBox.getItems().contains(saved)) {
+            sizeBox.setValue(saved);
+            pageSize = parse(saved);
+        }
+        rememberKey = key;
+        return this;
+    }
+
     public void setOnChange(Runnable onChange) {
         this.onChange = onChange != null ? onChange : () -> { };
     }
@@ -73,7 +86,7 @@ public class PageBar extends HBox {
 
     /** Moves to a page without firing the change callback (the caller is already reloading). */
     public void setCurrentPage(int page) {
-        currentPage = Math.max(1, Math.min(page, totalPages()));
+        currentPage = PageMath.clamp(page, totalPages());
         rebuild();
     }
 
@@ -86,7 +99,7 @@ public class PageBar extends HBox {
 
     public int totalPages() {
         if (pageSize == ALL) return 1;
-        return Math.max(1, (int) Math.ceil(totalItems / (double) pageSize));
+        return PageMath.totalPages(totalItems, pageSize);
     }
 
     private void go(int page) {
@@ -108,9 +121,7 @@ public class PageBar extends HBox {
 
         int last = 0;
         for (int page = 1; page <= pages; page++) {
-            boolean show = page == 1 || page == pages || Math.abs(page - currentPage) <= 1
-                    || (currentPage <= 3 && page <= 4) || (currentPage >= pages - 2 && page >= pages - 3);
-            if (!show) continue;
+            if (!PageMath.isShown(page, currentPage, pages)) continue;
             if (last != 0 && page - last > 1) {
                 Label dots = new Label("…");
                 dots.getStyleClass().add("table-footer");

@@ -42,10 +42,15 @@ final class MenuSeeder {
     private MenuSeeder() {
     }
 
+    /** Why the last seeding attempt failed, or null; shown once at start-up so an empty menu is not a mystery. */
+    private static volatile String failure;
+
+    static String failure() {
+        return failure;
+    }
+
     static void seedIfNeeded(Connection connection) throws SQLException {
-        try (Statement statement = connection.createStatement()) {
-            statement.execute("CREATE TABLE IF NOT EXISTS app_flags (name TEXT PRIMARY KEY)");
-        }
+        DatabaseConfig.ensureFlagsTable(connection);
         try (PreparedStatement check = connection.prepareStatement("SELECT 1 FROM app_flags WHERE name = ?")) {
             check.setString(1, FLAG_NAME);
             try (ResultSet rs = check.executeQuery()) {
@@ -57,6 +62,8 @@ final class MenuSeeder {
 
         boolean autoCommit = connection.getAutoCommit();
         connection.setAutoCommit(false);
+        List<String> copiedPictures = new java.util.ArrayList<>();
+        failure = null;
         try {
             Map<String, Integer> categoryIds = new HashMap<>();
             for (String categoryName : distinctCategoryNames()) {
@@ -66,6 +73,7 @@ final class MenuSeeder {
             Path imagesDir = ImageStorage.directory();
             for (MenuSeedData.MenuItem item : MenuSeedData.ITEMS) {
                 String storedImageName = copySeedImage(item.imageResource(), imagesDir);
+                if (storedImageName != null) copiedPictures.add(storedImageName);
                 insertProduct(connection, item, categoryIds.get(item.category()), storedImageName);
             }
 
@@ -74,10 +82,14 @@ final class MenuSeeder {
                 insertFlag.setString(1, FLAG_NAME);
                 insertFlag.executeUpdate();
             }
+            AppFlags.set(connection, AppFlags.REVIEW_MENU_NOTICE); // the admin is told once to check these made-up prices
             connection.commit();
             LOGGER.info("Seeded the starter menu (" + MenuSeedData.ITEMS.size() + " products).");
         } catch (SQLException | IOException | RuntimeException e) {
             connection.rollback();
+            // The pictures copied so far belong to a menu that was rolled back: remove them, so a retry does not pile up copies (TODO 3.38).
+            for (String name : copiedPictures) ImageStorage.deleteQuietly(name);
+            failure = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
             LOGGER.log(Level.WARNING, "Starter menu seeding failed; will retry on next launch", e);
         } finally {
             connection.setAutoCommit(autoCommit);

@@ -83,15 +83,23 @@ final class MoneyMigration {
                     "id, name, category_id, CAST(ROUND(price) AS INTEGER), CAST(ROUND(cost) AS INTEGER), " +
                             "stock, description, image_path, active");
 
+            // The rebuilt orders table must keep the two columns added after the first release. They are made sure of
+            // here (not only by DatabaseConfig, which happens to add them first), so this migration is correct on its
+            // own and a database that never had them gets them empty instead of the migration copying columns that are not there.
+            DatabaseConfig.addColumnIfMissing(connection, "orders", "table_number", "INTEGER");
+            DatabaseConfig.addColumnIfMissing(connection, "orders", "discount_reason", "TEXT");
+            DatabaseConfig.addColumnIfMissing(connection, "orders", "paid_by", "INTEGER");
             migrateTable(statement, "orders",
                     "id INTEGER PRIMARY KEY AUTOINCREMENT, order_date TEXT NOT NULL, employee_id INTEGER, " +
                             "customer_id INTEGER, status TEXT NOT NULL DEFAULT 'OPEN', " +
                             "subtotal INTEGER NOT NULL DEFAULT 0, discount INTEGER NOT NULL DEFAULT 0, " +
                             "total INTEGER NOT NULL DEFAULT 0, payment_method TEXT, paid_at TEXT, " +
+                            "table_number INTEGER, discount_reason TEXT, paid_by INTEGER, " +
                             "FOREIGN KEY (employee_id) REFERENCES employees(id), " +
                             "FOREIGN KEY (customer_id) REFERENCES customers(id)",
                     "id, order_date, employee_id, customer_id, status, CAST(ROUND(subtotal) AS INTEGER), " +
-                            "CAST(ROUND(discount) AS INTEGER), CAST(ROUND(total) AS INTEGER), payment_method, paid_at");
+                            "CAST(ROUND(discount) AS INTEGER), CAST(ROUND(total) AS INTEGER), payment_method, paid_at, " +
+                            "table_number, discount_reason, paid_by");
 
             migrateTable(statement, "order_items",
                     "id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL, product_id INTEGER, " +

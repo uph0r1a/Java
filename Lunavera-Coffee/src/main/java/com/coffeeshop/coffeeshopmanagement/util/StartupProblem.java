@@ -17,7 +17,37 @@ public final class StartupProblem {
 
     /** What to show: what happened in one line, the likely causes, where the data and the log are, and what to do. */
     public static String describe(Throwable error) {
-        return describe(error, safe(DataPaths::dataDir), safe(DataPaths::logsDir), safe(DataPaths::backupsDir));
+        return describe(error, safe(DataPaths::dataDir), safe(DataPaths::logsDir), safe(DataPaths::backupsDir))
+                + serverHint();
+    }
+
+    /**
+     * Extra lines when the shop uses a MariaDB/MySQL server: the most common reason it will not open is that the
+     * server is not running or the settings in data/database.properties are wrong. Empty for SQLite (and if the
+     * settings themselves cannot be read, the technical detail above already says why).
+     */
+    static String serverHint() {
+        try {
+            return serverHint(com.coffeeshop.coffeeshopmanagement.config.DatabaseSettings.load(),
+                    com.coffeeshop.coffeeshopmanagement.config.DatabaseSettings.fileExists());
+        } catch (RuntimeException e) {
+            return "";
+        }
+    }
+
+    static String serverHint(com.coffeeshop.coffeeshopmanagement.config.DatabaseSettings settings, boolean settingsFileExists) {
+        if (!settings.isMariaDb()) {
+            return "";
+        }
+        String hint = "\n\nCửa hàng đang dùng máy chủ cơ sở dữ liệu: " + settings.describe() + ".\n";
+        if (!settingsFileExists) {
+            hint += "Chưa có tệp " + DataPaths.dataDir().resolve("database.properties") + ". Hãy chép database.properties.example "
+                    + "(trong thư mục dự án) vào đó rồi điền máy chủ, tên, tài khoản, mật khẩu (xem docs/DATABASE.md). "
+                    + "Muốn dùng tệp SQLite thay cho máy chủ thì ghi db.type=sqlite.\n";
+        }
+        return hint + "Hãy kiểm tra: máy chủ MariaDB/MySQL (ví dụ XAMPP) đã được bật chưa, máy này có nối mạng tới máy chủ không, "
+                + "và tên, tài khoản, mật khẩu trong " + DataPaths.dataDir().resolve("database.properties") + " có đúng không. "
+                + "Không có máy chủ thì không bán hàng được; dữ liệu vẫn nằm an toàn trên máy chủ.";
     }
 
     static String describe(Throwable error, String dataDir, String logsDir, String backupsDir) {

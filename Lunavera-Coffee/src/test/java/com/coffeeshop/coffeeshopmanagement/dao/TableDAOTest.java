@@ -1,5 +1,6 @@
 package com.coffeeshop.coffeeshopmanagement.dao;
 
+import com.coffeeshop.coffeeshopmanagement.util.AppClock;
 import com.coffeeshop.coffeeshopmanagement.model.DiningTable;
 import com.coffeeshop.coffeeshopmanagement.model.Order;
 import com.coffeeshop.coffeeshopmanagement.model.OrderStatus;
@@ -35,7 +36,7 @@ public class TableDAOTest {
 
     private Order openOrderOn(int tableNumber) {
         Order order = new Order();
-        order.setOrderDate(LocalDateTime.now());
+        order.setOrderDate(AppClock.now());
         order.setTableNumber(tableNumber);
         order.setStatus(OrderStatus.OPEN);
         order.setSubtotal(BigDecimal.ZERO);
@@ -90,5 +91,60 @@ public class TableDAOTest {
 
         assertFalse(table(3).isOccupied());
         assertEquals(OrderStatus.CANCELLED, orderDAO.findById(open.getId()).orElseThrow().getStatus());
+    }
+
+    // ---------------------------------------------------------------- TODO 2.53: one source of truth
+
+    private static com.coffeeshop.coffeeshopmanagement.model.OrderItem line() {
+        com.coffeeshop.coffeeshopmanagement.model.OrderItem item = new com.coffeeshop.coffeeshopmanagement.model.OrderItem();
+        item.setProductName("Test");
+        item.setQuantity(1);
+        item.setUnitPrice(BigDecimal.valueOf(20_000));
+        item.setLineTotal(BigDecimal.valueOf(20_000));
+        return item;
+    }
+
+    @Test
+    public void anOrderAloneMakesTheTableOccupiedAndLeavesNoHandMadeMark() {
+        openOrderOn(10);
+        assertTrue(table(10).isOccupied());
+        assertFalse("the order is the reason, not a stored mark", tableDAO.holdsWithoutOrder().contains(10));
+        tableDAO.setEmpty(10);
+    }
+
+    @Test
+    public void aHandMadeMarkWithoutAnOrderIsListedSoItCanBeFlagged() {
+        tableDAO.setOccupied(11, null);
+        assertTrue(tableDAO.holdsWithoutOrder().contains(11));
+        String text = com.coffeeshop.coffeeshopmanagement.service.DashboardStatsService.heldTablesWarning(List.of(11));
+        assertTrue(text, text.contains("bàn 11"));
+        assertNull(com.coffeeshop.coffeeshopmanagement.service.DashboardStatsService.heldTablesWarning(List.of()));
+        tableDAO.setEmpty(11);
+        assertFalse(tableDAO.holdsWithoutOrder().contains(11));
+    }
+
+    @Test
+    public void payingAnOrderOnAMarkedTableClearsTheMarkInTheSameTransaction() {
+        tableDAO.setOccupied(12, null);
+        Order open = openOrderOn(12);
+        orderDAO.payExistingOrder(open.getId(), null, com.coffeeshop.coffeeshopmanagement.model.PaymentMethod.CASH,
+                BigDecimal.ZERO, BigDecimal.valueOf(20_000), List.of(line()));
+        assertFalse(table(12).isOccupied());
+        assertFalse(tableDAO.holdsWithoutOrder().contains(12));
+    }
+
+    @Test
+    public void aSaleSavedStraightAsPaidClearsAMarkOnItsTable() {
+        tableDAO.setOccupied(9, null);
+        Order paid = new Order();
+        paid.setOrderDate(AppClock.now());
+        paid.setPaidAt(AppClock.now());
+        paid.setTableNumber(9);
+        paid.setStatus(OrderStatus.PAID);
+        paid.setSubtotal(BigDecimal.valueOf(20_000));
+        paid.setDiscount(BigDecimal.ZERO);
+        paid.setTotal(BigDecimal.valueOf(20_000));
+        orderDAO.insert(paid, List.of(line()));
+        assertFalse(table(9).isOccupied());
     }
 }

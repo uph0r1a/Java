@@ -4,6 +4,8 @@ import com.coffeeshop.coffeeshopmanagement.dao.UserDAO;
 import com.coffeeshop.coffeeshopmanagement.model.AccountStatus;
 import com.coffeeshop.coffeeshopmanagement.model.User;
 
+import com.coffeeshop.coffeeshopmanagement.util.SecurityLog;
+
 import java.util.Optional;
 
 public class AuthenticationService {
@@ -53,24 +55,48 @@ public class AuthenticationService {
         String name = username == null ? "" : username.trim();
         long wait = throttle.secondsUntilAllowed(name);
         if (wait > 0) {
+            SecurityLog.warn("login blocked for '" + SecurityLog.clean(name) + "' (too many wrong passwords), " + wait + " s left");
             return new LoginResult(LoginStatus.TOO_MANY_ATTEMPTS, null, wait);
         }
-        Optional<User> found = userDAO.findByUsername(name);
+        // Customers never sign in (only admin and staff do); an old CUSTOMER row is treated as unknown.
+        Optional<User> found = userDAO.findByUsername(name)
+                .filter(u -> u.getRole() != com.coffeeshop.coffeeshopmanagement.model.Role.CUSTOMER);
         if (found.isEmpty()) {
             PasswordUtil.matches(password, dummyHash()); // same cost as a real check
             throttle.recordFailure(name);
+            SecurityLog.warn("failed login: no such user '" + SecurityLog.clean(name) + "'");
             return LoginResult.of(LoginStatus.INVALID_CREDENTIALS);
         }
         User user = found.get();
         if (!PasswordUtil.matches(password, user.getPasswordHash())) {
             throttle.recordFailure(name);
+            SecurityLog.warn("failed login: wrong password for '" + SecurityLog.clean(name) + "' (user id " + user.getId() + ")");
             return LoginResult.of(LoginStatus.INVALID_CREDENTIALS);
         }
         // A locked account is only reported to someone who knows its password.
         if (user.getStatus() == AccountStatus.LOCKED) {
+            SecurityLog.warn("login refused: locked account '" + SecurityLog.clean(name) + "' (user id " + user.getId() + ")");
             return LoginResult.of(LoginStatus.INACTIVE);
         }
         throttle.recordSuccess(name);
+        SecurityLog.event("login: " + user.getUsername() + " (id " + user.getId() + ", " + user.getRole() + ")");
+        upgradeHashIfOld(user, password);
         return new LoginResult(LoginStatus.SUCCESS, user, 0);
+    }
+
+    /**
+     * The password was just proven right, so it is the moment to store it with today's iteration count (TODO 2.12).
+     * A failure here is only logged: the person is logged in either way and it is retried at the next login.
+     */
+    private void upgradeHashIfOld(User user, String password) {
+        if (!PasswordUtil.needsRehash(user.getPasswordHash())) return;
+        try {
+            String fresh = PasswordUtil.hash(password);
+            userDAO.updatePasswordHash(user.getId(), fresh);
+            user.setPasswordHash(fresh);
+        } catch (RuntimeException e) {
+            java.util.logging.Logger.getLogger(AuthenticationService.class.getName())
+                    .log(java.util.logging.Level.WARNING, "Could not upgrade the password hash of user " + user.getId(), e);
+        }
     }
 }

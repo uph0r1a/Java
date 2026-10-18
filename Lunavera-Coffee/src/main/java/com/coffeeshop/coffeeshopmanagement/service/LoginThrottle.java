@@ -6,24 +6,26 @@ import java.util.Map;
 import java.util.function.LongSupplier;
 
 /**
- * Slows down password guessing: after {@value #MAX_FAILURES} wrong attempts in a row for a
- * username, further attempts for it are refused for 30 seconds, then 60, 120... up to 5 minutes.
- * A correct login resets it. It is a delay, never a permanent lock, so nobody (the only admin
- * included) can be locked out for good. State lives in memory for the running app.
+ * Slows down password guessing without ever locking anybody out: the first {@value #FREE_FAILURES}
+ * wrong attempts in a row for a username are free (typos), then every further wrong attempt makes
+ * the next one wait longer: 1, 2, 4, 8, 16 and then 30 seconds at most. A correct login resets it,
+ * and so does {@value #FORGET_AFTER_MILLIS} ms without any wrong attempt. State lives in memory
+ * for the running app (surviving a restart needs a table, planned after the MariaDB merge).
  *
  * <p>Usernames that do not exist are throttled exactly like real ones, so the throttle itself does
  * not reveal which usernames exist.
  */
 public final class LoginThrottle {
 
-    static final int MAX_FAILURES = 5;
-    private static final long BASE_LOCK_MILLIS = 30_000;
-    private static final long MAX_LOCK_MILLIS = 5 * 60_000;
+    static final int FREE_FAILURES = 2;
+    private static final long BASE_DELAY_MILLIS = 1_000;
+    private static final long MAX_DELAY_MILLIS = 30_000;
+    private static final long FORGET_AFTER_MILLIS = 15 * 60_000;
     private static final int MAX_TRACKED = 1000;
 
     private static final class State {
         int failures;
-        int lockouts;
+        long lastFailure;
         long blockedUntil;
     }
 
@@ -55,12 +57,14 @@ public final class LoginThrottle {
             states.clear(); // bounded memory; an attacker flooding names only resets everyone's counters
         }
         State state = states.computeIfAbsent(key(username), k -> new State());
+        long now = clock.getAsLong();
+        if (now - state.lastFailure > FORGET_AFTER_MILLIS) state.failures = 0;
+        state.lastFailure = now;
         state.failures++;
-        if (state.failures >= MAX_FAILURES) {
-            long lock = Math.min(MAX_LOCK_MILLIS, BASE_LOCK_MILLIS << Math.min(state.lockouts, 4));
-            state.blockedUntil = clock.getAsLong() + lock;
-            state.lockouts++;
-            state.failures = 0;
+        int extra = state.failures - FREE_FAILURES;
+        if (extra > 0) {
+            long delay = Math.min(MAX_DELAY_MILLIS, BASE_DELAY_MILLIS << Math.min(extra - 1, 5));
+            state.blockedUntil = now + delay;
         }
     }
 

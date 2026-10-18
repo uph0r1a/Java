@@ -6,6 +6,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.PosixFileAttributeView;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.LocalDateTime;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -65,6 +67,49 @@ public final class DataPaths {
         return dataDir().resolve("logs");
     }
 
+    /** Hourly SQLite copies of a MariaDB database (see SqliteSnapshotService). */
+    public static Path snapshotsDir() {
+        return dataDir().resolve("snapshots");
+    }
+
+    /**
+     * Where short-lived copies go while a backup is made or checked (TODO 2A.21). They hold customer data and password hashes,
+     * so they stay inside the owner-only data folder instead of the system temp folder that every user of the PC can list.
+     */
+    public static Path tmpDir() {
+        return dataDir().resolve("tmp");
+    }
+
+    /** A new empty file in {@link #tmpDir()} (the folder is made if needed). */
+    public static Path createTempFile(String prefix, String suffix) throws IOException {
+        Path dir = Files.createDirectories(tmpDir());
+        return Files.createTempFile(dir, prefix, suffix);
+    }
+
+    /**
+     * Removes what a crash left in {@link #tmpDir()}. Called once at start-up, after the single-instance lock is held, so no
+     * other copy of the app can be using those files. Never throws.
+     *
+     * @return how many files were removed
+     */
+    public static int cleanTmp() {
+        Path dir = tmpDir();
+        int removed = 0;
+        if (!Files.isDirectory(dir)) return 0;
+        try (java.util.stream.Stream<Path> files = Files.list(dir)) {
+            for (Path file : (Iterable<Path>) files::iterator) {
+                try {
+                    if (Files.isRegularFile(file) && Files.deleteIfExists(file)) removed++;
+                } catch (IOException e) {
+                    LOGGER.log(Level.WARNING, "Could not remove a leftover temporary file: " + file, e);
+                }
+            }
+        } catch (IOException e) {
+            LOGGER.log(Level.WARNING, "Could not list the temporary folder: " + dir, e);
+        }
+        return removed;
+    }
+
     public static Path backupsDir() {
         return dataDir().resolve("backups");
     }
@@ -77,6 +122,29 @@ public final class DataPaths {
     /** True if {@code path} is the data folder or anything inside it (e.g. a backup saved next to the live data). */
     public static boolean isInsideDataDir(Path path) {
         return path != null && path.toAbsolutePath().normalize().startsWith(dataDir());
+    }
+
+    /**
+     * Makes the data folder readable only by the user who runs the app (mode {@code rwx------}), because it holds customer
+     * phone numbers, password hashes and backups (TODO 2A.4, 2A.14). Only the folder itself is changed: nothing inside it can be
+     * reached by other users while the folder is closed to them. Works on Linux and macOS. On Windows (no POSIX permissions) it
+     * does nothing and returns false; there the folder's rights come from the place it sits in (see the README).
+     * Never throws: a folder that cannot be changed (not ours, read-only file system) is only logged.
+     *
+     * @return true if the folder is now owner-only
+     */
+    public static boolean restrictToOwner(Path dir) {
+        if (dir == null) return false;
+        try {
+            PosixFileAttributeView view = Files.getFileAttributeView(dir, PosixFileAttributeView.class);
+            if (view == null || !Files.isDirectory(dir)) return false;
+            if (Files.getPosixFilePermissions(dir).equals(PosixFilePermissions.fromString("rwx------"))) return true;
+            Files.setPosixFilePermissions(dir, PosixFilePermissions.fromString("rwx------"));
+            return true;
+        } catch (IOException | UnsupportedOperationException | SecurityException e) {
+            LOGGER.log(Level.WARNING, "Could not make the data folder owner-only: " + dir, e);
+            return false;
+        }
     }
 
     /**
@@ -101,6 +169,12 @@ public final class DataPaths {
                 || Files.exists(target.resolve(DATABASE_FILE_NAME))
                 || !Files.isRegularFile(legacyDb)) {
             return false;
+        }
+        // A journal next to the old database means the old app is still open (or crashed mid-write): a copy now could be
+        // inconsistent (TODO 3.40).
+        if (Files.exists(legacy.resolve(DATABASE_FILE_NAME + "-journal")) || Files.exists(legacy.resolve(DATABASE_FILE_NAME + "-wal"))) {
+            throw new IllegalStateException("Dữ liệu cũ ở " + legacy + " đang được một bản Lunavera cũ sử dụng. "
+                    + "Hãy đóng bản cũ rồi mở lại chương trình để chuyển dữ liệu. Dữ liệu cũ vẫn còn nguyên.");
         }
         Path temporary = target.resolve(DATABASE_FILE_NAME + ".copying");
         try {

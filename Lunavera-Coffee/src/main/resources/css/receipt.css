@@ -1,0 +1,175 @@
+/* =========================================================
+   LUNAVERA COFFEE - HÓA ĐƠN (cửa sổ xem và bản in)
+   Paper-like sheet: white background, dark text, large total.
+   The font comes from app.css (added by AppStyle to every window).
+   ========================================================= */
+
+.invoice-scroller {
+    -fx-background-color: #ffffff;
+    -fx-background: #ffffff;
+    -fx-padding: 0;
+}
+
+.invoice-root {
+    -fx-background-color: #ffffff;
+}
+
+.invoice-shop-name {
+    -fx-font-size: 22px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #3f5f2a;
+}
+
+.invoice-title {
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #222222;
+}
+
+.invoice-subtitle {
+    -fx-font-size: 12px;
+    -fx-text-fill: #666666;
+}
+
+.invoice-cancelled-banner {
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #ffffff;
+    -fx-background-color: #b3261e;
+    -fx-padding: 6 14 6 14;
+    -fx-background-radius: 4;
+}
+
+.invoice-label {
+    -fx-font-size: 13px;
+    -fx-text-fill: #666666;
+}
+
+.invoice-value {
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #222222;
+}
+
+.detail-title {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #222222;
+}
+
+.invoice-table {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #d5d9cf;
+    -fx-border-width: 1;
+}
+
+.invoice-table .column-header-background {
+    -fx-background-color: #eef3e6;
+}
+
+.invoice-table .column-header .label {
+    -fx-text-fill: #3f5f2a;
+    -fx-font-weight: bold;
+}
+
+.invoice-table .table-cell {
+    -fx-text-fill: #222222;
+    -fx-font-size: 13px;
+}
+
+.invoice-table .table-row-cell {
+    -fx-background-color: #ffffff;
+    -fx-table-cell-border-color: #eeeeee;
+}
+
+.empty-label {
+    -fx-text-fill: #888888;
+}
+
+.total-label {
+    -fx-font-size: 13px;
+    -fx-text-fill: #555555;
+}
+
+.total-value {
+    -fx-font-size: 13px;
+    -fx-text-fill: #222222;
+}
+
+.grand-total-label {
+    -fx-font-size: 17px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #222222;
+}
+
+.grand-total-value {
+    -fx-font-size: 22px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #3f5f2a;
+}
+
+.payment-method {
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #222222;
+}
+
+.qr-section {
+    -fx-padding: 6 0 0 0;
+}
+
+.qr-title {
+    -fx-font-size: 12px;
+    -fx-text-fill: #666666;
+}
+
+.qr-container {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #d5d9cf;
+    -fx-border-width: 1;
+}
+
+.qr-order-id {
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #222222;
+}
+
+.qr-subtitle {
+    -fx-font-size: 11px;
+    -fx-text-fill: #888888;
+}
+
+.invoice-footer-shop {
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #3f5f2a;
+}
+
+.invoice-footer-text {
+    -fx-font-size: 12px;
+    -fx-text-fill: #666666;
+}
+
+.print-button {
+    -fx-background-color: #5b7e45;
+    -fx-text-fill: #ffffff;
+    -fx-font-weight: bold;
+    -fx-background-radius: 6;
+    -fx-cursor: hand;
+}
+
+.print-button:hover {
+    -fx-background-color: #4a6a37;
+}
+
+.close-button {
+    -fx-background-color: #eef0ea;
+    -fx-text-fill: #333333;
+    -fx-background-radius: 6;
+    -fx-cursor: hand;
+}
+
+.close-button:hover {
+    -fx-background-color: #dfe3d8;
+}

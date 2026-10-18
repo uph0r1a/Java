@@ -18,6 +18,10 @@ public final class Money {
 
     /** For a NOT NULL money column. */
     public static long toDong(BigDecimal value) {
+        // An exponent such as 1e9999999 made setScale(0) run for seconds (TODO 2.40): refuse it before any rounding.
+        if (value.precision() - value.scale() > 18 || value.scale() > 1000) {
+            throw new ArithmeticException("Số tiền quá lớn hoặc không hợp lệ.");
+        }
         return value.setScale(0, RoundingMode.HALF_UP).longValueExact();
     }
 

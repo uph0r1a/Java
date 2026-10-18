@@ -1,0 +1,30 @@
+# Lunavera Coffee - which database to use.
+#
+# Copy this file to  data/database.properties  (next to data/lunavera.db) and edit it.
+# That file holds the database PASSWORD: it is outside git on purpose (data/ is in .gitignore). Never commit or share it.
+# Without the file the app looks for a MariaDB/MySQL server on this computer (127.0.0.1:3306, database "lunavera") and
+# stops at start-up if there is none. For the old SQLite file instead, write db.type=sqlite here.
+# Full guide: docs/DATABASE.md
+
+# mariadb (default) | mysql | sqlite
+db.type=mariadb
+
+# The server. 127.0.0.1 = the same computer; use the shop PC's address (for example 192.168.1.20) on the other tills.
+db.host=127.0.0.1
+db.port=3306
+
+# The database and a user that is NOT root (see docs/DATABASE.md for the two commands that create them).
+db.name=lunavera
+db.user=lunavera
+db.password=change-me-to-a-long-password
+
+# Once: copy the shop's old SQLite data (data/lunavera.db) into MariaDB at the next start. It replaces the starter data a first
+# start creates, and is skipped when MariaDB already holds real data (customers, orders, other accounts, your own products).
+# Nothing happens if the file does not exist. See docs/DATABASE.md section 4.
+db.import.sqlite=data/lunavera.db
+
+# Optional: the page the "Mở phpMyAdmin" button on the admin dashboard opens (http:// or https:// only).
+#db.phpmyadmin=http://localhost/phpmyadmin/
+
+# Optional: full path of mysqldump (used by the backup button). XAMPP on Windows:
+#db.mysqldump=C:\\xampp\\mysql\\bin\\mysqldump.exe

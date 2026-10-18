@@ -27,7 +27,7 @@
             stylesheets="@../css/employee-trangchu.css"
             xmlns="http://javafx.com/javafx/21"
             xmlns:fx="http://javafx.com/fxml/1"
-            fx:controller="org.example.controller.EmployeeController"
+            fx:controller="com.coffeeshop.coffeeshopmanagement.controller.EmployeeController"
             styleClass="dashboard">
 
     <!-- SIDEBAR -->

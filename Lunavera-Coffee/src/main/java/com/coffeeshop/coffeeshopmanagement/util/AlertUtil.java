@@ -32,6 +32,11 @@ public final class AlertUtil {
     }
 
     public static void error(String title, String message) {
+        show(Alert.AlertType.ERROR, title, ErrorText.forScreen(message));
+    }
+
+    /** For the start-up failure only: the person fixing the installation needs the folders and the technical reason. */
+    public static void errorWithDetails(String title, String message) {
         show(Alert.AlertType.ERROR, title, message);
     }
 
@@ -47,7 +52,7 @@ public final class AlertUtil {
         alert.setTitle(title);
         alert.setHeaderText(null);
         configure(alert);
-        setDefaultButton(alert, yes);
+        setDefaultButton(alert, no); // Enter = "Không": a habitual Enter must not delete or refund (TODO 2.60)
         setCancelButton(alert, no);
         Optional<ButtonType> result = alert.showAndWait();
         return result.isPresent() && result.get() == yes;
@@ -115,6 +120,59 @@ public final class AlertUtil {
         Node node = dialog.getDialogPane().lookupButton(buttonType);
         if (node instanceof Button button) {
             button.setCancelButton(true);
+        }
+    }
+
+    /**
+     * Esc, the Cancel button and the window's X no longer throw away a half-filled form without asking (TODO 3.20):
+     * when anything in the form differs from how it looked when the dialog opened, "Bỏ thay đổi?" is asked first
+     * (the default answer is "Không"). Nothing changed: it closes at once. Call before {@code showAndWait()}.
+     */
+    public static void confirmBeforeDiscarding(Dialog<?> dialog, ButtonType cancelType) {
+        String[] initial = {null};
+        dialog.setOnShown(e -> initial[0] = formState(dialog.getDialogPane().getContent()));
+        java.util.function.BooleanSupplier mayClose = () -> initial[0] == null
+                || initial[0].equals(formState(dialog.getDialogPane().getContent()))
+                || confirm("Bỏ thay đổi?", "Bạn đã nhập hoặc sửa thông tin nhưng chưa lưu. Bỏ các thay đổi này?");
+        Node cancel = dialog.getDialogPane().lookupButton(cancelType);
+        if (cancel != null) {
+            cancel.addEventFilter(javafx.event.ActionEvent.ACTION, ev -> {
+                if (!mayClose.getAsBoolean()) ev.consume();
+            });
+        }
+        dialog.getDialogPane().sceneProperty().addListener((o, a, scene) -> {
+            if (scene != null) {
+                scene.windowProperty().addListener((o2, w1, window) -> {
+                    if (window != null) {
+                        window.addEventFilter(javafx.stage.WindowEvent.WINDOW_CLOSE_REQUEST, ev -> {
+                            if (!mayClose.getAsBoolean()) ev.consume();
+                        });
+                    }
+                });
+            }
+        });
+    }
+
+    /** What the person has typed or chosen in a form, as one string, so "changed or not" is a simple comparison. */
+    static String formState(Node node) {
+        StringBuilder out = new StringBuilder();
+        collectState(node, out);
+        return out.toString();
+    }
+
+    private static void collectState(Node node, StringBuilder out) {
+        if (node == null) return;
+        if (node instanceof javafx.scene.control.TextInputControl text) {
+            out.append(text.getText()).append('\u0001');
+        } else if (node instanceof javafx.scene.control.CheckBox box) {
+            out.append(box.isSelected()).append('\u0001');
+        } else if (node instanceof javafx.scene.control.ComboBox<?> combo) {
+            out.append(combo.getValue()).append('\u0001');
+        } else if (node instanceof javafx.scene.control.DatePicker picker) {
+            out.append(picker.getValue()).append('\u0001');
+        }
+        if (node instanceof javafx.scene.Parent parent) {
+            for (Node child : parent.getChildrenUnmodifiable()) collectState(child, out);
         }
     }
 

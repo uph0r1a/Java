@@ -18,6 +18,8 @@ public final class TextLengthLimiter {
     public static final int DESCRIPTION_MAX = 500;
     /** Longest phone we accept: +84 and 10 digits is 13; 15 is the E.164 maximum. */
     public static final int PHONE_MAX = 15;
+    public static final int ADDRESS_MAX = 200;
+    public static final int POSITION_MAX = 60;
     public static final int EMAIL_MAX = 100;
     public static final int USERNAME_MAX = 32;
     public static final int PASSWORD_MAX = 64;
@@ -35,6 +37,11 @@ public final class TextLengthLimiter {
      *  but worth knowing if that ever changes. */
     public static void limit(TextInputControl field, int maxLength) {
         field.setTextFormatter(new TextFormatter<>(change ->
-                change.getControlNewText().length() <= maxLength ? change : null));
+                accepts(change.getControlNewText(), maxLength) ? change : null));
+    }
+
+    /** The rule {@link #limit} applies to every change, on its own so it can be tested without JavaFX (TODO 6.35): the new text may be at most {@code maxLength} characters. */
+    public static boolean accepts(String newText, int maxLength) {
+        return newText == null || newText.length() <= maxLength;
     }
 }

@@ -1,0 +1,18 @@
+.idea/
+*.iml
+out/
+target/
+
+# The shop database (customer phone numbers, password hashes), pictures, logs and backups: never commit
+data/
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+logs/
+backups/
+database.properties
+
+# OS files
+.DS_Store
+Thumbs.db

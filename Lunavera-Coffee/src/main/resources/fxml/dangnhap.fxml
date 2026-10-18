@@ -5,6 +5,7 @@
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.PasswordField?>
 <?import javafx.scene.control.TextField?>
+<?import javafx.scene.control.Tooltip?>
 <?import javafx.scene.image.Image?>
 <?import javafx.scene.image.ImageView?>
 <?import javafx.scene.layout.AnchorPane?>
@@ -19,7 +20,7 @@
            stylesheets="@../css/dangnhap.css"
            xmlns="http://javafx.com/javafx/21"
            xmlns:fx="http://javafx.com/fxml/1"
-           fx:controller="org.example.controller.LoginController">
+           fx:controller="com.coffeeshop.coffeeshopmanagement.controller.LoginController">
 
    <!-- Background -->
    <ImageView fx:id="backgroundImage"
@@ -112,7 +113,9 @@
                     minWidth="44"
                     prefHeight="42"
                     prefWidth="44"
-                    styleClass="password-eye"/>
+                    styleClass="password-eye">
+               <tooltip><Tooltip text="Hiện / ẩn mật khẩu"/></tooltip>
+            </Button>
          </HBox>
       </VBox>
 
@@ -128,5 +131,15 @@
               text="ĐĂNG NHẬP"/>
 
    </VBox>
+
+   <!-- Where the data is (TODO 5.25): a small line so the owner can tell at a glance which shop's data this is -->
+   <Label fx:id="dataLocationLabel"
+          maxWidth="900"
+          styleClass="data-location"
+          StackPane.alignment="BOTTOM_CENTER">
+      <StackPane.margin>
+         <Insets bottom="14.0"/>
+      </StackPane.margin>
+   </Label>
 
 </StackPane>

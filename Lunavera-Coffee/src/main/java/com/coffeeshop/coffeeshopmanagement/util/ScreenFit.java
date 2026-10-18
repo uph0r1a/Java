@@ -39,7 +39,22 @@ public final class ScreenFit extends Pane {
         }
         double w = content.prefWidth(-1);
         double h = content.prefHeight(-1);
-        return new ScreenFit(content, w > 0 ? w : 1600, h > 0 ? h : 1000);
+        if (content instanceof javafx.scene.layout.Region region) {
+            // The screens were drawn with their size locked to 1600x1000 (min = max = pref). Unlock it so a window that
+            // is wider or taller than that shape gives the extra room to the layout instead of leaving blank margins.
+            region.setMinSize(0, 0);
+            region.setMaxSize(Double.MAX_VALUE, Double.MAX_VALUE);
+        }
+        ScreenFit fit = new ScreenFit(content, w > 0 ? w : 1600, h > 0 ? h : 1000);
+        // The screen's own style sheet also reaches the wrapper, so its ".root" background fills the margins around a
+        // scaled screen instead of the default grey (TODO 2.39).
+        fit.getStylesheets().addAll(content.getStylesheets());
+        return fit;
+    }
+
+    /** True when {@code other} was drawn for the same design size (login to login, dashboard to products). */
+    public boolean sameDesignAs(ScreenFit other) {
+        return other != null && Math.abs(designWidth - other.designWidth) < 0.5 && Math.abs(designHeight - other.designHeight) < 0.5;
     }
 
     public double designWidth() {
@@ -65,11 +80,15 @@ public final class ScreenFit extends Pane {
         double w = getWidth();
         double h = getHeight();
         double scale = ScreenFitMath.scaleFor(w, h, designWidth, designHeight);
-        content.resize(designWidth, designHeight);
+        // The layout is given the window's own shape (divided by the zoom), never less than the design size,
+        // so there is no empty strip at the side or the bottom (the blank left margin seen on a tiled window).
+        double cw = Math.max(designWidth, w / scale);
+        double ch = Math.max(designHeight, h / scale);
+        content.resize(cw, ch);
         content.setScaleX(scale);
         content.setScaleY(scale);
         // Scaling is about the node's centre, so centring the unscaled box centres the scaled picture.
-        content.relocate((w - designWidth) / 2, (h - designHeight) / 2);
+        content.relocate((w - cw) / 2, (h - ch) / 2);
     }
 
     /**
@@ -83,9 +102,10 @@ public final class ScreenFit extends Pane {
         Rectangle2D free = Screen.getPrimary().getVisualBounds();
         double sceneW = ScreenFitMath.fitLength(fit.designWidth, free.getWidth(), chromeWidth + MARGIN);
         double sceneH = ScreenFitMath.fitLength(fit.designHeight, free.getHeight(), chromeHeight + MARGIN);
-        stage.setResizable(true);
-        stage.setMinWidth(480 + chromeWidth);
-        stage.setMinHeight(300 + chromeHeight);
+        if (!stage.isResizable()) stage.setResizable(true);
+        // The smallest window is the smallest the zoom can still draw completely (TODO 2.54).
+        stage.setMinWidth(Math.min(free.getWidth(), fit.designWidth * ScreenFitMath.MIN_SCALE + chromeWidth));
+        stage.setMinHeight(Math.min(free.getHeight(), fit.designHeight * ScreenFitMath.MIN_SCALE + chromeHeight));
         stage.setWidth(sceneW + chromeWidth);
         stage.setHeight(sceneH + chromeHeight);
         stage.setX(free.getMinX() + (free.getWidth() - stage.getWidth()) / 2);

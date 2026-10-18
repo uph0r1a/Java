@@ -1,5 +1,6 @@
 package com.coffeeshop.coffeeshopmanagement.dao;
 
+import com.coffeeshop.coffeeshopmanagement.util.AppClock;
 import com.coffeeshop.coffeeshopmanagement.model.*;
 import com.coffeeshop.coffeeshopmanagement.service.LoyaltyPolicy;
 import org.junit.Before;
@@ -29,6 +30,7 @@ public class OrderDAOTest {
 
     @BeforeClass
     public static void setUpDatabase() {
+        com.coffeeshop.coffeeshopmanagement.util.TestSession.admin();
         TestDatabaseSupport.ensureReady();
     }
 
@@ -70,14 +72,14 @@ public class OrderDAOTest {
 
     private Order paidOrderTotaling(BigDecimal total, Integer customerId) {
         Order order = new Order();
-        order.setOrderDate(LocalDateTime.now());
+        order.setOrderDate(AppClock.now());
         order.setCustomerId(customerId);
         order.setStatus(OrderStatus.PAID);
         order.setSubtotal(total);
         order.setDiscount(BigDecimal.ZERO);
         order.setTotal(total);
         order.setPaymentMethod(PaymentMethod.CASH);
-        order.setPaidAt(LocalDateTime.now());
+        order.setPaidAt(AppClock.now());
         return order;
     }
 
@@ -176,7 +178,7 @@ public class OrderDAOTest {
         Product product = newProduct(5, new BigDecimal("10000"));
         OrderItem line = lineFor(product, 1);
         Order order = new Order();
-        order.setOrderDate(LocalDateTime.now());
+        order.setOrderDate(AppClock.now());
         order.setStatus(OrderStatus.OPEN); // never paid, so insert() never touches stock/points
         order.setSubtotal(new BigDecimal("10000"));
         order.setDiscount(BigDecimal.ZERO);
@@ -245,7 +247,7 @@ public class OrderDAOTest {
     public void historyFilterByDateRangeExcludesOrdersOutsideIt() {
         Product product = newProduct(20, new BigDecimal("10000"));
         Order order = orderDAO.insert(paidOrderTotaling(new BigDecimal("10000"), null), List.of(lineFor(product, 1)));
-        java.time.LocalDate today = java.time.LocalDate.now();
+        java.time.LocalDate today = AppClock.today();
 
         OrderDAO.HistoryFilter includesToday = new OrderDAO.HistoryFilter(null, null, today, today);
         assertTrue(orderDAO.findHistoryPage(includesToday, 500, 0).stream().anyMatch(s -> s.order().getId() == order.getId()));
@@ -260,7 +262,7 @@ public class OrderDAOTest {
         Product product = newProduct(30, new BigDecimal("10000"));
         Customer customer = newCustomer();
         for (String total : new String[]{"30000", "10000", "20000"}) {
-            orderDAO.insert(paidOrderTotaling(new BigDecimal(total), customer.getId()), List.of(lineFor(product, 1)));
+            orderDAO.insert(paidOrderTotaling(new BigDecimal(total), customer.getId()), List.of(lineFor(product, Integer.parseInt(total) / 10000)));
         }
         OrderDAO.HistoryFilter mine = new OrderDAO.HistoryFilter(customer.getFullName(), null, null, null);
 
@@ -283,7 +285,7 @@ public class OrderDAOTest {
 
     private Order openOrderOnTable(int tableNumber, Integer customerId) {
         Order order = new Order();
-        order.setOrderDate(LocalDateTime.now());
+        order.setOrderDate(AppClock.now());
         order.setTableNumber(tableNumber);
         order.setCustomerId(customerId);
         order.setStatus(OrderStatus.OPEN);
@@ -372,6 +374,24 @@ public class OrderDAOTest {
     }
 
     @Test
+    public void aTableCannotHoldTwoOpenOrders() { // TODO 3.22
+        Order first = openOrderOnTable(4, null);
+        try {
+            openOrderOnTable(4, null);
+            fail("a second OPEN order for the same table must be refused");
+        } catch (DataAccessException expected) {
+            assertTrue(expected.getMessage(), expected.getMessage().contains("#" + first.getId()));
+        }
+        assertEquals("the first order is still the table's order", first.getId(),
+                orderDAO.findOpenOrderByTable(4).orElseThrow().getId());
+
+        new TableDAO().setEmpty(4); // closes the first order
+        Order again = openOrderOnTable(4, null); // the table is free again
+        assertTrue(again.getId() > first.getId());
+        new TableDAO().setEmpty(4);
+    }
+
+    @Test
     public void aLateAutosaveCannotTouchAnOrderThatWasAlreadyPaid() {
         Product product = newProduct(10, new BigDecimal("50000"));
         Order open = openOrderOnTable(9, null);
@@ -414,7 +434,8 @@ public class OrderDAOTest {
 
     @Test
     public void escapeLikeEscapesTheThreeSpecialCharacters() {
-        assertEquals("a\\%b\\_c\\\\d", OrderDAO.escapeLike("a%b_c\\d"));
+        assertEquals("a!%b!_c!!d", OrderDAO.escapeLike("a%b_c!d"));
+        assertEquals("a backslash is an ordinary character now", "a\\b", OrderDAO.escapeLike("a\\b"));
     }
 
     // ---- bank transfer ("Chuyển khoản") -------------------------------------------------------
@@ -441,7 +462,7 @@ public class OrderDAOTest {
     public void payingAnOpenOrderByTransferStoresTheMethod() {
         Product product = newProduct(10, new BigDecimal("25000"));
         Order open = new Order();
-        open.setOrderDate(LocalDateTime.now());
+        open.setOrderDate(AppClock.now());
         open.setStatus(OrderStatus.OPEN);
         open.setSubtotal(BigDecimal.ZERO);
         open.setDiscount(BigDecimal.ZERO);
@@ -475,7 +496,7 @@ public class OrderDAOTest {
     @Test
     public void bankTransferSalesCountInTheReportTotals() {
         ReportDAO reports = new ReportDAO();
-        java.time.LocalDate today = java.time.LocalDate.now();
+        java.time.LocalDate today = AppClock.today();
         ReportDAO.Summary before = reports.summary(today, today);
         Product product = newProduct(10, new BigDecimal("30000"));
 
@@ -484,5 +505,56 @@ public class OrderDAOTest {
         ReportDAO.Summary after = reports.summary(today, today);
         assertEquals(before.paidOrders() + 1, after.paidOrders());
         assertEquals(before.revenue().add(new BigDecimal("30000")), after.revenue());
+    }
+
+    /** TODO 6.37: an autosave writes only what changed; the lines that did not change keep their database row. */
+    @Test
+    public void autosaveChangesOnlyTheLinesThatDiffer() {
+        Product a = newProduct(50, new BigDecimal("10000"));
+        Product b = newProduct(50, new BigDecimal("20000"));
+        Product c = newProduct(50, new BigDecimal("30000"));
+        Order order = new Order();
+        order.setOrderDate(AppClock.now());
+        order.setStatus(OrderStatus.OPEN);
+        order.setSubtotal(new BigDecimal("50000"));
+        order.setDiscount(BigDecimal.ZERO);
+        order.setTotal(new BigDecimal("50000"));
+        Order saved = orderDAO.insert(order, List.of(lineFor(a, 1), lineFor(b, 2)));
+        List<OrderItem> first = orderDAO.findItemsByOrderId(saved.getId());
+        assertEquals(2, first.size());
+        int rowA = first.get(0).getId();
+        int rowB = first.get(1).getId();
+
+        // B goes from 2 to 3, C is added, A is untouched
+        assertTrue(orderDAO.updateIfStillOpen(saved, List.of(lineFor(a, 1), lineFor(b, 3), lineFor(c, 1))));
+        List<OrderItem> second = orderDAO.findItemsByOrderId(saved.getId());
+        assertEquals(3, second.size());
+        assertEquals("an unchanged line must keep its row", rowA, second.get(0).getId());
+        assertEquals("a changed quantity is an update in place", rowB, second.get(1).getId());
+        assertEquals(3, second.get(1).getQuantity());
+        assertEquals(0, new BigDecimal("60000").compareTo(second.get(1).getLineTotal()));
+        assertEquals(c.getId(), second.get(2).getProductId().intValue());
+
+        // saving the same thing again changes no row
+        assertTrue(orderDAO.updateIfStillOpen(saved, List.of(lineFor(a, 1), lineFor(b, 3), lineFor(c, 1))));
+        List<OrderItem> third = orderDAO.findItemsByOrderId(saved.getId());
+        assertEquals(second.get(0).getId(), third.get(0).getId());
+        assertEquals(second.get(1).getId(), third.get(1).getId());
+        assertEquals(second.get(2).getId(), third.get(2).getId());
+
+        // removing A leaves B and C where they were
+        assertTrue(orderDAO.updateIfStillOpen(saved, List.of(lineFor(b, 3), lineFor(c, 1))));
+        List<OrderItem> fourth = orderDAO.findItemsByOrderId(saved.getId());
+        assertEquals(2, fourth.size());
+        assertEquals(rowB, fourth.get(0).getId());
+
+        // emptying the order removes every line
+        assertTrue(orderDAO.updateIfStillOpen(saved, List.of()));
+        assertEquals(0, orderDAO.findItemsByOrderId(saved.getId()).size());
+    }
+
+    @org.junit.AfterClass
+    public static void signOut() {
+        com.coffeeshop.coffeeshopmanagement.util.TestSession.clear();
     }
 }

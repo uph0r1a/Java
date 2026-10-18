@@ -10,32 +10,12 @@
     -fx-background-color: rgba(248, 247, 239, 0.96);
 }
 
-
 /* ==================== SIDEBAR ==================== */
 
 .sidebar {
     -fx-background-color: #e4eed6;
     -fx-border-color: #cbdbba;
     -fx-border-width: 0 1px 0 0;
-}
-
-.logo-section {
-    -fx-background-color: transparent;
-    -fx-padding: 18px 15px 12px 15px;
-}
-
-.logo-title {
-    -fx-text-fill: #224416;
-    -fx-font-size: 28px;
-    -fx-font-weight: bold;
-    -fx-effect: dropshadow(gaussian, rgba(34, 68, 22, 0.15), 4, 0, 0, 1);
-}
-
-.logo-subtitle {
-    -fx-text-fill: #4b7833;
-    -fx-font-size: 11px;
-    -fx-font-weight: bold;
-    -fx-letter-spacing: 3px;
 }
 
 .sidebar-separator {
@@ -46,10 +26,6 @@
 .sidebar-separator .line {
     -fx-border-color: #d1dfc1;
     -fx-border-width: 0.5px;
-}
-
-.menu-container {
-    -fx-padding: 8px 12px;
 }
 
 /* Menu Button */
@@ -84,10 +60,6 @@
     -fx-text-fill: #ffffff;
 }
 
-.sidebar-bottom {
-    -fx-padding: 10px 16px 20px 16px;
-}
-
 .logout-button {
     -fx-background-color: #d9e8c6;
     -fx-background-radius: 8px;
@@ -108,14 +80,13 @@
     -fx-border-color: #b0cb93;
 }
 
-.sidebar-footer, .coffee-slogan {
+.sidebar-footer {
     -fx-text-fill: #5b7e45;
     -fx-font-size: 12px;
     -fx-font-style: italic;
     -fx-line-spacing: 4px;
     -fx-padding: 6px 0 0 0;
 }
-
 
 /* =========================================================
    MAIN CONTENT
@@ -124,7 +95,6 @@
 .content {
     -fx-padding: 0;
 }
-
 
 /* =========================================================
    PAGE HEADER
@@ -170,7 +140,6 @@
     -fx-font-size: 15px;
 }
 
-
 /* =========================================================
    CATEGORY TABS
    ========================================================= */
@@ -210,7 +179,6 @@
     -fx-border-color: #65785f;
 }
 
-
 /* =========================================================
    PRODUCT AREA
    ========================================================= */
@@ -232,7 +200,6 @@
     -fx-padding: 16px;
 }
 
-
 /* =========================================================
    CARD TITLE
    ========================================================= */
@@ -243,7 +210,6 @@
     -fx-font-weight: bold;
     -fx-padding: 0 0 6px 0;
 }
-
 
 /* =========================================================
    CATEGORY LIST
@@ -309,7 +275,6 @@
     -fx-text-fill: #50634f;
 }
 
-
 /* =========================================================
    SEARCH
    ========================================================= */
@@ -331,7 +296,6 @@
     -fx-border-color: #aab8a0;
     -fx-effect: dropshadow(gaussian, rgba(113, 131, 106, 0.16), 7, 0, 0, 1);
 }
-
 
 /* =========================================================
    COMBO BOX
@@ -361,7 +325,6 @@
     -fx-font-size: 11px;
 }
 
-
 /* =========================================================
    PRIMARY BUTTON
    ========================================================= */
@@ -387,7 +350,6 @@
     -fx-background-color: #50634f;
     -fx-border-color: #50634f;
 }
-
 
 /* =========================================================
    PRODUCT TABLE
@@ -451,7 +413,6 @@
     -fx-font-size: 12px;
 }
 
-
 /* =========================================================
    TABLE SCROLL BAR
    ========================================================= */
@@ -488,7 +449,6 @@
     -fx-background-radius: 8px;
 }
 
-
 /* =========================================================
    EMPTY LABEL
    ========================================================= */
@@ -498,7 +458,6 @@
     -fx-font-size: 12px;
 }
 
-
 /* =========================================================
    TABLE FOOTER
    ========================================================= */
@@ -507,7 +466,6 @@
     -fx-text-fill: #8b9282;
     -fx-font-size: 11px;
 }
-
 
 /* =========================================================
    PAGINATION
@@ -541,7 +499,6 @@
 .page-button-active:hover {
     -fx-background-color: #61745b;
 }
-
 
 /* =========================================================
    FOCUS

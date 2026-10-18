@@ -23,10 +23,14 @@ public final class ReceiptQr {
 
     public static String payload(Order order) {
         StringBuilder text = new StringBuilder("Lunavera Coffee\n")
-                .append("Hoa don #").append(order.getId()).append('\n')
+                .append("Hoa don #").append(order.getId())
+                .append(order.getStatus() == com.coffeeshop.coffeeshopmanagement.model.OrderStatus.CANCELLED ? " (DA HUY)" : "")
+                .append('\n')
                 .append("Tong: ").append(amount(order)).append(" VND");
-        if (order.getOrderDate() != null) {
-            text.append('\n').append(order.getOrderDate().format(TIME));
+        // Time of payment when known (the order may have been opened much earlier, TODO 2.44).
+        java.time.LocalDateTime time = order.getPaidAt() != null ? order.getPaidAt() : order.getOrderDate();
+        if (time != null) {
+            text.append('\n').append(time.format(TIME));
         }
         return text.toString();
     }

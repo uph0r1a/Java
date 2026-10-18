@@ -14,7 +14,11 @@ import java.util.Optional;
  */
 public class PasswordChangeService {
 
-    public enum Result { OK, NO_SUCH_USER, WRONG_CURRENT, WEAK, IS_DEFAULT, SAME_AS_CURRENT }
+    public enum Result { OK, NO_SUCH_USER, WRONG_CURRENT, TOO_MANY_ATTEMPTS, WEAK, IS_DEFAULT, SAME_AS_CURRENT }
+
+    private static final java.util.logging.Logger LOGGER = java.util.logging.Logger.getLogger(PasswordChangeService.class.getName());
+    /** Same slow-down as the login screen, so an unlocked till cannot be used to guess the owner's password (TODO 2.63). */
+    static final LoginThrottle THROTTLE = new LoginThrottle();
 
     private final UserDAO userDAO;
 
@@ -35,15 +39,26 @@ public class PasswordChangeService {
         if (found.isEmpty()) return Result.NO_SUCH_USER;
         User user = found.get();
 
-        if (requireCurrent
-                && (currentPassword == null || !PasswordUtil.matches(currentPassword, user.getPasswordHash()))) {
-            return Result.WRONG_CURRENT;
+        String throttleKey = "change-password:" + userId;
+        if (requireCurrent) {
+            if (THROTTLE.secondsUntilAllowed(throttleKey) > 0) return Result.TOO_MANY_ATTEMPTS;
+            if (currentPassword == null || !PasswordUtil.matches(currentPassword, user.getPasswordHash())) {
+                THROTTLE.recordFailure(throttleKey);
+                LOGGER.warning("Wrong current password typed in the change-password dialog for user id " + userId);
+                return Result.WRONG_CURRENT;
+            }
+            THROTTLE.recordSuccess(throttleKey);
         }
-        if (!ValidationUtil.isValidPassword(newPassword)) return Result.WEAK;
+        if (!ValidationUtil.isValidPassword(newPassword)
+                || ValidationUtil.containsUsername(newPassword, user.getUsername())) return Result.WEAK;
         if (DatabaseConfig.DEFAULT_ADMIN_PASSWORD.equals(newPassword)) return Result.IS_DEFAULT;
         if (PasswordUtil.matches(newPassword, user.getPasswordHash())) return Result.SAME_AS_CURRENT;
 
-        userDAO.updatePasswordHash(userId, PasswordUtil.hash(newPassword));
+        String newHash = PasswordUtil.hash(newPassword);
+        userDAO.updatePasswordHash(userId, newHash);
+        com.coffeeshop.coffeeshopmanagement.util.Session.passwordChangedBySelf(userId, newHash);
+        com.coffeeshop.coffeeshopmanagement.util.SecurityLog.event("password changed by the account owner: '"
+                + user.getUsername() + "' (id " + userId + ")");
         return Result.OK;
     }
 }

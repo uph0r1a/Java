@@ -33,11 +33,16 @@ public class DashboardStatsService {
             Map<LocalDate, BigDecimal> revenueLast7Days,
             int lowStockCount,
             List<Product> lowStockProducts,
-            List<Order> todayOrdersList
+            List<Order> todayOrdersList,
+            List<Order> staleOpenOrders,
+            List<Integer> heldTablesWithoutOrder,
+            int sharedCustomerPhones
     ) {
     }
 
     private static final int LOW_STOCK_ROWS = 5;
+    /** An order still OPEN after this long was most likely forgotten (TODO 2.11). */
+    public static final java.time.Duration STALE_OPEN_AFTER = java.time.Duration.ofHours(12);
 
     private final OrderDAO orderDAO;
     private final ProductDAO productDAO;
@@ -63,14 +68,58 @@ public class DashboardStatsService {
                 orderDAO.countDistinctCustomersToday(),
                 orderDAO.countByStatus(OrderStatus.PAID),
                 orderDAO.countByStatus(OrderStatus.OPEN),
-                orderDAO.countByStatus(OrderStatus.CANCELLED),
+                orderDAO.countRefunded(),
                 productDAO.countAll(),
                 employeeDAO.countActive(),
                 customerDAO.countAll(),
                 orderDAO.revenueForLast7Days(),
                 productDAO.countLowStock(ProductDAO.LOW_STOCK_THRESHOLD),
                 productDAO.findLowStock(ProductDAO.LOW_STOCK_THRESHOLD, LOW_STOCK_ROWS),
-                orderDAO.findTodayOrders()
+                orderDAO.findTodayOrders(),
+                orderDAO.findStaleOpenOrders(STALE_OPEN_AFTER),
+                new com.coffeeshop.coffeeshopmanagement.dao.TableDAO().holdsWithoutOrder(),
+                customerDAO.countSharedPhones()
         );
+    }
+
+    /** Tables marked "in use" by hand with no order (TODO 2.53), or null when there are none. */
+    public static String heldTablesWarning(List<Integer> held) {
+        if (held == null || held.isEmpty()) return null;
+        StringBuilder names = new StringBuilder();
+        for (int number : held) names.append(names.length() == 0 ? "" : ", ").append("bàn ").append(number);
+        return "⚠ " + names + " đang được đánh dấu \"Đang sử dụng\" nhưng không có đơn. Nếu khách đã về, hãy trả bàn.";
+    }
+
+    /** Customers who share a phone number (TODO 3.41), or null when none do. */
+    public static String sharedPhonesWarning(int sharedPhones) {
+        if (sharedPhones <= 0) return null;
+        return "⚠ " + sharedPhones + " số điện thoại đang trùng giữa nhiều khách hàng, nên quy tắc \"một khách một số\" chưa được áp dụng. "
+                + "Mở màn hình Khách hàng và sửa số điện thoại bị trùng.";
+    }
+
+    /** The dashboard warnings as one text, or null when there is nothing to warn about. */
+    public static String combinedWarning(List<Order> stale, List<Integer> held) {
+        return combinedWarning(stale, held, 0);
+    }
+
+    public static String combinedWarning(List<Order> stale, List<Integer> held, int sharedPhones) {
+        StringBuilder text = new StringBuilder();
+        for (String line : new String[]{staleOrdersWarning(stale), heldTablesWarning(held), sharedPhonesWarning(sharedPhones)}) {
+            if (line == null) continue;
+            if (text.length() > 0) text.append('\n');
+            text.append(line);
+        }
+        return text.length() == 0 ? null : text.toString();
+    }
+
+    /** The one-line warning for the dashboard, or null when nothing is stale: "2 đơn mở quá 12 giờ (bàn 3, bàn 5)". */
+    public static String staleOrdersWarning(List<Order> stale) {
+        if (stale == null || stale.isEmpty()) return null;
+        java.util.LinkedHashSet<String> tables = new java.util.LinkedHashSet<>();
+        for (Order order : stale) {
+            tables.add(order.getTableNumber() == null ? "mang đi" : "bàn " + order.getTableNumber());
+        }
+        return "⚠ " + stale.size() + " đơn mở quá " + STALE_OPEN_AFTER.toHours() + " giờ (" + String.join(", ", tables)
+                + "). Mở đơn để thanh toán, hoặc trả bàn nếu đơn bị bỏ quên.";
     }
 }

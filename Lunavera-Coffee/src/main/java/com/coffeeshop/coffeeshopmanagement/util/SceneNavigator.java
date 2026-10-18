@@ -22,7 +22,7 @@ public final class SceneNavigator {
     private static final Logger LOGGER = Logger.getLogger(SceneNavigator.class.getName());
     private static final String LOGIN_FXML = "/fxml/dangnhap.fxml";
 
-    /** Run on every screen right after it is loaded and before it is shown (HelloApplication sets it). */
+    /** Run on every screen right after it is loaded and before it is shown (LunaveraApplication sets it). */
     private static Consumer<Parent> screenDecorator = root -> { };
 
     private SceneNavigator() {
@@ -39,7 +39,22 @@ public final class SceneNavigator {
         switchScene(stage, fxmlPath);
     }
 
+    /**
+     * Closes every window except {@code keep}: the receipt, history and report windows of the person who just left
+     * must not stay on screen for the next one (TODO 2.30).
+     */
+    public static void closeOtherWindows(javafx.stage.Window keep) {
+        for (javafx.stage.Window window : new java.util.ArrayList<>(javafx.stage.Window.getWindows())) {
+            if (window != keep && window.isShowing()) {
+                window.hide();
+            }
+        }
+    }
+
     public static void switchScene(Stage stage, String fxmlPath) {
+        if (LOGIN_FXML.equals(fxmlPath)) {
+            closeOtherWindows(stage);
+        }
         // A locked/deactivated account (Account Management -> lock, or the last-admin guard
         // taking effect from another session) used to be checked only here, on screen changes.
         // SessionGuard (progress.md, latest session) now also covers a background 30s tick, the
@@ -69,15 +84,32 @@ public final class SceneNavigator {
     private static void showScreen(Stage stage, Parent root) {
         screenDecorator.accept(root);
         Scene old = stage.getScene();
+        ScreenFit fit = ScreenFit.wrap(root);
+        if (stage.isShowing() && old != null) {
+            // Switching tabs only swaps the content of the scene that is already there. Making a new Scene and
+            // re-sizing/re-positioning the window on every click made the whole window jump (and fight a tiling
+            // window manager such as Hyprland) - the flicker seen when changing sidebar tabs.
+            boolean sameDesign = old.getRoot() instanceof ScreenFit previous
+                    && previous.designWidth() == fit.designWidth() && previous.designHeight() == fit.designHeight();
+            old.setRoot(fit);
+            if (!sameDesign) {
+                // Only the login screen (smaller design) <-> the main screens (bigger design) need a different window size.
+                ScreenFit.fitStage(stage, fit, Math.max(0, stage.getWidth() - old.getWidth()),
+                        Math.max(0, stage.getHeight() - old.getHeight()));
+            }
+            return;
+        }
         boolean measurable = stage.isShowing() && old != null;
         double chromeW = measurable ? Math.max(0, stage.getWidth() - old.getWidth()) : 0;
         double chromeH = measurable ? Math.max(0, stage.getHeight() - old.getHeight()) : 0;
-        ScreenFit fit = ScreenFit.wrap(root);
         stage.setScene(ScreenFit.newScene(fit, chromeW, chromeH));
         ScreenFit.fitStage(stage, fit, chromeW, chromeH);
     }
 
     public static <T> T switchSceneAndGetController(Stage stage, String fxmlPath) {
+        if (LOGIN_FXML.equals(fxmlPath)) {
+            closeOtherWindows(stage);
+        }
         if (!LOGIN_FXML.equals(fxmlPath)
                 && Session.getCurrentUser() != null && !SessionGuard.validateNow()) {
             SessionGuard.forceLogout();
@@ -106,6 +138,7 @@ public final class SceneNavigator {
             Parent root = loader.load();
             Stage stage = new Stage();
             stage.setTitle(title);
+        com.coffeeshop.coffeeshopmanagement.util.AppIcon.apply(stage);
             stage.setScene(new Scene(root));
             AlertUtil.closeOnEscape(stage.getScene());
             stage.show();
