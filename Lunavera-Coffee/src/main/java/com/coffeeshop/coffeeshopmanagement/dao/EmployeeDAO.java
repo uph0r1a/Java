@@ -1,5 +1,6 @@
 package com.coffeeshop.coffeeshopmanagement.dao;
 
+import com.coffeeshop.coffeeshopmanagement.util.I18n;
 import com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig;
 import com.coffeeshop.coffeeshopmanagement.model.Employee;
 
@@ -14,6 +15,23 @@ import java.util.List;
 import java.util.Optional;
 
 public class EmployeeDAO {
+
+    private static final java.util.logging.Logger LOGGER = java.util.logging.Logger.getLogger(EmployeeDAO.class.getName());
+
+    /**
+     * A damaged date must not stop the whole account list or that person's login (TODO 3.64): the first ten characters are tried
+     * ("2026-10-18 00:00:00" from an import still reads), and anything else gives no date and a warning (the id, never the text).
+     */
+    static LocalDate readHireDate(int employeeId, String text) {
+        if (text == null || text.isBlank()) return null;
+        String trimmed = text.trim();
+        try {
+            return LocalDate.parse(trimmed.length() > 10 ? trimmed.substring(0, 10) : trimmed);
+        } catch (java.time.format.DateTimeParseException e) {
+            LOGGER.warning("Staff record " + employeeId + " has a hire date that cannot be read; it is shown as empty");
+            return null;
+        }
+    }
 
     public Employee insert(Employee employee) {
         try (Connection connection = DatabaseConfig.getConnection()) {
@@ -48,7 +66,7 @@ public class EmployeeDAO {
      */
     private static DataAccessException duplicatePhoneOr(SQLException e, String fallback) {
         return UniqueViolation.isUnique(e)
-                ? new DataAccessException("Số điện thoại này đã thuộc về một nhân viên khác.", e)
+                ? new DataAccessException(I18n.t("employee.phone.taken"), e)
                 : new DataAccessException(fallback, e);
     }
 
@@ -177,7 +195,7 @@ public class EmployeeDAO {
         long salaryDong = rs.getLong("salary");
         employee.setSalary(com.coffeeshop.coffeeshopmanagement.util.Money.fromDongOrNull(salaryDong, rs.wasNull()));
         String hireDate = rs.getString("hire_date");
-        employee.setHireDate(hireDate != null ? LocalDate.parse(hireDate) : null);
+        employee.setHireDate(readHireDate(employee.getId(), hireDate));
         employee.setActive(rs.getBoolean("active"));
         return employee;
     }

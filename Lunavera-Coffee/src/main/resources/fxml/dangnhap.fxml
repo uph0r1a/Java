@@ -3,6 +3,7 @@
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Tooltip?>
 <?import javafx.scene.control.PasswordField?>
 <?import javafx.scene.control.TextField?>
 <?import javafx.scene.control.Tooltip?>
@@ -66,7 +67,7 @@
       </ImageView>
 
       <!-- Title -->
-      <Label styleClass="login-title" text="ĐĂNG NHẬP">
+      <Label styleClass="login-title" text="%login.title">
          <VBox.margin>
             <Insets bottom="8" top="8"/>
          </VBox.margin>
@@ -76,7 +77,7 @@
       <Label alignment="CENTER"
              maxWidth="310"
              styleClass="login-subtitle"
-             text="Chào mừng bạn trở lại với Lunavera Coffee"
+             text="%login.subtitle"
              wrapText="true">
          <VBox.margin>
             <Insets bottom="20"/>
@@ -85,12 +86,12 @@
 
       <!-- Username -->
       <VBox maxWidth="310" prefWidth="310" spacing="6">
-         <Label styleClass="field-label" text="Tên đăng nhập hoặc SĐT"/>
+         <Label styleClass="field-label" text="%login.username.label"/>
          <TextField fx:id="usernameField"
                     maxWidth="310"
                     prefHeight="42"
                     prefWidth="310"
-                    promptText="Nhập tên đăng nhập hoặc số điện thoại"
+                    promptText="%login.username.prompt"
                     styleClass="login-field"/>
       </VBox>
 
@@ -99,13 +100,13 @@
          <VBox.margin>
             <Insets top="12"/>
          </VBox.margin>
-         <Label styleClass="field-label" text="Mật khẩu"/>
+         <Label styleClass="field-label" text="%login.password.label"/>
          <HBox alignment="CENTER_LEFT" maxWidth="310" prefWidth="310" spacing="0" styleClass="password-box">
             <PasswordField fx:id="passwordField"
                            maxWidth="Infinity"
                            prefHeight="42"
                            prefWidth="260"
-                           promptText="Nhập mật khẩu"
+                           promptText="%login.password.prompt"
                            styleClass="password-inner"
                            HBox.hgrow="ALWAYS"/>
             <Button fx:id="showPasswordButton"
@@ -114,9 +115,12 @@
                     prefHeight="42"
                     prefWidth="44"
                     styleClass="password-eye">
-               <tooltip><Tooltip text="Hiện / ẩn mật khẩu"/></tooltip>
+               <tooltip><Tooltip text="%login.password.toggle"/></tooltip>
             </Button>
          </HBox>
+         <!-- TODO 5.26: shown by CapsLockWarning while Caps Lock seems to be on -->
+         <Label fx:id="capsLockLabel" managed="false" visible="false"
+                style="-fx-text-fill: #b45309; -fx-font-weight: bold; -fx-font-size: 12px;" text="%capslock.warning"/>
       </VBox>
 
       <Region prefHeight="24"/>
@@ -128,7 +132,7 @@
               prefHeight="45"
               prefWidth="310"
               styleClass="login-button"
-              text="ĐĂNG NHẬP"/>
+              text="%login.button"/>
 
    </VBox>
 
@@ -141,5 +145,59 @@
          <Insets bottom="14.0"/>
       </StackPane.margin>
    </Label>
+
+   <!-- Language switch (TODO 1.7): top right, outside the card so it never changes the card's size.
+        A pill with a green "thumb" that slides under the chosen language (LoginController animates it).
+        Both segments are exactly 86 wide: the thumb moves by that much. -->
+   <StackPane alignment="CENTER_LEFT"
+              maxHeight="-Infinity"
+              maxWidth="-Infinity"
+              styleClass="language-switch"
+              StackPane.alignment="TOP_RIGHT">
+      <StackPane.margin>
+         <Insets right="24" top="20"/>
+      </StackPane.margin>
+      <Region fx:id="languageThumb"
+              maxHeight="28.0"
+              maxWidth="86.0"
+              minHeight="28.0"
+              minWidth="86.0"
+              mouseTransparent="true"
+              prefHeight="28.0"
+              prefWidth="86.0"
+              styleClass="language-thumb"/>
+      <HBox maxWidth="-Infinity" spacing="0">
+         <Button fx:id="languageViButton"
+                 focusTraversable="false"
+                 maxHeight="28.0"
+                 maxWidth="86.0"
+                 minHeight="28.0"
+                 minWidth="86.0"
+                 onAction="#chooseVietnamese"
+                 prefHeight="28.0"
+                 prefWidth="86.0"
+                 styleClass="language-button"
+                 text="%lang.vi">
+            <tooltip>
+               <Tooltip text="%lang.tooltip"/>
+            </tooltip>
+         </Button>
+         <Button fx:id="languageEnButton"
+                 focusTraversable="false"
+                 maxHeight="28.0"
+                 maxWidth="86.0"
+                 minHeight="28.0"
+                 minWidth="86.0"
+                 onAction="#chooseEnglish"
+                 prefHeight="28.0"
+                 prefWidth="86.0"
+                 styleClass="language-button"
+                 text="%lang.en">
+            <tooltip>
+               <Tooltip text="%lang.tooltip"/>
+            </tooltip>
+         </Button>
+      </HBox>
+   </StackPane>
 
 </StackPane>

@@ -84,7 +84,7 @@ public class CheckoutServiceTest {
     }
 
     private static String newPhone() {
-        return "09" + String.format("%08d", new Random().nextInt(100_000_000));
+        return "09" + String.format(java.util.Locale.ROOT, "%08d", new Random().nextInt(100_000_000));
     }
 
     private int stockOf(Product product) {

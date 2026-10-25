@@ -42,4 +42,24 @@ public class LocationSummaryTest {
         assertFalse(DatabaseConfig.locationSummary(sqlite(), Path.of("data"), 2).contains("TOP-SECRET"));
         assertFalse(DatabaseConfig.locationSummary(maria(), Path.of("data"), 2).contains("TOP-SECRET"));
     }
+
+    @Test
+    public void aServerOnAnotherComputerWithoutTlsIsLabelledAsNotEncrypted() {
+        String text = DatabaseConfig.locationSummary(maria(), Path.of("data"), 2);
+        assertTrue(text, text.contains("KHÔNG mã hóa"));
+        assertTrue(text, text.endsWith("cấu trúc v2"));
+    }
+
+    @Test
+    public void tlsIsShownAndTheLocalServerWithoutItSaysNothingExtra() {
+        DatabaseSettings tls = new DatabaseSettings(SqlDialect.MARIADB, "db.shop.local", 3307, "quan_ca_phe", "shopuser", "TOP-SECRET",
+                null, null, null, DatabaseSettings.SslMode.VERIFY_FULL, null, 30_000);
+        String text = DatabaseConfig.locationSummary(tls, Path.of("data"), 2);
+        assertTrue(text, text.contains("mã hóa TLS"));
+        assertFalse(text, text.contains("KHÔNG"));
+        DatabaseSettings local = new DatabaseSettings(SqlDialect.MARIADB, "127.0.0.1", 3306, "lunavera", "root", "TOP-SECRET", null, null, null);
+        assertEquals("Dữ liệu: máy chủ 127.0.0.1:3306/lunavera  ·  cấu trúc v2", DatabaseConfig.locationSummary(local, Path.of("data"), 2));
+        assertEquals("SQLite has no connection to protect", false,
+                DatabaseConfig.locationSummary(sqlite(), Path.of("data"), 2).contains("TLS"));
+    }
 }

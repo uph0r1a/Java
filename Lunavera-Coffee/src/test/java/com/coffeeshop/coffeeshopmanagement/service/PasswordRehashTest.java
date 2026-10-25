@@ -42,7 +42,7 @@ public class PasswordRehashTest {
         savedHash = null;
         UserDAO fake = new UserDAO() {
             @Override public Optional<User> findByUsername(String username) { return Optional.of(user); }
-            @Override public void updatePasswordHash(int userId, String passwordHash) { saves++; savedHash = passwordHash; }
+            @Override public void rehashPassword(int userId, String passwordHash) { saves++; savedHash = passwordHash; }
         };
         service = new AuthenticationService(fake, new LoginThrottle());
     }
@@ -91,7 +91,7 @@ public class PasswordRehashTest {
     public void aFailureWhileSavingDoesNotStopTheLogin() {
         UserDAO failing = new UserDAO() {
             @Override public Optional<User> findByUsername(String username) { return Optional.of(user); }
-            @Override public void updatePasswordHash(int userId, String passwordHash) { throw new RuntimeException("disk full"); }
+            @Override public void rehashPassword(int userId, String passwordHash) { throw new RuntimeException("disk full"); }
         };
         assertEquals(LoginStatus.SUCCESS, new AuthenticationService(failing, new LoginThrottle()).login("staff1", "Correct1").status());
     }

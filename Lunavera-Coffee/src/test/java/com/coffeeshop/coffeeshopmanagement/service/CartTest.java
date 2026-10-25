@@ -119,4 +119,31 @@ public class CartTest {
         cart.add(product(1, "Latte", "45000", 5));
         assertEquals("the caller's own list was changed", 1, lines.size());
     }
+
+    /** TODO 3.59 */
+    @Test
+    public void aLineStopsAtTheQuantityCeiling() {
+        Product latte = product(1, "Latte", "45000", 5000);
+        cart.add(latte);
+        cart.setQuantity(lines.get(0), Limits.MAX_LINE_QUANTITY);
+        assertEquals(Cart.Outcome.LINE_LIMIT, cart.add(latte).outcome());
+        assertEquals(Limits.MAX_LINE_QUANTITY, lines.get(0).getQuantity());
+        assertTrue(Cart.exceedsLineLimit(Limits.MAX_LINE_QUANTITY + 1));
+        assertFalse(Cart.exceedsLineLimit(Limits.MAX_LINE_QUANTITY));
+        cart.setQuantity(lines.get(0), 2_000_000_000); // a screen that forgot to ask: held at the ceiling, no overflow
+        assertEquals(Limits.MAX_LINE_QUANTITY, lines.get(0).getQuantity());
+        assertEquals(0, new BigDecimal("45000").multiply(BigDecimal.valueOf(Limits.MAX_LINE_QUANTITY)).compareTo(lines.get(0).getLineTotal()));
+    }
+
+    @Test
+    public void totalQuantityDoesNotWrapNegative() {
+        for (int id = 1; id <= 2; id++) {
+            OrderItem line = new OrderItem();
+            line.setQuantity(2_000_000_000); // stored lines from before the ceiling, or a damaged order
+            line.setUnitPrice(BigDecimal.ONE);
+            line.setLineTotal(BigDecimal.ONE);
+            lines.add(line);
+        }
+        assertEquals(4_000_000_000L, cart.totalQuantity());
+    }
 }

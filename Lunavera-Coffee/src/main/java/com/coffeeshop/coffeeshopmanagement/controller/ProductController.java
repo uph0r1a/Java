@@ -1,5 +1,8 @@
 package com.coffeeshop.coffeeshopmanagement.controller;
 
+import com.coffeeshop.coffeeshopmanagement.service.Limits;
+import java.util.Locale;
+import com.coffeeshop.coffeeshopmanagement.util.I18n;
 import com.coffeeshop.coffeeshopmanagement.dao.CategoryDAO;
 import com.coffeeshop.coffeeshopmanagement.dao.DataAccessException;
 import com.coffeeshop.coffeeshopmanagement.dao.ProductDAO;
@@ -102,9 +105,9 @@ public class ProductController extends AdminScreen {
     /** "Nhập CSV" and "Xuất CSV" next to "Thêm sản phẩm" (TODO 5.8). */
     private void addProductCsvButtons() {
         if (addProductButton == null || !(addProductButton.getParent() instanceof javafx.scene.layout.HBox bar)) return;
-        Button importButton = new Button("Nhập CSV");
+        Button importButton = new Button(I18n.t("products.import"));
         importButton.setOnAction(e -> importProductsCsv());
-        Button exportButton = new Button("Xuất CSV");
+        Button exportButton = new Button(I18n.t("common.exportcsv"));
         exportButton.setOnAction(e -> exportProductsCsv());
         int at = bar.getChildren().indexOf(addProductButton);
         bar.getChildren().addAll(at, List.of(importButton, exportButton));
@@ -113,11 +116,12 @@ public class ProductController extends AdminScreen {
     private void exportProductsCsv() {
         if (!requireAdmin()) return;
         FileChooser chooser = new FileChooser();
-        chooser.setTitle("Xuất danh sách sản phẩm");
+        chooser.setTitle(I18n.t("products.export.title"));
         chooser.setInitialFileName("san-pham-" + java.time.LocalDate.now() + ".csv");
         chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("CSV", "*.csv"));
         java.io.File file = chooser.showSaveDialog(productTable.getScene().getWindow());
         if (file == null) return;
+        Runnable pointer = com.coffeeshop.coffeeshopmanagement.util.BusyIndicator.waitCursor(productTable); // TODO 5.16
         Async.run(
                 () -> {
                     List<Product> all = productDAO.findAll();
@@ -125,64 +129,72 @@ public class ProductController extends AdminScreen {
                             com.coffeeshop.coffeeshopmanagement.service.ProductCsv.export(all));
                     return all.size();
                 },
-                count -> AlertUtil.info("Xuất sản phẩm", "Đã lưu " + count + " sản phẩm vào:\n" + file.getAbsolutePath()),
-                error -> AlertUtil.error("Không thể lưu file", error.getMessage()));
+                count -> {
+                    pointer.run();
+                    AlertUtil.info(I18n.t("products.export.title2"), I18n.t("products.export.done", count, file.getAbsolutePath()));
+                },
+                error -> {
+                    pointer.run();
+                    AlertUtil.error(I18n.t("common.file.savefail"), error.getMessage());
+                });
     }
 
     /** Adds the products of a CSV file; existing products are never changed. The person sees the outcome before anything is saved. */
     private void importProductsCsv() {
         if (!requireAdmin()) return;
         if (allActiveCategories.isEmpty()) {
-            AlertUtil.warning("Chưa có danh mục", "Hãy tạo danh mục trước khi nhập sản phẩm.");
+            AlertUtil.warning(I18n.t("categories.none.title"), I18n.t("products.import.nocategory"));
             return;
         }
         FileChooser chooser = new FileChooser();
-        chooser.setTitle("Chọn file CSV sản phẩm");
+        chooser.setTitle(I18n.t("products.import.choose"));
         chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("CSV", "*.csv"));
         java.io.File file = chooser.showOpenDialog(productTable.getScene().getWindow());
         if (file == null) return;
         if (file.length() > 5L * 1024 * 1024) {
-            AlertUtil.warning("File quá lớn", "File CSV lớn hơn 5 MB. Hãy chia nhỏ file.");
+            AlertUtil.warning(I18n.t("products.import.toobig.title"), I18n.t("products.import.toobig.message"));
             return;
         }
         com.coffeeshop.coffeeshopmanagement.service.ProductCsv.Result result;
         try {
-            String text = java.nio.file.Files.readString(file.toPath(), java.nio.charset.StandardCharsets.UTF_8);
+            String text = com.coffeeshop.coffeeshopmanagement.service.ProductCsv.decode(java.nio.file.Files.readAllBytes(file.toPath()));
             result = com.coffeeshop.coffeeshopmanagement.service.ProductCsv.parse(text, allActiveCategories,
                     (name, categoryId) -> productDAO.existsByNameInCategory(name, categoryId, 0));
         } catch (java.io.IOException | RuntimeException e) {
-            AlertUtil.error("Không đọc được file", "File phải là CSV lưu dạng UTF-8. " + (e instanceof java.io.IOException ? "" : e.getMessage()));
+            AlertUtil.error(I18n.t("products.import.unreadable.title"), I18n.t("products.import.unreadable.message", (e instanceof java.io.IOException ? "" : e.getMessage())));
             return;
         }
         String problems = result.problems().isEmpty() ? ""
-                : "\n\n" + result.problems().size() + " dòng bị bỏ qua:\n"
-                + String.join("\n", result.problems().stream().limit(12).toList())
-                + (result.problems().size() > 12 ? "\n... và " + (result.problems().size() - 12) + " dòng nữa." : "");
+                : "\n\n" + I18n.t("products.import.skipped", result.problems().size(), String.join("\n", result.problems().stream().limit(12).toList()), (result.problems().size() > 12 ? "\n" + I18n.t("products.import.more", (result.problems().size() - 12)) : ""));
+        String warnings = result.warnings().isEmpty() ? ""
+                : "\n\n" + I18n.t("products.import.warned", result.warnings().size(),
+                        String.join("\n", result.warnings().stream().limit(8).toList()),
+                        (result.warnings().size() > 8 ? "\n" + I18n.t("products.import.more", (result.warnings().size() - 8)) : ""));
         if (result.products().isEmpty()) {
-            AlertUtil.warning("Không có sản phẩm nào để thêm", "File không có dòng hợp lệ." + problems);
+            AlertUtil.warning(I18n.t("products.import.nothing.title"), I18n.t("products.import.nothing.message", problems));
             return;
         }
-        if (!AlertUtil.confirm("Nhập sản phẩm",
-                "Thêm " + result.products().size() + " sản phẩm mới vào thực đơn? Sản phẩm đã có sẽ không bị thay đổi. "
-                        + "Ảnh không nằm trong file, hãy thêm ảnh sau." + problems)) {
+        if (!AlertUtil.confirm(I18n.t("products.import.title"),
+                I18n.t("products.import.confirm", result.products().size(), problems + warnings))) {
             return;
         }
         var toAdd = result.products();
         Async.run(
                 () -> {
                     com.coffeeshop.coffeeshopmanagement.util.Permissions.requireAdmin("import products");
-                    for (Product product : toAdd) productDAO.insert(product);
+                    productDAO.insertAll(toAdd); // one transaction: all rows or none (TODO 2.69)
                     com.coffeeshop.coffeeshopmanagement.util.SecurityLog.event("imported " + toAdd.size() + " products from CSV");
                     return toAdd.size();
                 },
                 count -> {
-                    AlertUtil.info("Nhập sản phẩm", "Đã thêm " + count + " sản phẩm.");
+                    AlertUtil.info(I18n.t("products.import.title"), I18n.t("products.import.done", count));
                     reloadProducts();
                 },
                 error -> {
-                    AlertUtil.error("Không nhập được", error.getMessage());
+                    AlertUtil.error(I18n.t("products.import.fail"), error.getMessage());
                     reloadProducts();
-                });
+                },
+                productTable);
     }
 
     private void initProductScreen() {
@@ -206,15 +218,17 @@ public class ProductController extends AdminScreen {
                     return;
                 }
                 setText(value.toString());
-                // Same threshold the dashboard's "low stock" widgets already use
-                // (ProductDAO.LOW_STOCK_THRESHOLD) - one definition of "low", not two.
-                setStyle(value.intValue() <= ProductDAO.LOW_STOCK_THRESHOLD
-                        ? "-fx-text-fill: #c0392b; -fx-font-weight: bold;" : null);
+                // The product's own reorder level (TODO 4.19), or the shop default: the same rule as the dashboard
+                // (StockLevel), one definition of "low".
+                Product row = getTableRow() == null ? null : getTableRow().getItem();
+                boolean low = row != null ? row.isLowStock()
+                        : com.coffeeshop.coffeeshopmanagement.service.StockLevel.isLow(value.intValue(), null);
+                setStyle(low ? "-fx-text-fill: #c0392b; -fx-font-weight: bold;" : null);
             }
         });
         productStatusColumn.setCellValueFactory(data ->
-                new SimpleStringProperty(!data.getValue().isActive() ? "Ngừng bán"
-                        : isCategoryHidden(data.getValue()) ? "Danh mục đang ẩn" : "Đang bán"));
+                new SimpleStringProperty(!data.getValue().isActive() ? I18n.t("products.status.stopped")
+                        : isCategoryHidden(data.getValue()) ? I18n.t("products.status.categoryhidden") : I18n.t("products.status.selling")));
         actionColumn.setCellFactory(actionColumnFactory(this::openEditProductDialog, this::deleteProduct));
         imageColumn.setCellFactory(column -> new TableCell<>() {
             private final javafx.scene.image.ImageView imageView = new javafx.scene.image.ImageView();
@@ -241,9 +255,10 @@ public class ProductController extends AdminScreen {
             }
         });
 
-        categoryFilter.getItems().setAll("Tất cả danh mục");
+        categoryFilter.getItems().setAll(I18n.t("products.filter.allcategories"));
         categoryFilter.getSelectionModel().selectFirst();
-        statusFilter.getItems().setAll("Tất cả trạng thái", "Đang bán", "Ngừng bán");
+        statusFilter.getItems().setAll(I18n.t("history.status.all"), I18n.t("products.status.selling"), I18n.t("products.status.stopped"),
+                I18n.t("products.status.reorder"));
         statusFilter.getSelectionModel().selectFirst();
         TextLengthLimiter.limit(searchField, TextLengthLimiter.SEARCH_MAX);
         searchField.textProperty().addListener((obs, old, value) -> applyProductFilter());
@@ -257,6 +272,11 @@ public class ProductController extends AdminScreen {
     }
 
     private void reloadProducts() {
+        reloadProducts(null);
+    }
+
+    /** Reloads the list; when {@code selectId} is given and on the page shown, that product is selected again (after an arrow). */
+    private void reloadProducts(Integer selectId) {
         Async.run(
                 () -> {
                     List<Category> categories = categoryDAO.findAll();
@@ -274,13 +294,13 @@ public class ProductController extends AdminScreen {
                     if (categoryFilter != null) {
                         syncingCategoryFilter = true;
                         try {
-                            categoryFilter.getItems().setAll("Tất cả danh mục");
+                            categoryFilter.getItems().setAll(I18n.t("products.filter.allcategories"));
                             allActiveCategories.forEach(c -> categoryFilter.getItems().add(c.getName()));
                             if (selectedProductCategoryId != null
                                     && allActiveCategories.stream().noneMatch(c -> c.getId() == selectedProductCategoryId)) {
                                 selectedProductCategoryId = null; // selected category was deleted/deactivated
                             }
-                            categoryFilter.setValue("Tất cả danh mục");
+                            categoryFilter.setValue(I18n.t("products.filter.allcategories"));
                         } finally { syncingCategoryFilter = false; }
                         syncCategoryFilterWithSelection();
                     }
@@ -288,8 +308,16 @@ public class ProductController extends AdminScreen {
                     renderProductCategoryTabs();
                     renderProductCategoryList();
                     applyProductFilter();
+                    if (selectId != null) {
+                        for (Product product : productTable.getItems()) {
+                            if (product.getId() == selectId) {
+                                productTable.getSelectionModel().select(product);
+                                break;
+                            }
+                        }
+                    }
                 },
-                error -> AlertUtil.error("Lỗi tải dữ liệu", "Không thể tải danh sách sản phẩm: " + error.getMessage())
+                error -> AlertUtil.error(I18n.t("dashboard.load.title"), I18n.t("pos.load.products", error.getMessage()))
         );
     }
 
@@ -297,7 +325,7 @@ public class ProductController extends AdminScreen {
         if (productCategoryTabsBox == null) return;
         productCategoryTabsBox.getChildren().clear();
 
-        Button allBtn = new Button("▦   Tất cả");
+        Button allBtn = new Button(I18n.t("products.sidebar.all"));
         allBtn.getStyleClass().add("category-button");
         if (selectedProductCategoryId == null) {
             allBtn.getStyleClass().add("category-button-active");
@@ -321,7 +349,7 @@ public class ProductController extends AdminScreen {
         if (categoryListBox == null) return;
         categoryListBox.getChildren().clear();
 
-        Button allBtn = createCategoryListRow(null, "▦", "Tất cả", allProducts.size());
+        Button allBtn = createCategoryListRow(null, "▦", I18n.t("pos.category.all"), allProducts.size());
         categoryListBox.getChildren().add(allBtn);
 
         for (Category cat : allActiveCategories) {
@@ -361,7 +389,7 @@ public class ProductController extends AdminScreen {
 
     private String getCategoryIcon(String name) {
         if (name == null) return "●";
-        String lower = name.toLowerCase();
+        String lower = name.toLowerCase(Locale.ROOT);
         if (lower.contains("phê") || lower.contains("coffee")) return "☕";
         if (lower.contains("bánh") || lower.contains("cake")) return "♨";
         if (lower.contains("trà") || lower.contains("tea")) return "🍵";
@@ -381,7 +409,7 @@ public class ProductController extends AdminScreen {
     /** Keep the "Danh mục" combo in step with the sidebar/tab selection ("Tất cả" -> all categories). */
     private void syncCategoryFilterWithSelection() {
         if (categoryFilter == null) return;
-        String target = "Tất cả danh mục";
+        String target = I18n.t("products.filter.allcategories");
         if (selectedProductCategoryId != null) {
             for (Category c : allActiveCategories) {
                 if (c.getId() == selectedProductCategoryId) { target = c.getName(); break; }
@@ -401,17 +429,19 @@ public class ProductController extends AdminScreen {
         List<Product> filtered = allProducts.stream()
                 .filter(p -> selectedProductCategoryId == null || (p.getCategoryId() != null && p.getCategoryId().equals(selectedProductCategoryId)))
                 .filter(p -> keyword.isEmpty() || com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.searchKey(p.getName()).contains(keyword))
-                .filter(p -> categoryChoice == null || categoryChoice.startsWith("Tất cả")
+                .filter(p -> categoryChoice == null || categoryChoice.startsWith(I18n.t("pos.category.all"))
                         || (p.getCategoryName() != null && categoryChoice.equals(p.getCategoryName())))
-                .filter(p -> statusChoice == null || statusChoice.startsWith("Tất cả")
-                        || p.isActive() == statusChoice.equals("Đang bán"))
+                .filter(p -> statusChoice == null || statusChoice.startsWith(I18n.t("pos.category.all"))
+                        || (statusChoice.equals(I18n.t("products.status.reorder"))
+                                ? p.isActive() && p.isLowStock() // "need to reorder": on sale and at or below its level (TODO 4.19)
+                                : p.isActive() == statusChoice.equals(I18n.t("products.status.selling"))))
                 .collect(Collectors.toList());
 
         if (productPaged != null) {
             productPaged.setItems(filtered);
         }
         if (totalProductLabel != null) {
-            totalProductLabel.setText("Tổng cộng: " + filtered.size() + " sản phẩm");
+            totalProductLabel.setText(I18n.t("products.total", filtered.size()));
         }
     }
 
@@ -421,7 +451,7 @@ public class ProductController extends AdminScreen {
         String choice = categoryFilter.getValue();
         if (choice == null) return;
         Integer id = null;
-        if (!choice.startsWith("Tất cả")) {
+        if (!choice.startsWith(I18n.t("pos.category.all"))) {
             for (Category c : allActiveCategories) {
                 if (c.getName().equals(choice)) { id = c.getId(); break; }
             }
@@ -438,11 +468,42 @@ public class ProductController extends AdminScreen {
     @FXML
     public void handleAddProduct() {
         if (allActiveCategories.isEmpty()) {
-            AlertUtil.warning("Chưa có danh mục",
-                    "Vui lòng tạo ít nhất một danh mục (trong Quản lý danh mục) trước khi thêm sản phẩm.");
+            AlertUtil.warning(I18n.t("categories.none.title"),
+                    I18n.t("products.nocategory.message"));
             return;
         }
         openProductDialog(null);
+    }
+
+    @FXML
+    public void handleMoveProductUp() {
+        moveSelectedProduct(-1);
+    }
+
+    @FXML
+    public void handleMoveProductDown() {
+        moveSelectedProduct(1);
+    }
+
+    /**
+     * The arrows change the place of a product among the others of its category on the sales screen (TODO 5.31). They need a selected
+     * row and the stored order shown (no column sort), because only then does a press visibly move the row.
+     */
+    private void moveSelectedProduct(int delta) {
+        Product selected = productTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            AlertUtil.info(I18n.t("sort.title"), I18n.t("sort.select.product"));
+            return;
+        }
+        if (!productTable.getSortOrder().isEmpty()) {
+            AlertUtil.info(I18n.t("sort.title"), I18n.t("sort.clear"));
+            return;
+        }
+        int id = selected.getId();
+        Async.run(
+                () -> productDAO.move(id, delta),
+                moved -> reloadProducts(id),
+                error -> AlertUtil.error(I18n.t("common.error.title"), error.getMessage()));
     }
 
     private void openEditProductDialog(Product product) {
@@ -451,9 +512,9 @@ public class ProductController extends AdminScreen {
 
     private void openProductDialog(Product existing) {
         Dialog<Void> dialog = new Dialog<>();
-        dialog.setTitle(existing == null ? "Thêm sản phẩm" : "Chỉnh sửa sản phẩm");
+        dialog.setTitle(existing == null ? I18n.t("products.dialog.add") : I18n.t("products.dialog.edit"));
         AlertUtil.configure(dialog);
-        ButtonType saveButtonType = new ButtonType("Lưu", ButtonData.OK_DONE);
+        ButtonType saveButtonType = new ButtonType(I18n.t("common.save"), ButtonData.OK_DONE);
         dialog.getDialogPane().getButtonTypes().addAll(saveButtonType, ButtonType.CANCEL);
         AlertUtil.setDefaultButton(dialog, saveButtonType);
         AlertUtil.setCancelButton(dialog, ButtonType.CANCEL);
@@ -472,44 +533,61 @@ public class ProductController extends AdminScreen {
         TextLengthLimiter.limit(priceField, TextLengthLimiter.NUMBER_MAX);
         TextLengthLimiter.limit(costField, TextLengthLimiter.NUMBER_MAX);
         TextLengthLimiter.limit(stockField, 9);
+        TextField reorderField = new TextField(existing != null && existing.getReorderLevel() != null
+                ? String.valueOf(existing.getReorderLevel()) : "");
+        reorderField.setPromptText(I18n.t("products.reorder.prompt", com.coffeeshop.coffeeshopmanagement.service.StockLevel.DEFAULT));
+        TextLengthLimiter.limit(reorderField, 7);
         TextArea descriptionField = new TextArea(existing != null ? existing.getDescription() : "");
         TextLengthLimiter.limit(descriptionField, TextLengthLimiter.DESCRIPTION_MAX);
         descriptionField.setPrefRowCount(3);
-        CheckBox activeBox = new CheckBox("Đang bán");
+        CheckBox activeBox = new CheckBox(I18n.t("products.status.selling"));
         activeBox.setSelected(existing == null || existing.isActive());
 
         Label imagePathLabel = new Label(existing != null && existing.getImagePath() != null
-                ? existing.getImagePath() : "Chưa chọn ảnh");
+                ? existing.getImagePath() : I18n.t("products.image.none"));
         String[] pickedImagePath = {existing != null ? existing.getImagePath() : null};
         // Pictures are only removed once the product is saved (TODO 2.21): the one it had before, and any copies
         // made while picking. Copies are removed again when the dialog is cancelled.
         final String originalImagePath = existing != null ? existing.getImagePath() : null;
         final java.util.List<String> copiedImages = new java.util.ArrayList<>();
         final boolean[] productSaved = {false};
-        Button pickImageButton = new Button("Chọn ảnh...");
+        Button pickImageButton = new Button(I18n.t("common.pickimage"));
         pickImageButton.setOnAction(e -> {
             FileChooser chooser = new FileChooser();
-            chooser.setTitle("Chọn ảnh sản phẩm");
+            chooser.setTitle(I18n.t("products.image.choose"));
             chooser.getExtensionFilters().add(
-                    new FileChooser.ExtensionFilter("Hình ảnh", "*.png", "*.jpg", "*.jpeg", "*.jfif", "*.jpe", "*.gif", "*.bmp"));
+                    new FileChooser.ExtensionFilter(I18n.t("products.image.filter"), "*.png", "*.jpg", "*.jpeg", "*.jfif", "*.jpe", "*.gif", "*.bmp"));
             java.io.File picked = chooser.showOpenDialog(dialog.getDialogPane().getScene().getWindow());
-            String pictureProblem = picked == null ? null
-                    : com.coffeeshop.coffeeshopmanagement.util.ImageStorage.pictureProblem(picked);
-            if (pictureProblem != null) {
-                AlertUtil.warning("Ảnh không dùng được", pictureProblem);
-            } else if (picked != null) {
-                try {
-                    // Stores a bare file name now, not an absolute path (TODO.md item 10a) - a
-                    // database copied to another machine/user still finds its product images.
-                    String fileName = com.coffeeshop.coffeeshopmanagement.util.ImageStorage.storeNewFile(picked);
-                    pickedImagePath[0] = fileName;
-                    copiedImages.add(fileName);
-                    // The stored name is a random string now; show the name of the file that was picked.
-                    imagePathLabel.setText(picked.getName());
-                } catch (IOException ex) {
-                    AlertUtil.error("Không thể lưu ảnh", "Có lỗi khi sao chép ảnh: " + ex.getMessage());
-                }
-            }
+            if (picked == null) return;
+            // Looking at the picture and copying it take time (a big photo, a slow USB stick): not on the screen thread (TODO 3.43).
+            pickImageButton.setDisable(true);
+            Async.run(
+                    () -> {
+                        String problem = com.coffeeshop.coffeeshopmanagement.util.ImageStorage.pictureProblem(picked);
+                        if (problem != null) return new String[]{problem, null};
+                        // Stores a bare file name now, not an absolute path (TODO.md item 10a) - a
+                        // database copied to another machine/user still finds its product images.
+                        return new String[]{null, com.coffeeshop.coffeeshopmanagement.util.ImageStorage.storeNewFile(picked)};
+                    },
+                    result -> {
+                        pickImageButton.setDisable(false);
+                        if (result[0] != null) {
+                            AlertUtil.warning(I18n.t("products.image.unusable"), result[0]);
+                            return;
+                        }
+                        if (!dialog.isShowing()) { // the dialog was closed while the picture was being copied
+                            com.coffeeshop.coffeeshopmanagement.util.ImageStorage.deleteQuietly(result[1]);
+                            return;
+                        }
+                        pickedImagePath[0] = result[1];
+                        copiedImages.add(result[1]);
+                        // The stored name is a random string now; show the name of the file that was picked.
+                        imagePathLabel.setText(picked.getName());
+                    },
+                    error -> {
+                        pickImageButton.setDisable(false);
+                        AlertUtil.error(I18n.t("products.image.savefail"), I18n.t("products.image.copyfail", error.getMessage()));
+                    });
         });
         HBox imageRow = new HBox(10, pickImageButton, imagePathLabel);
 
@@ -518,25 +596,26 @@ public class ProductController extends AdminScreen {
         grid.setVgap(10);
         grid.setPadding(new Insets(20));
         int row = 0;
-        grid.addRow(row++, new Label("Tên sản phẩm:"), nameField);
-        grid.addRow(row++, new Label("Danh mục:"), categoryBox);
-        grid.addRow(row++, new Label("Giá bán:"), priceField);
-        grid.addRow(row++, new Label("Giá vốn:"), costField);
-        grid.addRow(row++, new Label("Tồn kho:"), stockField);
-        grid.addRow(row++, new Label("Mô tả:"), descriptionField);
-        grid.addRow(row++, new Label("Ảnh:"), imageRow);
+        grid.addRow(row++, new Label(I18n.t("products.label.name")), nameField);
+        grid.addRow(row++, new Label(I18n.t("products.label.category")), categoryBox);
+        grid.addRow(row++, new Label(I18n.t("products.label.price")), priceField);
+        grid.addRow(row++, new Label(I18n.t("products.label.cost")), costField);
+        grid.addRow(row++, new Label(I18n.t("products.label.stock")), stockField);
+        grid.addRow(row++, new Label(I18n.t("products.label.reorder")), reorderField);
+        grid.addRow(row++, new Label(I18n.t("common.label.description")), descriptionField);
+        grid.addRow(row++, new Label(I18n.t("products.label.image")), imageRow);
         grid.addRow(row, new Label(""), activeBox);
         dialog.getDialogPane().setContent(grid);
 
         Button saveButton = (Button) dialog.getDialogPane().lookupButton(saveButtonType);
         saveButton.addEventFilter(ActionEvent.ACTION, event -> {
             if (ValidationUtil.isBlank(nameField.getText())) {
-                AlertUtil.warning("Thiếu thông tin", "Vui lòng nhập tên sản phẩm.");
+                AlertUtil.warning(I18n.t("common.missing.title"), I18n.t("products.val.name"));
                 event.consume();
                 return;
             }
             if (categoryBox.getValue() == null) {
-                AlertUtil.warning("Thiếu thông tin", "Vui lòng chọn danh mục.");
+                AlertUtil.warning(I18n.t("common.missing.title"), I18n.t("products.val.category"));
                 event.consume();
                 return;
             }
@@ -545,7 +624,12 @@ public class ProductController extends AdminScreen {
                 price = MoneyParser.parseDong(priceField.getText());
                 if (price == null || price.signum() <= 0) throw new IllegalArgumentException();
             } catch (IllegalArgumentException ex) {
-                AlertUtil.warning("Giá không hợp lệ", "Giá bán phải là số tiền lớn hơn 0, ví dụ 25000 hoặc 25.000.");
+                AlertUtil.warning(I18n.t("products.val.price.title"), I18n.t("products.val.price.message"));
+                event.consume();
+                return;
+            }
+            if (Limits.priceTooBig(price)) { // a price with three extra zeros is an easy slip (TODO 3.59)
+                AlertUtil.warning(I18n.t("products.val.price.title"), I18n.t("products.val.price.max", Limits.maxPriceText()));
                 event.consume();
                 return;
             }
@@ -555,13 +639,18 @@ public class ProductController extends AdminScreen {
                     cost = MoneyParser.parseDong(costField.getText());
                     if (cost.signum() < 0) throw new IllegalArgumentException("negative");
                 } catch (IllegalArgumentException ex) {
-                    AlertUtil.warning("Giá vốn không hợp lệ", "Giá vốn phải là số tiền, ví dụ 12000 hoặc 12.000.");
+                    AlertUtil.warning(I18n.t("products.val.cost.title"), I18n.t("products.val.cost.message"));
+                    event.consume();
+                    return;
+                }
+                if (Limits.priceTooBig(cost)) {
+                    AlertUtil.warning(I18n.t("products.val.cost.title"), I18n.t("products.val.price.max", Limits.maxPriceText()));
                     event.consume();
                     return;
                 }
                 if (cost.compareTo(price) > 0
-                        && !AlertUtil.confirm("Giá vốn cao hơn giá bán",
-                        "Giá vốn lớn hơn giá bán nên mỗi lần bán sẽ lỗ. Vẫn lưu sản phẩm này?")) {
+                        && !AlertUtil.confirm(I18n.t("products.val.loss.title"),
+                        I18n.t("products.val.loss.message"))) {
                     event.consume();
                     return;
                 }
@@ -571,15 +660,19 @@ public class ProductController extends AdminScreen {
                 stock = Integer.parseInt(stockField.getText().trim());
                 if (stock < 0) throw new NumberFormatException();
             } catch (NumberFormatException ex) {
-                AlertUtil.warning("Tồn kho không hợp lệ", "Tồn kho phải là một số nguyên không âm.");
+                AlertUtil.warning(I18n.t("products.val.stock.title"), I18n.t("products.val.stock.message"));
+                event.consume();
+                return;
+            }
+            if (stock > Limits.MAX_STOCK) {
+                AlertUtil.warning(I18n.t("products.val.stock.title"), I18n.t("products.val.stock.max", Limits.MAX_STOCK));
                 event.consume();
                 return;
             }
             int oldStock = existing != null ? existing.getStock() : 0;
             if (com.coffeeshop.coffeeshopmanagement.service.StockPolicy.looksTooBig(oldStock, stock)
-                    && !AlertUtil.confirm("Tồn kho tăng rất nhiều",
-                    "Tồn kho đổi từ " + oldStock + " lên " + stock + ". Có đúng là " + stock + " không? "
-                            + "(Nhập nhầm thêm một số 0 rất dễ xảy ra.)")) {
+                    && !AlertUtil.confirm(I18n.t("products.stock.jump.title"),
+                    I18n.t("products.stock.jump.message", oldStock, stock, stock))) {
                 event.consume();
                 return;
             }
@@ -587,14 +680,18 @@ public class ProductController extends AdminScreen {
             try {
                 if (productDAO.existsByNameInCategory(nameField.getText(), categoryBox.getValue().getId(),
                         existing != null ? existing.getId() : 0)) {
-                    AlertUtil.warning("Trùng tên sản phẩm", "Danh mục \"" + categoryBox.getValue().getName()
-                            + "\" đã có sản phẩm tên \"" + nameField.getText().trim() + "\". Hãy đặt tên khác (ví dụ thêm cỡ ly) "
-                            + "hoặc sửa sản phẩm đã có.");
+                    AlertUtil.warning(I18n.t("products.dup.title"), I18n.t("products.dup.message", categoryBox.getValue().getName(), nameField.getText().trim()));
                     event.consume();
                     return;
                 }
             } catch (DataAccessException ex) {
-                AlertUtil.error("Không thể kiểm tra tên sản phẩm", ex.getMessage());
+                AlertUtil.error(I18n.t("products.dup.checkfail"), ex.getMessage());
+                event.consume();
+                return;
+            }
+            String reorderProblem = com.coffeeshop.coffeeshopmanagement.service.StockLevel.problem(reorderField.getText());
+            if (reorderProblem != null) {
+                AlertUtil.warning(I18n.t("products.val.stock.title"), I18n.t(reorderProblem, Limits.MAX_STOCK));
                 event.consume();
                 return;
             }
@@ -604,6 +701,7 @@ public class ProductController extends AdminScreen {
             product.setPrice(price);
             product.setCost(cost);
             product.setStock(stock);
+            product.setReorderLevel(com.coffeeshop.coffeeshopmanagement.service.StockLevel.parse(reorderField.getText()));
             product.setDescription(descriptionField.getText());
             product.setImagePath(pickedImagePath[0]);
             product.setActive(activeBox.isSelected());
@@ -626,7 +724,7 @@ public class ProductController extends AdminScreen {
                     com.coffeeshop.coffeeshopmanagement.util.ImageStorage.deleteQuietly(originalImagePath);
                 }
             } catch (DataAccessException ex) {
-                AlertUtil.error("Không thể lưu sản phẩm", ex.getMessage());
+                AlertUtil.error(I18n.t("products.save.fail"), ex.getMessage());
                 event.consume();
             }
         });
@@ -651,10 +749,8 @@ public class ProductController extends AdminScreen {
                 () -> productService.orderReferences(product.getId()),
                 orderRefs -> {
                     if (orderRefs > 0) {
-                        boolean confirmed = AlertUtil.confirm("Không thể xóa",
-                                "Sản phẩm \"" + product.getName() + "\" đã xuất hiện trong " + orderRefs +
-                                        " đơn hàng và không thể xóa để giữ nguyên lịch sử đơn hàng. " +
-                                        "Bạn có muốn ngừng bán sản phẩm này thay vì xóa không?");
+                        boolean confirmed = AlertUtil.confirm(I18n.t("common.delete.fail"),
+                                I18n.t("products.delete.inorders", product.getName(), orderRefs));
                         if (confirmed) {
                             Async.run(
                                     () -> {
@@ -662,12 +758,13 @@ public class ProductController extends AdminScreen {
                                         return Boolean.TRUE;
                                     },
                                     done -> reloadProducts(),
-                                    error -> AlertUtil.error("Không thể ngừng bán sản phẩm", error.getMessage()));
+                                    error -> AlertUtil.error(I18n.t("products.stop.fail"), error.getMessage()),
+                                    productTable);
                         }
                         return;
                     }
-                    boolean confirmed = AlertUtil.confirm("Xác nhận xóa",
-                            "Xóa sản phẩm \"" + product.getName() + "\"? Hành động này không thể hoàn tác.");
+                    boolean confirmed = AlertUtil.confirm(I18n.t("common.delete.confirm.title"),
+                            I18n.t("products.delete.confirm", product.getName()));
                     if (!confirmed) {
                         return;
                     }
@@ -675,15 +772,16 @@ public class ProductController extends AdminScreen {
                             () -> productService.delete(product),
                             deleted -> {
                                 if (!deleted) {
-                                    AlertUtil.warning("Không thể xóa",
-                                            "Sản phẩm vừa xuất hiện trong một đơn hàng nên chưa bị xóa. "
-                                                    + "Hãy ngừng bán sản phẩm này thay vì xóa.");
+                                    AlertUtil.warning(I18n.t("common.delete.fail"),
+                                            I18n.t("products.delete.race"));
                                 }
                                 reloadProducts();
                             },
-                            error -> AlertUtil.error("Không thể xóa sản phẩm", error.getMessage()));
+                            error -> AlertUtil.error(I18n.t("products.delete.fail"), error.getMessage()),
+                            productTable);
                 },
-                error -> AlertUtil.error("Lỗi", error.getMessage()));
+                error -> AlertUtil.error(I18n.t("common.error.title"), error.getMessage()),
+                productTable); // no second click on a delete button while this runs (TODO 2.75)
     }
 
     /**

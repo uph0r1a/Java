@@ -16,6 +16,7 @@ db.port=3306
 # The database and a user that is NOT root (see docs/DATABASE.md for the two commands that create them).
 db.name=lunavera
 db.user=lunavera
+# The password is read exactly as typed after the "=": a backslash, spaces, # or ! in it are ordinary characters.
 db.password=change-me-to-a-long-password
 
 # Once: copy the shop's old SQLite data (data/lunavera.db) into MariaDB at the next start. It replaces the starter data a first
@@ -23,8 +24,26 @@ db.password=change-me-to-a-long-password
 # Nothing happens if the file does not exist. See docs/DATABASE.md section 4.
 db.import.sqlite=data/lunavera.db
 
+# A server on ANOTHER computer (a second till): encrypt the connection, or customer names, phone numbers, password hashes and
+# the database password cross the shop's network as plain text. The server must have TLS switched on first: docs/DATABASE.md
+# section 7. Without any of these lines nothing is encrypted (fine for a server on this same computer).
+#db.ssl=true
+# Only for a server whose certificate is self-signed or from your own CA: the certificate (or CA) file. A name without a
+# folder is looked for in the data folder.
+#db.sslServerCert=ca-cert.pem
+# Instead of db.ssl, to choose exactly: disable | trust (encrypts but does not check the server) | verify-ca | verify-full
+#db.sslMode=verify-ca
+
+# How long a call waits for the server's answer before it gives up, in milliseconds (default 30000; 0 = wait for ever).
+#db.socketTimeoutMs=30000
+
 # Optional: the page the "Mở phpMyAdmin" button on the admin dashboard opens (http:// or https:// only).
 #db.phpmyadmin=http://localhost/phpmyadmin/
 
 # Optional: full path of mysqldump (used by the backup button). XAMPP on Windows:
-#db.mysqldump=C:\\xampp\\mysql\\bin\\mysqldump.exe
+#db.mysqldump=C:\xampp\mysql\bin\mysqldump.exe
+
+# Optional: set to false to stop THIS till from making the hourly SQLite copy of the shop's data (data/snapshots). With several
+# tills only one of them makes the copies anyway (the first one to start; another takes over if it is closed), so you normally
+# need nothing here.
+#db.snapshots=true

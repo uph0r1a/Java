@@ -1,0 +1,21 @@
+# Vietnamese string literals / FXML attribute values per file that still skip the language system (TODO 1.7).
+# Written by UntranslatedTextTest with -Dlunavera.i18n.writeBaseline=true. Only ever lower these numbers.
+# What is left is on purpose (TODO 1.7): MenuSeedData and SeedNames (the starter menu as stored, and the table that maps its
+# Vietnamese names to English ones for display), ProductController (icon keywords matched
+# against product names), DatabaseConfig (seeded names and a SQL match on the old category), ProductCsv (the CSV header and
+# yes/no values are a file format), MoneyParser/CurrencyUtil/Product (the dong sign), TableStatus and DiningTable (stored
+# table names), CustomerService (the stored walk-in name), FirstRunDialog (the owner's stored position), ReceiptQr (ASCII QR text).
+java/com/coffeeshop/coffeeshopmanagement/config/DatabaseConfig.java=1
+java/com/coffeeshop/coffeeshopmanagement/config/MenuSeedData.java=59
+java/com/coffeeshop/coffeeshopmanagement/config/SchemaMigrations.java=7
+java/com/coffeeshop/coffeeshopmanagement/config/SeedNames.java=30
+java/com/coffeeshop/coffeeshopmanagement/controller/FirstRunDialog.java=1
+java/com/coffeeshop/coffeeshopmanagement/controller/ProductController.java=5
+java/com/coffeeshop/coffeeshopmanagement/model/DiningTable.java=1
+java/com/coffeeshop/coffeeshopmanagement/model/Product.java=1
+java/com/coffeeshop/coffeeshopmanagement/model/TableStatus.java=2
+java/com/coffeeshop/coffeeshopmanagement/service/CustomerService.java=1
+java/com/coffeeshop/coffeeshopmanagement/service/ProductCsv.java=4
+java/com/coffeeshop/coffeeshopmanagement/util/CurrencyUtil.java=1
+java/com/coffeeshop/coffeeshopmanagement/util/MoneyParser.java=2
+java/com/coffeeshop/coffeeshopmanagement/util/ReceiptQr.java=1

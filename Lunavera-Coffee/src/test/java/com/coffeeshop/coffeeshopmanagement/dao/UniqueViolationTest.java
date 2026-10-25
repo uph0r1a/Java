@@ -3,6 +3,7 @@ package com.coffeeshop.coffeeshopmanagement.dao;
 import com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig;
 import com.coffeeshop.coffeeshopmanagement.model.Category;
 import com.coffeeshop.coffeeshopmanagement.model.Customer;
+import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -23,6 +24,12 @@ public class UniqueViolationTest {
     @BeforeClass
     public static void setUpDatabase() {
         TestDatabaseSupport.ensureReady();
+        com.coffeeshop.coffeeshopmanagement.util.TestSession.admin();
+    }
+
+    @AfterClass
+    public static void signOut() {
+        com.coffeeshop.coffeeshopmanagement.util.TestSession.clear();
     }
 
     // ---- the rule itself, no database ----
@@ -102,7 +109,7 @@ public class UniqueViolationTest {
         DataAccessException e = assertThrows(DataAccessException.class, () -> categories.insert(second));
         assertTrue(e.getMessage(), e.getMessage().contains("Đã tồn tại danh mục"));
 
-        String phone = "09" + String.format("%08d", Math.abs(UUID.randomUUID().getMostSignificantBits() % 100_000_000L));
+        String phone = "09" + String.format(java.util.Locale.ROOT, "%08d", Math.abs(UUID.randomUUID().getMostSignificantBits() % 100_000_000L));
         CustomerDAO customers = new CustomerDAO();
         customers.insert(customer(phone));
         DataAccessException dup = assertThrows(DataAccessException.class, () -> customers.insert(customer(phone)));

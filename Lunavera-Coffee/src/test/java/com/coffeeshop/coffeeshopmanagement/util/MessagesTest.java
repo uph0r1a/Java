@@ -22,7 +22,8 @@ import static org.junit.Assert.*;
  */
 public class MessagesTest {
 
-    private static final Path BUNDLE = Path.of("src", "main", "resources", "messages_vi.properties");
+    private static final Path BUNDLE = Path.of("src", "main", "resources", "i18n", "messages_vi.properties");
+    private static final Path BUNDLE_EN = Path.of("src", "main", "resources", "i18n", "messages_en.properties");
     private static final Path JAVA = Path.of("src", "main", "java");
     private static final Pattern CALL = Pattern.compile("Messages\\.(?:get|format)\\(\\s*(?:[^\"(),]*\\?\\s*)?\"([\\w.]+)\"(?:\\s*:\\s*\"([\\w.]+)\")?");
 
@@ -31,8 +32,12 @@ public class MessagesTest {
     }
 
     private static Set<String> keysInFile() throws IOException {
+        return keysIn(lines());
+    }
+
+    private static Set<String> keysIn(List<String> fileLines) {
         Set<String> keys = new TreeSet<>();
-        for (String line : lines()) {
+        for (String line : fileLines) {
             String t = line.trim();
             if (t.isEmpty() || t.startsWith("#")) continue;
             int eq = t.indexOf('=');
@@ -64,35 +69,46 @@ public class MessagesTest {
     }
 
     @Test
-    public void everyKeyInTheFileIsUsedInCode() throws IOException {
-        Set<String> unused = new TreeSet<>(keysInFile());
-        unused.removeAll(keysUsedInCode());
-        assertTrue("these keys are in the file but no code uses them (delete them or use them): " + unused, unused.isEmpty());
+    public void everyKeyUsedInCodeIsAlsoInTheEnglishFile() throws IOException {
+        Set<String> missing = new TreeSet<>(keysUsedInCode());
+        missing.removeAll(keysIn(Files.readAllLines(BUNDLE_EN, StandardCharsets.UTF_8)));
+        assertTrue("code asks for keys that messages_en.properties does not have: " + missing, missing.isEmpty());
     }
 
     @Test
     public void noKeyIsDefinedTwiceBecauseTheSecondSilentlyWins() throws IOException {
-        Set<String> seen = new HashSet<>();
-        for (String line : lines()) {
-            String t = line.trim();
-            if (t.isEmpty() || t.startsWith("#")) continue;
-            String key = t.substring(0, t.indexOf('=')).trim();
-            assertTrue("defined twice: " + key, seen.add(key));
+        for (Path file : List.of(BUNDLE, BUNDLE_EN)) {
+            Set<String> seen = new HashSet<>();
+            for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
+                String t = line.trim();
+                if (t.isEmpty() || t.startsWith("#")) continue;
+                String key = t.substring(0, t.indexOf('=')).trim();
+                assertTrue("defined twice in " + file.getFileName() + ": " + key, seen.add(key));
+            }
+            assertFalse(seen.isEmpty());
         }
-        assertFalse(seen.isEmpty());
     }
 
     @Test
-    public void theFileIsPlainUtf8WithVietnameseLettersWrittenAsTheyAre() throws IOException {
+    public void theFilesArePlainUtf8WithLettersWrittenAsTheyAre() throws IOException {
         String text = Files.readString(BUNDLE, StandardCharsets.UTF_8);
         assertFalse("escaped letters make the file hard to read and to review", text.contains("\\u"));
         assertTrue(text.contains("Thêm danh mục"));
+        assertFalse(Files.readString(BUNDLE_EN, StandardCharsets.UTF_8).contains("\\u"));
     }
 
     @Test
     public void aKnownKeyGivesItsTextAndAnUnknownKeyGivesTheKeyItself() {
-        assertEquals("Thêm danh mục", Messages.get("category.dialog.title.add"));
-        assertEquals("no.such.key", Messages.get("no.such.key"));
+        String before = I18n.current();
+        try {
+            I18n.setLanguage(I18n.VI);
+            assertEquals("Thêm danh mục", Messages.get("category.dialog.title.add"));
+            I18n.setLanguage(I18n.EN);
+            assertEquals("Add category", Messages.get("category.dialog.title.add"));
+            assertEquals("no.such.key", Messages.get("no.such.key"));
+        } finally {
+            I18n.setLanguage(before);
+        }
     }
 
     @Test
@@ -100,4 +116,26 @@ public class MessagesTest {
         // Uses the real lookup path with a key that does not exist: the key is the pattern, so the filling-in is still tested.
         assertEquals("no.such.key", Messages.format("no.such.key", "x"));
     }
+
+    @Test
+    public void aMissingKeyIsLoggedOnlyOnce() {
+        java.util.logging.Logger logger = java.util.logging.Logger.getLogger(Messages.class.getName());
+        java.util.concurrent.atomic.AtomicInteger records = new java.util.concurrent.atomic.AtomicInteger();
+        java.util.logging.Handler counter = new java.util.logging.Handler() {
+            @Override public void publish(java.util.logging.LogRecord r) { records.incrementAndGet(); }
+            @Override public void flush() { }
+            @Override public void close() { }
+        };
+        logger.addHandler(counter);
+        try {
+            String key = "no.such.key." + System.nanoTime();
+            assertEquals(key, Messages.get(key));
+            assertEquals(key, Messages.get(key));
+            assertEquals(key, Messages.format(key));
+            assertEquals("three calls, one log line", 1, records.get());
+        } finally {
+            logger.removeHandler(counter);
+        }
+    }
 }
+

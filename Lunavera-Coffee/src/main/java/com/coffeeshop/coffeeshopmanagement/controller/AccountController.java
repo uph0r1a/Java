@@ -1,5 +1,7 @@
 package com.coffeeshop.coffeeshopmanagement.controller;
 
+import java.util.Locale;
+import com.coffeeshop.coffeeshopmanagement.util.I18n;
 import com.coffeeshop.coffeeshopmanagement.dao.DataAccessException;
 import com.coffeeshop.coffeeshopmanagement.dao.EmployeeDAO;
 import com.coffeeshop.coffeeshopmanagement.dao.UserDAO;
@@ -118,17 +120,17 @@ public class AccountController extends AdminScreen {
         phoneColumn.setCellValueFactory(data -> new SimpleStringProperty(employeePhoneFor(data.getValue())));
         roleColumn.setCellValueFactory(data -> new SimpleStringProperty(roleLabel(data.getValue().getRole())));
         statusColumn.setCellValueFactory(data ->
-                new SimpleStringProperty(data.getValue().getStatus() == AccountStatus.ACTIVE ? "Hoạt động" : "Đã khóa"));
+                new SimpleStringProperty(data.getValue().getStatus() == AccountStatus.ACTIVE ? I18n.t("accounts.status.active") : I18n.t("accounts.status.locked")));
         createdDateColumn.setCellValueFactory(data -> new SimpleStringProperty(
                 data.getValue().getCreatedAt() != null ? data.getValue().getCreatedAt().format(DATE_FORMAT) : "-"));
         accountActionColumn.setCellFactory(actionColumnFactory(this::showAccountDetail, null));
 
         if (roleFilter != null) {
-            roleFilter.getItems().setAll("Tất cả quyền", "Quản trị viên", "Nhân viên", "Khách hàng");
+            roleFilter.getItems().setAll(I18n.t("accounts.filter.allroles"), I18n.t("role.admin"), I18n.t("role.employee"), I18n.t("history.col.customer"));
             roleFilter.getSelectionModel().selectFirst();
         }
         if (accountStatusFilter != null) {
-            accountStatusFilter.getItems().setAll("Tất cả trạng thái", "Hoạt động", "Đã khóa");
+            accountStatusFilter.getItems().setAll(I18n.t("history.status.all"), I18n.t("accounts.status.active"), I18n.t("accounts.status.locked"));
             accountStatusFilter.getSelectionModel().selectFirst();
         }
         if (accountSearchField != null) {
@@ -153,7 +155,7 @@ public class AccountController extends AdminScreen {
                     employeesById = employees.stream().collect(Collectors.toMap(Employee::getId, e -> e));
                     applyAccountFilter();
                 },
-                error -> AlertUtil.error("Lỗi", error.getMessage())
+                error -> AlertUtil.error(I18n.t("common.error.title"), error.getMessage())
         );
     }
 
@@ -167,10 +169,10 @@ public class AccountController extends AdminScreen {
                 .filter(u -> keyword.isEmpty()
                         || com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.searchKey(u.getUsername()).contains(keyword)
                         || com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.searchKey(employeeNameFor(u)).contains(keyword)
-                        || employeePhoneFor(u).toLowerCase().contains(keyword))
-                .filter(u -> roleChoice == null || roleChoice.startsWith("Tất cả") || roleLabel(u.getRole()).equals(roleChoice))
-                .filter(u -> statusChoice == null || statusChoice.startsWith("Tất cả")
-                        || (u.getStatus() == AccountStatus.ACTIVE) == statusChoice.equals("Hoạt động"))
+                        || employeePhoneFor(u).toLowerCase(Locale.ROOT).contains(keyword))
+                .filter(u -> roleChoice == null || roleChoice.startsWith(I18n.t("pos.category.all")) || roleLabel(u.getRole()).equals(roleChoice))
+                .filter(u -> statusChoice == null || statusChoice.startsWith(I18n.t("pos.category.all"))
+                        || (u.getStatus() == AccountStatus.ACTIVE) == statusChoice.equals(I18n.t("accounts.status.active")))
                 .collect(Collectors.toList());
 
         accountPaged.setItems(filtered);
@@ -185,10 +187,9 @@ public class AccountController extends AdminScreen {
         if (adminAccountLabel != null) {
             adminAccountLabel.setText(String.valueOf(allAccounts.stream().filter(u -> u.getRole() == Role.ADMIN).count()));
         }
-        if (accountCountLabel != null) accountCountLabel.setText(filtered.size() + " tài khoản");
+        if (accountCountLabel != null) accountCountLabel.setText(I18n.t("accounts.count", filtered.size()));
         if (accountPaginationLabel != null) {
-            accountPaginationLabel.setText(String.format("Hiển thị %d – %d / %d tài khoản",
-                    accountPaged.getFromIndex(), accountPaged.getToIndex(), accountPaged.getTotalCount()));
+            accountPaginationLabel.setText(I18n.t("accounts.pagination", accountPaged.getFromIndex(), accountPaged.getToIndex(), accountPaged.getTotalCount()));
         }
     }
 
@@ -214,9 +215,9 @@ public class AccountController extends AdminScreen {
 
     private String roleLabel(Role role) {
         return switch (role) {
-            case ADMIN -> "Quản trị viên";
-            case EMPLOYEE -> "Nhân viên";
-            case CUSTOMER -> "Khách hàng";
+            case ADMIN -> I18n.t("role.admin");
+            case EMPLOYEE -> I18n.t("role.employee");
+            case CUSTOMER -> I18n.t("history.col.customer");
         };
     }
 
@@ -238,9 +239,9 @@ public class AccountController extends AdminScreen {
 
     private void openAccountDialog(User existing) {
         Dialog<Void> dialog = new Dialog<>();
-        dialog.setTitle(existing == null ? "Thêm tài khoản nhân viên" : "Chỉnh sửa tài khoản");
+        dialog.setTitle(existing == null ? I18n.t("accounts.dialog.add") : I18n.t("accounts.dialog.edit"));
         AlertUtil.configure(dialog);
-        ButtonType saveButtonType = new ButtonType("Lưu", ButtonData.OK_DONE);
+        ButtonType saveButtonType = new ButtonType(I18n.t("common.save"), ButtonData.OK_DONE);
         dialog.getDialogPane().getButtonTypes().addAll(saveButtonType, ButtonType.CANCEL);
         AlertUtil.setDefaultButton(dialog, saveButtonType);
         AlertUtil.setCancelButton(dialog, ButtonType.CANCEL);
@@ -257,7 +258,7 @@ public class AccountController extends AdminScreen {
         usernameField.setDisable(existing != null); // username is immutable once created
         PasswordField passwordField = new PasswordField();
         TextLengthLimiter.limit(passwordField, TextLengthLimiter.PASSWORD_MAX);
-        passwordField.setPromptText(existing == null ? "" : "Để trống nếu không đổi mật khẩu");
+        passwordField.setPromptText(existing == null ? "" : I18n.t("accounts.password.prompt"));
         ComboBox<Role> roleBox = new ComboBox<>();
         roleBox.getItems().setAll(Role.ADMIN, Role.EMPLOYEE);
         roleBox.setConverter(new javafx.util.StringConverter<>() {
@@ -265,7 +266,13 @@ public class AccountController extends AdminScreen {
             @Override public Role fromString(String text) { return null; }
         });
         roleBox.setValue(existing != null && existing.getRole() != Role.CUSTOMER ? existing.getRole() : Role.EMPLOYEE);
-        CheckBox activeBox = new CheckBox("Hoạt động");
+        if (existing != null && existing.getRole() == Role.CUSTOMER) {
+            // TODO 2.84: an old customer-role account keeps its role (shown, not editable); saving the form must not make it staff.
+            roleBox.getItems().setAll(Role.CUSTOMER);
+            roleBox.setValue(Role.CUSTOMER);
+            roleBox.setDisable(true);
+        }
+        CheckBox activeBox = new CheckBox(I18n.t("accounts.status.active"));
         activeBox.setSelected(existing == null || existing.getStatus() == AccountStatus.ACTIVE);
 
         // Employee details (TODO 2.10): saved with the staff record and shown in the account's detail panel.
@@ -278,7 +285,7 @@ public class AccountController extends AdminScreen {
         TextField salaryField = new TextField(existingEmployee != null && existingEmployee.getSalary() != null
                 ? existingEmployee.getSalary().toPlainString() : "");
         TextLengthLimiter.limit(salaryField, TextLengthLimiter.NUMBER_MAX);
-        salaryField.setPromptText("Đồng/tháng, ví dụ 8000000");
+        salaryField.setPromptText(I18n.t("accounts.salary.prompt"));
         DatePicker hireDatePicker = new DatePicker(existingEmployee != null ? existingEmployee.getHireDate() : null);
         if (existing != null && Session.getCurrentUser() != null && existing.getId() == Session.getCurrentUser().getId()) {
             // Own account (TODO 2.48): the Khóa button refuses it, so the dialog must too.
@@ -293,23 +300,23 @@ public class AccountController extends AdminScreen {
             addressField.setDisable(true);
             salaryField.setDisable(true);
             hireDatePicker.setDisable(true);
-            positionField.setPromptText("Tài khoản này chưa có hồ sơ nhân viên");
+            positionField.setPromptText(I18n.t("accounts.noprofile"));
         }
 
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(10);
         grid.setPadding(new Insets(20));
-        grid.addRow(0, new Label("Họ và tên:"), fullNameField);
-        grid.addRow(1, new Label("Số điện thoại:"), phoneField);
-        grid.addRow(2, new Label("Tên đăng nhập:"), usernameField);
-        grid.addRow(3, new Label("Mật khẩu:"), passwordField);
-        grid.addRow(4, new Label("Quyền:"), roleBox);
+        grid.addRow(0, new Label(I18n.t("customers.label.name")), fullNameField);
+        grid.addRow(1, new Label(I18n.t("customers.label.phone")), phoneField);
+        grid.addRow(2, new Label(I18n.t("accounts.label.username")), usernameField);
+        grid.addRow(3, new Label(I18n.t("accounts.label.password")), passwordField);
+        grid.addRow(4, new Label(I18n.t("accounts.label.role")), roleBox);
         grid.addRow(5, new Label(""), activeBox);
-        grid.addRow(6, new Label("Chức vụ:"), positionField);
-        grid.addRow(7, new Label("Địa chỉ:"), addressField);
-        grid.addRow(8, new Label("Lương:"), salaryField);
-        grid.addRow(9, new Label("Ngày vào làm:"), hireDatePicker);
+        grid.addRow(6, new Label(I18n.t("accounts.label.position")), positionField);
+        grid.addRow(7, new Label(I18n.t("accounts.label.address")), addressField);
+        grid.addRow(8, new Label(I18n.t("accounts.label.salary")), salaryField);
+        grid.addRow(9, new Label(I18n.t("accounts.label.startdate")), hireDatePicker);
         dialog.getDialogPane().setContent(grid);
 
         // Event filter on the button itself (not setResultConverter) so an invalid/failed save
@@ -318,18 +325,18 @@ public class AccountController extends AdminScreen {
         Button saveButton = (Button) dialog.getDialogPane().lookupButton(saveButtonType);
         saveButton.addEventFilter(ActionEvent.ACTION, event -> {
             if ((hasDetailsRecord && ValidationUtil.isBlank(fullNameField.getText())) || ValidationUtil.isBlank(usernameField.getText())) {
-                AlertUtil.warning("Thiếu thông tin", "Vui lòng nhập họ tên và tên đăng nhập.");
+                AlertUtil.warning(I18n.t("common.missing.title"), I18n.t("accounts.val.required"));
                 event.consume();
                 return;
             }
             if (!ValidationUtil.isValidUsername(usernameField.getText())) {
-                AlertUtil.warning("Tên đăng nhập không hợp lệ",
-                        "Tên đăng nhập phải từ 4-32 ký tự, chỉ gồm chữ, số, dấu chấm và gạch dưới, và không được giống một số điện thoại.");
+                AlertUtil.warning(I18n.t("accounts.val.username.title"),
+                        I18n.t("accounts.val.username.message"));
                 event.consume();
                 return;
             }
             if (hasDetailsRecord && !ValidationUtil.isBlank(phoneField.getText()) && !ValidationUtil.isValidPhone(phoneField.getText())) {
-                AlertUtil.warning("Số điện thoại không hợp lệ", "Vui lòng nhập đúng định dạng số điện thoại.");
+                AlertUtil.warning(I18n.t("customers.val.phone.title"), I18n.t("customers.val.phone.message"));
                 event.consume();
                 return;
             }
@@ -337,12 +344,12 @@ public class AccountController extends AdminScreen {
             try {
                 salary = MoneyParser.parseDong(salaryField.getText());
             } catch (IllegalArgumentException e) {
-                AlertUtil.warning("Lương không hợp lệ", e.getMessage());
+                AlertUtil.warning(I18n.t("accounts.val.salary.title"), e.getMessage());
                 event.consume();
                 return;
             }
-            if (hireDatePicker.getValue() != null && hireDatePicker.getValue().isAfter(java.time.LocalDate.now())) {
-                AlertUtil.warning("Ngày vào làm không hợp lệ", "Ngày vào làm không thể ở tương lai.");
+            if (hireDatePicker.getValue() != null && hireDatePicker.getValue().isAfter(com.coffeeshop.coffeeshopmanagement.util.AppClock.today())) {
+                AlertUtil.warning(I18n.t("accounts.val.date.title"), I18n.t("accounts.val.date.message"));
                 event.consume();
                 return;
             }
@@ -359,7 +366,7 @@ public class AccountController extends AdminScreen {
                 if (existing == null) {
                     if (!ValidationUtil.isValidPassword(passwordField.getText())
                             || ValidationUtil.containsUsername(passwordField.getText(), usernameField.getText())) {
-                        AlertUtil.warning("Mật khẩu yếu", "Mật khẩu phải có ít nhất 8 ký tự, gồm cả chữ và số, không chứa tên đăng nhập hay tên quán, và không phải mật khẩu quá phổ biến (như 12345678).");
+                        AlertUtil.warning(I18n.t("password.weak.title"), I18n.t("password.problem.weak"));
                         event.consume();
                         return;
                     }
@@ -368,14 +375,14 @@ public class AccountController extends AdminScreen {
                     if (!ValidationUtil.isBlank(passwordField.getText())
                             && (!ValidationUtil.isValidPassword(passwordField.getText())
                             || ValidationUtil.containsUsername(passwordField.getText(), usernameField.getText()))) {
-                        AlertUtil.warning("Mật khẩu yếu", "Mật khẩu phải có ít nhất 8 ký tự, gồm cả chữ và số, không chứa tên đăng nhập hay tên quán, và không phải mật khẩu quá phổ biến (như 12345678).");
+                        AlertUtil.warning(I18n.t("password.weak.title"), I18n.t("password.problem.weak"));
                         event.consume();
                         return;
                     }
                     accountService.update(existing, existingEmployee, form);
                 }
             } catch (DataAccessException e) {
-                AlertUtil.error("Không thể lưu tài khoản", e.getMessage());
+                AlertUtil.error(I18n.t("accounts.save.fail"), e.getMessage());
                 event.consume();
             }
         });
@@ -389,7 +396,7 @@ public class AccountController extends AdminScreen {
     public void handleEditAccount() {
         if (!requireAdmin()) return;
         if (selectedAccount == null) {
-            AlertUtil.info("Chưa chọn tài khoản", "Vui lòng chọn một tài khoản trong bảng trước.");
+            AlertUtil.info(I18n.t("accounts.none.title"), I18n.t("accounts.none.message"));
             return;
         }
         openAccountDialog(selectedAccount);
@@ -399,11 +406,11 @@ public class AccountController extends AdminScreen {
     public void handleLockAccount() {
         if (!requireAdmin()) return;
         if (selectedAccount == null) {
-            AlertUtil.info("Chưa chọn tài khoản", "Vui lòng chọn một tài khoản trong bảng trước.");
+            AlertUtil.info(I18n.t("accounts.none.title"), I18n.t("accounts.none.message"));
             return;
         }
         if (selectedAccount.getUsername().equals(Session.getCurrentUser().getUsername())) {
-            AlertUtil.warning("Không thể khóa", "Bạn không thể tự khóa tài khoản đang đăng nhập.");
+            AlertUtil.warning(I18n.t("accounts.lock.fail.title"), I18n.t("accounts.lock.self"));
             return;
         }
         final User target = selectedAccount;
@@ -415,21 +422,22 @@ public class AccountController extends AdminScreen {
                     userDAO::countActiveAdmins,
                     activeAdmins -> {
                         if (activeAdmins <= 1) {
-                            AlertUtil.warning("Không thể khóa",
-                                    "Đây là quản trị viên đang hoạt động cuối cùng - khóa sẽ làm mất quyền quản trị hệ thống.");
+                            AlertUtil.warning(I18n.t("accounts.lock.fail.title"),
+                                    I18n.t("accounts.lock.last"));
                             return;
                         }
                         confirmAndSetLocked(target, nowLocking);
                     },
-                    error -> AlertUtil.error("Lỗi", error.getMessage()));
+                    error -> AlertUtil.error(I18n.t("common.error.title"), error.getMessage()),
+                    accountTable);
             return;
         }
         confirmAndSetLocked(target, nowLocking);
     }
 
     private void confirmAndSetLocked(User target, boolean nowLocking) {
-        boolean confirmed = AlertUtil.confirm(nowLocking ? "Khóa tài khoản" : "Mở khóa tài khoản",
-                (nowLocking ? "Khóa" : "Mở khóa") + " tài khoản \"" + target.getUsername() + "\"?");
+        boolean confirmed = AlertUtil.confirm(nowLocking ? I18n.t("accounts.lock.title") : I18n.t("accounts.unlock.title"),
+                I18n.t("accounts.lock.confirm", (nowLocking ? I18n.t("accounts.lock.verb") : I18n.t("accounts.unlock.verb")), target.getUsername()));
         if (!confirmed) {
             return;
         }
@@ -442,7 +450,8 @@ public class AccountController extends AdminScreen {
                     reloadAccounts();
                     handleCloseDetail();
                 },
-                error -> AlertUtil.error("Không thể đổi trạng thái", error.getMessage()));
+                error -> AlertUtil.error(I18n.t("accounts.status.fail"), error.getMessage()),
+                accountTable);
     }
 
     @FXML
@@ -463,7 +472,7 @@ public class AccountController extends AdminScreen {
         if (detailPhoneLabel != null) detailPhoneLabel.setText(employeePhoneFor(user));
         if (detailRoleLabel != null) detailRoleLabel.setText(roleLabel(user.getRole()));
         if (detailStatusLabel != null) {
-            detailStatusLabel.setText(user.getStatus() == AccountStatus.ACTIVE ? "Hoạt động" : "Đã khóa");
+            detailStatusLabel.setText(user.getStatus() == AccountStatus.ACTIVE ? I18n.t("accounts.status.active") : I18n.t("accounts.status.locked"));
         }
         if (detailCreatedDateLabel != null) {
             detailCreatedDateLabel.setText(user.getCreatedAt() != null ? user.getCreatedAt().format(DATE_FORMAT) : "-");
@@ -479,7 +488,7 @@ public class AccountController extends AdminScreen {
         }
         if (detailAddressLabel != null) detailAddressLabel.setText(staff != null && staff.getAddress() != null ? staff.getAddress() : "-");
         if (lockAccountButton != null) {
-            lockAccountButton.setText(user.getStatus() == AccountStatus.ACTIVE ? "▣   Khóa" : "▣   Mở khóa");
+            lockAccountButton.setText(user.getStatus() == AccountStatus.ACTIVE ? I18n.t("accounts.button.lock") : I18n.t("accounts.button.unlock"));
         }
         if (accountDetailCard != null) {
             accountDetailCard.setVisible(true);

@@ -1,5 +1,6 @@
 package com.coffeeshop.coffeeshopmanagement.controller;
 
+import com.coffeeshop.coffeeshopmanagement.util.I18n;
 import com.coffeeshop.coffeeshopmanagement.dao.TableDAO;
 import com.coffeeshop.coffeeshopmanagement.model.DiningTable;
 import com.coffeeshop.coffeeshopmanagement.service.DashboardStatsService;
@@ -52,7 +53,7 @@ public class EmployeeController {
     private void initialize() {
         loadHomeTableGrid();
         if (dashboardGreetingLabel != null) {
-            dashboardGreetingLabel.setText("Chào mừng, " + Session.getDisplayName() + "!");
+            dashboardGreetingLabel.setText(I18n.t("dashboard.greeting", Session.getDisplayName()));
         }
         if (dashboardAccountNameLabel != null) {
             dashboardAccountNameLabel.setText(Session.getDisplayName());
@@ -85,7 +86,7 @@ public class EmployeeController {
                 dashboardStatsService::loadStats,
                 this::applyDashboardStats,
                 error -> {
-                    if (!quiet) AlertUtil.error("Lỗi tải dữ liệu", "Không thể tải số liệu thống kê: " + error.getMessage());
+                    if (!quiet) AlertUtil.error(I18n.t("dashboard.load.title"), I18n.t("dashboard.load.stats", error.getMessage()));
                 }
         );
     }
@@ -101,8 +102,8 @@ public class EmployeeController {
         }
         if (dashboardLowStockNoteLabel != null) {
             dashboardLowStockNoteLabel.setText(stats.lowStockCount() == 0
-                    ? "Không có sản phẩm sắp hết hàng"
-                    : "Cần nhập thêm: " + stats.lowStockCount() + " sản phẩm");
+                    ? I18n.t("stats.lowstock.none")
+                    : I18n.t("stats.lowstock.some", stats.lowStockCount()));
         }
         if (lowStockList != null) {
             DashboardWidgets.fillLowStock(lowStockList, stats.lowStockProducts());
@@ -115,7 +116,7 @@ public class EmployeeController {
         Async.run(
                 tableDAO::findAll,
                 tables -> DashboardWidgets.fillTableGrid(homeTableGrid, tables, this::handleHomeTableClick),
-                error -> AlertUtil.error("Lỗi", "Không thể tải sơ đồ bàn: " + error.getMessage())
+                error -> AlertUtil.error(I18n.t("common.error.title"), I18n.t("dashboard.load.tables", error.getMessage()))
         );
     }
 

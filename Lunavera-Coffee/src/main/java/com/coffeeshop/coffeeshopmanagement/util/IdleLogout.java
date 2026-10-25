@@ -14,7 +14,6 @@ import javafx.scene.input.TouchEvent;
 import javafx.stage.Window;
 
 import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.logging.Logger;
 
@@ -67,7 +66,7 @@ public final class IdleLogout {
             TRACKER.touch(); // not signed in: the clock starts when someone signs in
             return;
         }
-        if (TRACKER.isIdle(Instant.now(), limit)) {
+        if (TRACKER.isIdle(limit)) {
             TRACKER.touch();
             // later, not inside the animation pulse: ending the session shows a dialog
             Platform.runLater(() -> SessionGuard.idleLogout(limit));

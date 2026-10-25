@@ -61,4 +61,33 @@ public class EmployeeDetailsTest {
         assertNull(loaded.getHireDate());
         assertNull(loaded.getPosition());
     }
+
+    /** TODO 3.64: a damaged hire date reads as "no date" instead of breaking the staff list and the login. */
+    @Test
+    public void readHireDateIsTolerant() {
+        assertEquals(LocalDate.of(2026, 10, 18), EmployeeDAO.readHireDate(1, "2026-10-18"));
+        assertEquals(LocalDate.of(2026, 10, 18), EmployeeDAO.readHireDate(1, "2026-10-18 00:00:00"));
+        assertEquals(LocalDate.of(2026, 10, 18), EmployeeDAO.readHireDate(1, " 2026-10-18T09:30:00 "));
+        assertNull(EmployeeDAO.readHireDate(1, null));
+        assertNull(EmployeeDAO.readHireDate(1, "   "));
+        assertNull(EmployeeDAO.readHireDate(1, "18/10/2026"));
+        assertNull(EmployeeDAO.readHireDate(1, "not a date"));
+    }
+
+    @Test
+    public void aBadHireDateInTheDatabaseDoesNotBreakReading() throws Exception {
+        Employee e = new Employee();
+        e.setFullName("test-emp-" + UUID.randomUUID());
+        e.setActive(true);
+        dao.insert(e);
+        try (java.sql.Connection c = com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig.getConnection();
+             java.sql.PreparedStatement ps = c.prepareStatement("UPDATE employees SET hire_date = ? WHERE id = ?")) {
+            ps.setString(1, "18/10/2026");
+            ps.setInt(2, e.getId());
+            ps.executeUpdate();
+        }
+        Employee loaded = dao.findById(e.getId()).orElseThrow();
+        assertNull(loaded.getHireDate());
+        assertTrue(dao.findAll().stream().anyMatch(x -> x.getId() == e.getId()));
+    }
 }

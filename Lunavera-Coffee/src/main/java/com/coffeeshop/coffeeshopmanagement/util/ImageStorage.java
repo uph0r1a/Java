@@ -60,7 +60,7 @@ public final class ImageStorage {
     static String storeNewFile(File source, Supplier<String> baseNames) throws IOException {
         String extension = extensionOf(source.getName());
         if (!ALLOWED_EXTENSIONS.contains(extension)) {
-            throw new IOException("Chỉ hỗ trợ ảnh PNG, JPG, JFIF, GIF hoặc BMP (tệp \"" + source.getName() + "\" không hợp lệ).");
+            throw new IOException(I18n.t("image.type", source.getName()));
         }
         // JavaFX reads JFIF/JPE as JPEG; store them under the usual name (TODO 2.58).
         if (extension.equals("jfif") || extension.equals("jpe")) {
@@ -78,32 +78,53 @@ public final class ImageStorage {
                 // Pick another name and try again.
             }
         }
-        throw new IOException("Không thể tạo tên tệp ảnh duy nhất. Vui lòng thử lại.");
+        throw new IOException(I18n.t("image.name.fail"));
     }
 
     /** Lowercase extension without the dot, or an empty string when there is none. */
     /** Pictures above this size are refused: the list decodes every picture and a huge one makes the app slow (TODO 3.12). */
     public static final long MAX_PICTURE_BYTES = 8L * 1024 * 1024;
 
+    /** The most pixels a picture may have (16 million, about 4,000 x 4,000): decoded it needs 4 bytes each, so 64 MB (TODO 3.43). */
+    public static final long MAX_PICTURE_PIXELS = 16_000_000L;
+    /** The longest side of a picture; stops a one-pixel-high strip of enormous width that stays under the pixel count. */
+    public static final int MAX_PICTURE_SIDE = 8_000;
+
     /**
-     * Looks at a picked file before it is copied: not empty, not larger than {@link #MAX_PICTURE_BYTES}, and the content
-     * really decodes as a picture (a renamed text file with a .png name is refused). Returns the problem in Vietnamese, or
-     * null when the picture is fine.
+     * Looks at a picked file before it is copied: not empty, not larger than {@link #MAX_PICTURE_BYTES}, not larger in pixels than
+     * {@link #MAX_PICTURE_PIXELS} (read from the file's header, nothing is decoded for this), and the content really decodes as a
+     * picture (a renamed text file with a .png name is refused). Returns the problem in the language in use, or null when the
+     * picture is fine.
+     *
+     * <p>Reading and decoding a picture takes time, so call this from a background thread ({@code Async}), not the screen thread.
      */
     public static String pictureProblem(File file) {
-        if (file == null || !file.isFile()) return "Không đọc được tệp ảnh.";
-        long size = file.length();
-        if (size == 0) return "Tệp ảnh trống.";
-        if (size > MAX_PICTURE_BYTES) {
-            return "Ảnh quá lớn (" + (size / 1024 / 1024) + " MB). Hãy chọn ảnh nhỏ hơn " + (MAX_PICTURE_BYTES / 1024 / 1024) + " MB.";
-        }
+        String problem = sizeProblem(file);
+        if (problem != null) return problem;
         try {
-            javafx.scene.image.Image image = new javafx.scene.image.Image(file.toURI().toString(), false);
+            // A small requested size: the picture is only checked to decode, so there is no need to build it at full size.
+            javafx.scene.image.Image image = new javafx.scene.image.Image(file.toURI().toString(), 64, 64, true, false);
             if (image.isError() || image.getWidth() <= 0 || image.getHeight() <= 0) {
-                return "Tệp này không phải là ảnh hợp lệ.";
+                return I18n.t("image.invalid");
             }
         } catch (RuntimeException e) {
-            return "Tệp này không phải là ảnh hợp lệ.";
+            return I18n.t("image.invalid");
+        }
+        return null;
+    }
+
+    /** The checks that need no picture library: present, not empty, not too many bytes, not too many pixels (TODO 3.43). */
+    static String sizeProblem(File file) {
+        if (file == null || !file.isFile()) return I18n.t("image.unreadable");
+        long size = file.length();
+        if (size == 0) return I18n.t("image.empty");
+        if (size > MAX_PICTURE_BYTES) {
+            return I18n.t("image.toolarge", (size / 1024 / 1024), (MAX_PICTURE_BYTES / 1024 / 1024));
+        }
+        ImageSize.Size pixels = ImageSize.read(file.toPath());
+        if (pixels == null) return I18n.t("image.invalid"); // not a picture of a known type, or a cut-off one
+        if (pixels.pixels() > MAX_PICTURE_PIXELS || pixels.width() > MAX_PICTURE_SIDE || pixels.height() > MAX_PICTURE_SIDE) {
+            return I18n.t("image.toomanypixels", pixels.width(), pixels.height());
         }
         return null;
     }

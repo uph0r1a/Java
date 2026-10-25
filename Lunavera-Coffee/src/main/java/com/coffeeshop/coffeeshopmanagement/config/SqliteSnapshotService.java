@@ -1,5 +1,6 @@
 package com.coffeeshop.coffeeshopmanagement.config;
 
+import com.coffeeshop.coffeeshopmanagement.util.I18n;
 import com.coffeeshop.coffeeshopmanagement.util.DataPaths;
 import com.coffeeshop.coffeeshopmanagement.util.DbTime;
 
@@ -40,6 +41,11 @@ import java.util.stream.Stream;
  * (DB Browser for SQLite) and can also be used by the app itself: copy it over {@code data/lunavera.db} and set
  * {@code db.type=sqlite}. It does not contain the product pictures (those are plain files in {@code data/images}).
  *
+ * <p><b>One till makes them, not every till</b> (TODO 3.51): the tills of one shop share the server, so one copy an hour is
+ * enough. The till that gets the server lock {@value #LEADER_LOCK} keeps it for as long as it runs and is the only one that
+ * copies; the others skip. When that till is closed the server frees the lock and another till takes over at its next hour.
+ * {@code db.snapshots=false} in {@code data/database.properties} switches the copies off on a till for good.
+ *
  * <p>It runs only when the shop's database is not SQLite (a SQLite shop already has the file itself and the backup
  * zips). The first snapshot is made shortly after start-up when the newest one is older than an hour, then every hour while
  * the app is running. A failure is logged and tried again at the next hour; it never stops the app. The file is written
@@ -59,7 +65,12 @@ public final class SqliteSnapshotService {
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
     private static final Pattern NAME = Pattern.compile("lunavera-(\\d{8}-\\d{6})\\.db");
 
+    /** The server-side lock whose holder is the one till that makes the copies (TODO 3.51). */
+    static final String LEADER_LOCK = "lunavera-snapshot";
+
     private static ScheduledExecutorService scheduler;
+    /** The connection that holds {@link #LEADER_LOCK}; kept open for as long as this till is the one making copies. */
+    private static Connection leaderConnection;
 
     private SqliteSnapshotService() {
     }
@@ -75,6 +86,10 @@ public final class SqliteSnapshotService {
         if (DatabaseConfig.isSqlite() || scheduler != null) {
             return;
         }
+        if (!snapshotsWanted()) {
+            LOGGER.info("SQLite snapshots are switched off on this till (db.snapshots=false).");
+            return;
+        }
         scheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
             Thread thread = new Thread(runnable, "sqlite-snapshot");
             thread.setDaemon(true);
@@ -87,8 +102,64 @@ public final class SqliteSnapshotService {
                 + firstDelay + " seconds.");
     }
 
+    /** {@code db.snapshots} (default true); a setting that cannot be read leaves the copies on. */
+    private static boolean snapshotsWanted() {
+        try {
+            return DatabaseSettings.snapshotsEnabled();
+        } catch (RuntimeException e) {
+            return true;
+        }
+    }
+
+    /**
+     * Is this till the one that makes the copies? True when it already holds the lock, or gets it now; false when another till
+     * holds it. A held connection that has died (the server restarted) is dropped and the lock asked for again.
+     */
+    static synchronized boolean isLeader(ConnectionSource source) throws SQLException {
+        if (leaderConnection != null) {
+            try {
+                if (!leaderConnection.isClosed() && leaderConnection.isValid(5)) {
+                    return true;
+                }
+            } catch (SQLException ignored) {
+                // treated as dead below
+            }
+            closeQuietly(leaderConnection);
+            leaderConnection = null;
+        }
+        Connection candidate = source.open();
+        boolean got = false;
+        try {
+            got = ServerLock.acquire(candidate, LEADER_LOCK, 0);
+        } finally {
+            if (!got) closeQuietly(candidate);
+        }
+        if (got) {
+            leaderConnection = candidate;
+        }
+        return got;
+    }
+
+    /** For tests: forget (and close) the held lock connection. */
+    static synchronized void forgetLeader() {
+        if (leaderConnection != null) closeQuietly(leaderConnection);
+        leaderConnection = null;
+    }
+
+    private static void closeQuietly(Connection connection) {
+        try {
+            connection.close();
+        } catch (SQLException | RuntimeException ignored) {
+            // nothing more to do
+        }
+    }
+
     private static void runQuietly() {
         try {
+            if (!isLeader(DatabaseConfig::getConnection)) {
+                LOGGER.fine("Another till makes the SQLite snapshots; this one skips."); // it tries again at the next hour
+                return;
+            }
             Path made = createSnapshot(DatabaseConfig::getConnection, DataPaths.snapshotsDir(), LocalDateTime.now(), KEEP);
             LOGGER.info("SQLite snapshot written: " + made);
         } catch (Throwable e) { // never let one failure end the hourly job
@@ -148,7 +219,7 @@ public final class SqliteSnapshotService {
                 int copied = copyTable(from, snapshot, table);
                 int found = count(snapshot, table.name());
                 if (found != copied) {
-                    throw new SQLException("Bảng " + table.name() + ": đã chép " + copied + " dòng nhưng bản chụp có " + found + ".");
+                    throw new SQLException(I18n.t("db.snapshot.mismatch", table.name(), copied, found));
                 }
             }
             snapshot.commit();

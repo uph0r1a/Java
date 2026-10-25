@@ -275,3 +275,39 @@
     -fx-padding: 4 12 4 12;
 }
 
+
+/* =========================================================
+   LANGUAGE SWITCH (TODO 1.7)
+   ========================================================= */
+
+.language-switch {
+    -fx-background-color: rgba(255, 255, 255, 0.82);
+    -fx-background-radius: 18px;
+    -fx-padding: 4px;
+}
+
+/* the sliding part under the chosen language (moved by LoginController) */
+.language-thumb {
+    -fx-background-color: #71836A;
+    -fx-background-radius: 14px;
+}
+
+.language-button {
+    -fx-background-color: transparent;
+    -fx-background-radius: 14px;
+    -fx-text-fill: #687866;
+    -fx-font-size: 12px;
+    -fx-padding: 0;
+    -fx-alignment: CENTER;
+    -fx-cursor: hand;
+}
+
+.language-button:hover {
+    -fx-text-fill: #435443;
+}
+
+.language-button.language-active,
+.language-button.language-active:hover {
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+}

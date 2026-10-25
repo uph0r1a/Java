@@ -1,6 +1,5 @@
 package com.coffeeshop.coffeeshopmanagement.util;
 
-import com.coffeeshop.coffeeshopmanagement.dao.ProductDAO;
 import com.coffeeshop.coffeeshopmanagement.model.Order;
 import com.coffeeshop.coffeeshopmanagement.model.Product;
 
@@ -31,16 +30,17 @@ public final class DashboardWidgets {
     public static void fillLowStock(VBox container, List<Product> products) {
         container.getChildren().clear();
         if (products.isEmpty()) {
-            container.getChildren().add(styled(new Label("Tất cả sản phẩm đều đủ hàng."), "inventory-description"));
+            container.getChildren().add(styled(new Label(I18n.t("stock.allfine")), "inventory-description"));
             return;
         }
         for (Product product : products) {
             int stock = product.getStock();
-            String badge = stock == 0 ? "Hết hàng" : stock <= 5 ? "Sắp hết" : "Thấp";
-            String badgeStyle = stock <= 5 ? "inventory-danger" : "inventory-warning";
+            boolean critical = com.coffeeshop.coffeeshopmanagement.service.StockLevel.isCritical(stock, product.getReorderLevel());
+            String badge = I18n.t(stock == 0 ? "stock.badge.out" : critical ? "stock.badge.soon" : "stock.badge.low");
+            String badgeStyle = critical ? "inventory-danger" : "inventory-warning";
             container.getChildren().add(row(
-                    product.getName(),
-                    "Còn " + stock + " (cảnh báo khi ≤ " + ProductDAO.LOW_STOCK_THRESHOLD + ")",
+                    com.coffeeshop.coffeeshopmanagement.config.SeedNames.product(product.getName()),
+                    I18n.t("stock.left", stock, com.coffeeshop.coffeeshopmanagement.service.StockLevel.effective(product.getReorderLevel())),
                     badge, badgeStyle));
         }
     }
@@ -55,7 +55,7 @@ public final class DashboardWidgets {
             emptyBox.setPadding(new javafx.geometry.Insets(30, 10, 30, 10));
             Label icon = new Label("📋");
             icon.setStyle("-fx-font-size: 26px; -fx-opacity: 0.6;");
-            Label msg = styled(new Label("Không có đơn hàng hôm nay"), "today-orders-empty");
+            Label msg = styled(new Label(I18n.t("orders.today.empty")), "today-orders-empty");
             emptyBox.getChildren().addAll(icon, msg);
             container.getChildren().add(emptyBox);
             return;
@@ -69,7 +69,7 @@ public final class DashboardWidgets {
             HBox topRow = new HBox(8);
             topRow.setAlignment(Pos.CENTER_LEFT);
             Label idLabel = styled(new Label("#" + order.getId()), "today-order-id");
-            String tableText = order.getTableNumber() != null ? "Bàn " + order.getTableNumber() : "Mang đi";
+            String tableText = order.getTableNumber() != null ? I18n.t("orders.table", order.getTableNumber()) : I18n.t("orders.takeaway");
             Label tableLabel = styled(new Label("• " + tableText), "today-order-table");
 
             Region spacer = new Region();
@@ -87,15 +87,15 @@ public final class DashboardWidgets {
             String statusClass;
             switch (order.getStatus()) {
                 case PAID -> {
-                    statusText = "Đã thanh toán";
+                    statusText = I18n.t("orders.status.paid");
                     statusClass = "today-order-badge-paid";
                 }
                 case OPEN -> {
-                    statusText = "Đang mở";
+                    statusText = I18n.t("orders.status.open");
                     statusClass = "today-order-badge-open";
                 }
                 case CANCELLED -> {
-                    statusText = "Đã hủy";
+                    statusText = I18n.t("orders.status.cancelled");
                     statusClass = "today-order-badge-cancelled";
                 }
                 default -> {
@@ -116,26 +116,42 @@ public final class DashboardWidgets {
         }
     }
 
+    /** The line shown instead of an empty table map: what to do about it, different for the administrator and for staff. */
+    public static javafx.scene.control.Label emptyTablesNote() {
+        javafx.scene.control.Label note = new javafx.scene.control.Label(
+                I18n.t(Session.isAdmin() ? "tables.empty.admin" : "tables.empty.staff"));
+        note.setWrapText(true);
+        note.getStyleClass().add("inventory-description");
+        note.setPadding(new javafx.geometry.Insets(16));
+        return note;
+    }
+
     public static void fillTableGrid(javafx.scene.layout.GridPane grid, List<com.coffeeshop.coffeeshopmanagement.model.DiningTable> tables, java.util.function.Consumer<com.coffeeshop.coffeeshopmanagement.model.DiningTable> onTableClick) {
         grid.getChildren().clear();
+        if (tables.isEmpty()) {
+            grid.add(emptyTablesNote(), 0, 0, com.coffeeshop.coffeeshopmanagement.service.TableLayout.COLUMNS, 1);
+            return;
+        }
+        int index = 0;
         for (com.coffeeshop.coffeeshopmanagement.model.DiningTable table : tables) {
-            int num = table.getTableNumber();
-            int col = (num - 1) % 3;
-            int row = (num - 1) / 3;
+            // the place comes from the position in the list, not from the number (TODO 3.48)
+            com.coffeeshop.coffeeshopmanagement.service.TableLayout.Cell cell =
+                    com.coffeeshop.coffeeshopmanagement.service.TableLayout.cellAt(index++);
 
-            String statusText = table.isOccupied() ? "Đang sử dụng" : "Không hoạt động";
+            String statusText = I18n.t(table.isOccupied() ? "tables.status.occupied" : "tables.status.free"); // TODO 2.68: a free table is "Trống"
             javafx.scene.control.Button btn = new javafx.scene.control.Button(
-                    "☕  " + table.getName() + "\n" + statusText);
+                    "☕  " + table.displayName() + "\n" + statusText);
             btn.getStyleClass().add(table.isOccupied() ? "table-button-occupied" : "table-button-empty");
             btn.setMaxWidth(Double.MAX_VALUE);
             btn.setMaxHeight(Double.MAX_VALUE);
+            btn.setMinHeight(78.0);
             javafx.scene.layout.GridPane.setHgrow(btn, Priority.ALWAYS);
             javafx.scene.layout.GridPane.setVgrow(btn, Priority.ALWAYS);
 
             if (onTableClick != null) {
                 btn.setOnAction(e -> onTableClick.accept(table));
             }
-            grid.add(btn, col, row);
+            grid.add(btn, cell.column(), cell.row());
         }
     }
 

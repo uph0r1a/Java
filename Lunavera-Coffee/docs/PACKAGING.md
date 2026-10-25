@@ -6,13 +6,13 @@ steps once and correct this file with what really happened.**
 
 ## What the project can build today
 
-- `mvn clean test` runs the tests (JDK 21; the CI runs it on Ubuntu and Windows).
-- `mvn javafx:run` starts the app from the project folder (the normal way while the shop is being set up).
-- The `javafx-maven-plugin` entry in `pom.xml` also carries jlink settings: launcher name `app`, image folder `app`,
-  zip `app`, no man pages, no header files, debug info stripped, main class
+- `./mvnw clean test` runs the tests (JDK 21; the CI runs it on Ubuntu and Windows).
+- `./mvnw javafx:run` starts the app from the project folder (the normal way while the shop is being set up).
+- The `javafx-maven-plugin` entry in `pom.xml` also carries jlink settings: launcher name `lunavera`, image folder `lunavera`,
+  zip `lunavera`, no man pages, no header files, debug info stripped, main class
   `com.coffeeshop.coffeeshopmanagement/com.coffeeshop.coffeeshopmanagement.LunaveraApplication`. So
-  `mvn clean javafx:jlink` is expected to produce `target/app/` (a small private Java runtime plus a launcher in
-  `target/app/bin/`) and `target/app.zip`. There is **no jpackage / installer** configuration: a Windows `.exe` or `.msi`
+  `./mvnw clean javafx:jlink` is expected to produce `target/lunavera/` (a small private Java runtime plus a launcher in
+  `target/lunavera/bin/`) and `target/lunavera.zip`. There is **no jpackage / installer** configuration: a Windows `.exe` or `.msi`
   installer does not exist yet, only this folder or zip.
 - jlink only accepts real modules. `module-info.java` names `org.xerial.sqlitejdbc`, `org.mariadb.jdbc` and `org.slf4j`;
   if the build stops with "automatic module" or "module not found", that is the place to look (the comment in
@@ -26,7 +26,7 @@ The data folder is **not** inside the packaged app. `DataPaths.dataDir()` picks,
 2. the environment variable `LUNAVERA_DATA_DIR`,
 3. otherwise `data/` **relative to the folder the program is started from**.
 
-So a shortcut to `target/app/bin/app` with an empty "Start in" creates a brand-new empty `data/` somewhere else, and the
+So a shortcut to `target/lunavera/bin/lunavera` with an empty "Start in" creates a brand-new empty `data/` somewhere else, and the
 shop thinks its data is gone (TODO 3.32 shows a "new database" message at least). For a packaged copy always set one of the
 first two, for example a shortcut whose target sets `LUNAVERA_DATA_DIR=D:\LuneveraData` first, and tell the shop that
 `D:\LuneveraData` (not the program folder) is what must be backed up. With MariaDB the shop's real data is on the server;
@@ -34,7 +34,7 @@ first two, for example a shortcut whose target sets `LUNAVERA_DATA_DIR=D:\Luneve
 
 ## How an upgrade keeps the database
 
-- The program never overwrites `data/`. Replacing the program folder (new zip over the old one, or a new `target/app`) leaves
+- The program never overwrites `data/`. Replacing the program folder (new zip over the old one, or a new `target/lunavera`) leaves
   the data alone as long as `LUNAVERA_DATA_DIR` / `lunavera.dataDir` points at the same place.
 - At the next start the new version upgrades the tables by itself: SQLite through `user_version`
   (`MoneyMigration`, then `SchemaMigrations.SQLITE_STEPS`), MariaDB through the `schema_version` table
@@ -45,8 +45,8 @@ first two, for example a shortcut whose target sets `LUNAVERA_DATA_DIR=D:\Luneve
 ## First real build and first real upgrade (do these once, then fix this file)
 
 1. Make a backup of the shop's data (`docs/RELEASE.md`, step 1).
-2. `mvn clean javafx:jlink` on a Windows machine with JDK 21; note any error and the size of `target/app.zip`.
-3. Unzip somewhere else, set `LUNAVERA_DATA_DIR` to a **copy** of the data, start `bin/app`, and check: login, one report,
+2. `./mvnw clean javafx:jlink` on a Windows machine with JDK 21; note any error and the size of `target/lunavera.zip`.
+3. Unzip somewhere else, set `LUNAVERA_DATA_DIR` to a **copy** of the data, start `bin/lunavera`, and check: login, one report,
    pictures show, one test sale, the data folder named on the screen is the copy.
 4. Install the previous version's package and the new one side by side, start the previous one on a copy of the data, then the
    new one on the same copy: it must open and upgrade without a message about a newer version.

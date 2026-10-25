@@ -1,5 +1,6 @@
 package com.coffeeshop.coffeeshopmanagement.service;
 
+import com.coffeeshop.coffeeshopmanagement.util.I18n;
 import com.coffeeshop.coffeeshopmanagement.dao.CustomerDAO;
 import com.coffeeshop.coffeeshopmanagement.model.Customer;
 import com.coffeeshop.coffeeshopmanagement.util.ValidationUtil;
@@ -24,6 +25,20 @@ public class CustomerService {
 
     public CustomerService(CustomerDAO customerDAO) {
         this.customerDAO = customerDAO;
+    }
+
+    /** How many customers the POS "attach a customer" box shows at most (TODO 3.52). */
+    public static final int PICKER_LIMIT = 20;
+
+    /** What the "attach a customer" box shows: the first {@link #PICKER_LIMIT} matches, and whether there are more of them. */
+    public record Matches(java.util.List<Customer> shown, boolean more) {
+    }
+
+    /** The customers matching {@code typed} for the POS "attach a customer" box (TODO 3.52): at most {@link #PICKER_LIMIT}, found by the database. */
+    public Matches search(String typed) {
+        java.util.List<Customer> found = customerDAO.search(typed, PICKER_LIMIT + 1); // one more than shown, to know there are more
+        boolean more = found.size() > PICKER_LIMIT;
+        return new Matches(more ? new java.util.ArrayList<>(found.subList(0, PICKER_LIMIT)) : found, more);
     }
 
     /**

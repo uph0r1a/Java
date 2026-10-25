@@ -1,8 +1,17 @@
-# Runs the tests on Linux and Windows (TODO 6.1, 6.31). Tests use SQLite, no database server needed.
+# Runs the tests on Linux and Windows (TODO 6.1, 6.31). The "test" job uses SQLite, no database server needed; the "test-mariadb"
+# job runs the same database tests on a real MariaDB, the shop's default database (TODO 6.66).
+# The two actions are pinned to a commit (the release is in the comment), not to a tag: a tag can be moved to different code by
+# whoever controls the action's repository, a commit cannot (TODO 6.51). Dependabot's github-actions entry proposes new commits.
 name: CI
 on:
   push:
   pull_request:
+permissions:
+  contents: read
+# A new push cancels the older run of the same branch or pull request (TODO 6.51).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   test:
     strategy:
@@ -10,13 +19,78 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
+      # verify = the tests plus the JaCoCo coverage report (TODO 6.59).
       - name: Run tests
-        run: ./mvnw -B test
+        run: ./mvnw -B clean verify
         shell: bash
+      # Digits written through the default locale come out as Arabic-Indic digits on some PCs (TODO 6.62): run the suite once more
+      # under ar_SA so such a bug fails here and not at a shop. The first run above pins en_US (see pom.xml).
+      - name: Run tests under an Arabic locale
+        if: matrix.os == 'ubuntu-latest'
+        run: ./mvnw -B test -Dtest.locale.language=ar -Dtest.locale.country=SA
+        shell: bash
+      - name: Upload coverage report
+        if: always() && matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: coverage-report
+          path: target/site/jacoco
+          if-no-files-found: ignore
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: surefire-reports-${{ matrix.os }}
+          path: target/surefire-reports
+          if-no-files-found: ignore
+      # A broken jlink or packaging setting (TODO 6.15) then shows up on every push, not on release day.
+      - name: Package (no tests)
+        if: matrix.os == 'ubuntu-latest'
+        run: ./mvnw -B -DskipTests package
+        shell: bash
+  # The MariaDB code (MariaDbSchema, MariaDbMigrations, SqlDialect, the data rules, the importer) is only exercised against a real server
+  # here (TODO 6.66). The command is the one in docs/DATABASE.md section 10. The database name must end in _test: the support class drops
+  # every table in it first and refuses any other name. Host, port and user below are the defaults it expects. The tables carry their own
+  # utf8mb4 settings, so the image's default character set does not matter. Tests about SQLite files skip themselves (requireSqlite).
+  test-mariadb:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_DATABASE: lunavera_test
+          MARIADB_USER: lunavera_test
+          MARIADB_PASSWORD: test-password
+          MARIADB_ROOT_PASSWORD: root-test-password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Run tests on MariaDB
+        run: ./mvnw -B test -Dlunavera.test.db=mariadb -Dlunavera.test.db.password=test-password
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: surefire-reports-mariadb
+          path: target/surefire-reports
+          if-no-files-found: ignore

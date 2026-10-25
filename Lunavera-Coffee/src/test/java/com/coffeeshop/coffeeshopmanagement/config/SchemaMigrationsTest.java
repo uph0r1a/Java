@@ -150,7 +150,7 @@ public class SchemaMigrationsTest {
     @Test
     public void theDatabaseRefusesASecondCustomerWithTheSamePhone() {
         CustomerDAO dao = new CustomerDAO();
-        String phone = "09" + String.format("%08d", Math.abs(UUID.randomUUID().getMostSignificantBits()) % 100_000_000L);
+        String phone = "09" + String.format(java.util.Locale.ROOT, "%08d", Math.abs(UUID.randomUUID().getMostSignificantBits()) % 100_000_000L);
         Customer first = new Customer();
         first.setFullName("test-unique-1");
         first.setPhone(phone);
@@ -167,7 +167,7 @@ public class SchemaMigrationsTest {
         // and changing someone else's phone to this one is refused as well
         Customer third = new Customer();
         third.setFullName("test-unique-3");
-        third.setPhone("09" + String.format("%08d", Math.abs(UUID.randomUUID().getLeastSignificantBits()) % 100_000_000L));
+        third.setPhone("09" + String.format(java.util.Locale.ROOT, "%08d", Math.abs(UUID.randomUUID().getLeastSignificantBits()) % 100_000_000L));
         dao.insert(third);
         third.setPhone(phone);
         try {

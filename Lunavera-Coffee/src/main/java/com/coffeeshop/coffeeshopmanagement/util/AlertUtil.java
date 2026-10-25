@@ -1,5 +1,6 @@
 package com.coffeeshop.coffeeshopmanagement.util;
 
+import java.util.Locale;
 import javafx.scene.Node;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
@@ -44,10 +45,26 @@ public final class AlertUtil {
         show(Alert.AlertType.WARNING, title, message);
     }
 
+    /** An information box with one extra button next to "Close" (for example "Open folder"); {@code action} runs only if it is pressed. */
+    public static void infoWithAction(String title, String message, String actionLabel, Runnable action) {
+        ButtonType act = new ButtonType(actionLabel, javafx.scene.control.ButtonBar.ButtonData.LEFT);
+        ButtonType close = new ButtonType(I18n.t("common.close"), javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE);
+        Alert alert = new Alert(Alert.AlertType.INFORMATION, message, act, close);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        configure(alert);
+        setDefaultButton(alert, close);
+        setCancelButton(alert, close);
+        Optional<ButtonType> result = alert.showAndWait();
+        if (result.isPresent() && result.get() == act && action != null) {
+            action.run();
+        }
+    }
+
     public static boolean confirm(String title, String message) {
         // Custom labels: the built-in YES/NO buttons follow the OS language ("Yes/No" on English systems).
-        ButtonType yes = new ButtonType("Có", javafx.scene.control.ButtonBar.ButtonData.YES);
-        ButtonType no = new ButtonType("Không", javafx.scene.control.ButtonBar.ButtonData.NO);
+        ButtonType yes = new ButtonType(I18n.t("common.yes"), javafx.scene.control.ButtonBar.ButtonData.YES);
+        ButtonType no = new ButtonType(I18n.t("common.no"), javafx.scene.control.ButtonBar.ButtonData.NO);
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION, message, yes, no);
         alert.setTitle(title);
         alert.setHeaderText(null);
@@ -94,7 +111,7 @@ public final class AlertUtil {
         if (Boolean.getBoolean("lunavera.nativeModal")) {
             return false;
         }
-        return System.getProperty("os.name", "").toLowerCase().contains("linux");
+        return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("linux");
     }
 
     private static void applySoftModality(Dialog<?> dialog, Node ownerRoot) {
@@ -133,7 +150,7 @@ public final class AlertUtil {
         dialog.setOnShown(e -> initial[0] = formState(dialog.getDialogPane().getContent()));
         java.util.function.BooleanSupplier mayClose = () -> initial[0] == null
                 || initial[0].equals(formState(dialog.getDialogPane().getContent()))
-                || confirm("Bỏ thay đổi?", "Bạn đã nhập hoặc sửa thông tin nhưng chưa lưu. Bỏ các thay đổi này?");
+                || confirm(I18n.t("common.discard.title"), I18n.t("common.discard.message"));
         Node cancel = dialog.getDialogPane().lookupButton(cancelType);
         if (cancel != null) {
             cancel.addEventFilter(javafx.event.ActionEvent.ACTION, ev -> {

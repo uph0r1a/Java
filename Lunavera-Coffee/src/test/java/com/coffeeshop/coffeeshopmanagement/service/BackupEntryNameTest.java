@@ -20,7 +20,7 @@ public class BackupEntryNameTest {
 
     @Test
     public void theMariaDbRestoreHelpPointsToPhpMyAdminAndTheImages() {
-        String help = BackupService.MARIADB_RESTORE_HELP;
+        String help = BackupService.mariaDbRestoreHelp();
         assertTrue(help, help.contains("phpMyAdmin"));
         assertTrue(help, help.contains("lunavera.sql"));
         assertTrue(help, help.contains("images"));

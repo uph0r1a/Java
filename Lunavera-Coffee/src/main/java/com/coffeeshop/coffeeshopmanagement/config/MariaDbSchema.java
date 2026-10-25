@@ -9,7 +9,9 @@ import java.util.List;
  *   <li>real types: {@code INT} ids, {@code BIGINT} whole-dong money, {@code DATETIME} / {@code DATE} instead of text;</li>
  *   <li>{@code VARCHAR} with lengths where a column is indexed or unique (MySQL cannot index plain TEXT);</li>
  *   <li>text compares ignoring case and accents ({@code utf8mb4_unicode_ci}), except {@code users.username}, which stays
- *       exact ({@code utf8mb4_bin}) like SQLite did, so {@code admin} and {@code ADMIN} are still different logins;</li>
+ *       exact ({@code utf8mb4_bin}) so an accent still matters in a login name. {@code Admin} and {@code admin} must not be two
+ *       accounts though (the SQLite index {@code ux_users_username_nocase}), so {@code users.username_key}, a stored
+ *       lower-case copy of the name with a unique key, makes the server refuse the pair (TODO 1.9). It exists only here;</li>
  *   <li>a {@code schema_version} table instead of {@code PRAGMA user_version}.</li>
  * </ul>
  * Keep the columns in step with {@link SqliteSchema} (a test compares the two).
@@ -47,6 +49,7 @@ public final class MariaDbSchema {
             CREATE TABLE IF NOT EXISTS users (
                 id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
                 username VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL UNIQUE,
+                username_key VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin AS (LOWER(username)) STORED,
                 password_hash VARCHAR(255) NOT NULL,
                 role VARCHAR(20) NOT NULL,
                 status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
@@ -54,6 +57,7 @@ public final class MariaDbSchema {
                 customer_id INT,
                 created_at DATETIME NOT NULL,
                 must_change_password TINYINT(1) NOT NULL DEFAULT 0,
+                UNIQUE KEY ux_users_username_key (username_key),
                 FOREIGN KEY (employee_id) REFERENCES employees(id),
                 FOREIGN KEY (customer_id) REFERENCES customers(id)
             """ + TAIL,
@@ -62,7 +66,8 @@ public final class MariaDbSchema {
                 id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
                 name VARCHAR(255) NOT NULL UNIQUE,
                 description TEXT,
-                active TINYINT(1) NOT NULL DEFAULT 1
+                active TINYINT(1) NOT NULL DEFAULT 1,
+                sort_order INT NOT NULL DEFAULT 0
             """ + TAIL,
             """
             CREATE TABLE IF NOT EXISTS products (
@@ -72,9 +77,11 @@ public final class MariaDbSchema {
                 price BIGINT NOT NULL,
                 cost BIGINT,
                 stock INT NOT NULL DEFAULT 0,
+                reorder_level INT NULL,
                 description TEXT,
                 image_path VARCHAR(500),
                 active TINYINT(1) NOT NULL DEFAULT 1,
+                sort_order INT NOT NULL DEFAULT 0,
                 FOREIGN KEY (category_id) REFERENCES categories(id)
             """ + TAIL,
             """
@@ -92,6 +99,10 @@ public final class MariaDbSchema {
                 table_number INT,
                 discount_reason VARCHAR(255),
                 paid_by INT,
+                points_earned INT,
+                cash_received BIGINT,
+                change_given BIGINT,
+                transfer_ref VARCHAR(64),
                 INDEX idx_orders_status_date (status, order_date),
                 INDEX idx_orders_paid_at (paid_at),
                 INDEX idx_orders_table (table_number),
@@ -107,6 +118,7 @@ public final class MariaDbSchema {
                 quantity INT NOT NULL,
                 unit_price BIGINT NOT NULL,
                 line_total BIGINT NOT NULL,
+                unit_cost BIGINT,
                 FOREIGN KEY (order_id) REFERENCES orders(id),
                 FOREIGN KEY (product_id) REFERENCES products(id)
             """ + TAIL,
@@ -125,6 +137,15 @@ public final class MariaDbSchema {
                 name VARCHAR(100) NOT NULL PRIMARY KEY
             """ + TAIL,
             """
+            CREATE TABLE IF NOT EXISTS login_attempts (
+                scope VARCHAR(20) NOT NULL,
+                name_key VARCHAR(100) NOT NULL,
+                failures INT NOT NULL DEFAULT 0,
+                last_failure BIGINT NOT NULL DEFAULT 0,
+                blocked_until BIGINT NOT NULL DEFAULT 0,
+                PRIMARY KEY (scope, name_key)
+            """ + TAIL,
+            """
             CREATE TABLE IF NOT EXISTS schema_version (
                 id TINYINT NOT NULL PRIMARY KEY,
                 version INT NOT NULL
@@ -133,7 +154,7 @@ public final class MariaDbSchema {
 
     /** Tables to drop (children first) when a throw-away test database is reset. */
     public static final List<String> DROP_ORDER = List.of("dining_tables", "order_items", "orders", "products",
-            "categories", "users", "customers", "employees", "app_flags", "schema_version");
+            "categories", "users", "customers", "employees", "app_flags", "login_attempts", "schema_version");
 
     private MariaDbSchema() {
     }

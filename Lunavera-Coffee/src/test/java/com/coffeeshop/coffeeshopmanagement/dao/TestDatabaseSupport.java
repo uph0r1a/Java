@@ -18,9 +18,9 @@ import java.nio.file.Path;
  * Because every DAO test shares this one database for the run, tests here don't rely on the
  * table being empty (no assertions like "findAll().size() == 1") - each test creates its own
  * uniquely-named row(s) (a random suffix) and only asserts about the row it created. The whole
- * temp directory is discarded when the process ends, so there is nothing to clean up afterward
- * and no delete-after-test bookkeeping needed even for DAOs (like CustomerDAO) with no delete
- * method at all.
+ * temp directory is deleted by a shutdown hook when the test JVM ends (TODO 6.61: it holds about 3 MB of starter photos
+ * and used to pile up in the system temp folder, one per run), so there is no delete-after-test bookkeeping needed even
+ * for DAOs (like CustomerDAO) with no delete method at all.
  */
 public final class TestDatabaseSupport {
 
@@ -29,11 +29,11 @@ public final class TestDatabaseSupport {
     static {
         try {
             TEMP_HOME = Files.createTempDirectory("lunavera-dao-test-home");
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> deleteTree(TEMP_HOME), "lunavera-test-home-cleanup"));
             // user.home too: the one-time copy from ~/.lunavera-coffee must never find a real home folder.
             System.setProperty("user.home", TEMP_HOME.toString());
             System.setProperty("lunavera.dataDir", TEMP_HOME.resolve("data").toString());
-            // Production no longer seeds an administrator; the tests still want a known login.
-            System.setProperty("lunavera.seedDefaultAdmin", "true");
+            // Production seeds no administrator (TODO 2A.5, 2A.33); the tests insert a known login themselves, see seedTestAdmin().
             System.setProperty("lunavera.db.type", "sqlite"); // the app default is MariaDB; tests need no server
             configureMariaDbIfRequested();
             // One date for the whole run (TODO 6.39): the data code and the tests both read AppClock, so a run that crosses
@@ -45,6 +45,21 @@ public final class TestDatabaseSupport {
     }
 
     private TestDatabaseSupport() {
+    }
+
+    /** Best effort: a file still open (SQLite on Windows) is left behind, it must never fail the run. */
+    private static void deleteTree(Path root) {
+        try (java.util.stream.Stream<Path> walk = Files.walk(root)) {
+            walk.sorted(java.util.Comparator.reverseOrder()).forEach(path -> {
+                try {
+                    Files.deleteIfExists(path);
+                } catch (IOException ignored) {
+                    // nothing to do: the system temp folder is cleaned by the system sooner or later
+                }
+            });
+        } catch (IOException | RuntimeException ignored) {
+            // the folder may already be gone
+        }
     }
 
     /**
@@ -106,10 +121,53 @@ public final class TestDatabaseSupport {
                         + "it would use the real database " + live + ". Call TestDatabaseSupport.ensureReady() "
                         + "(or touch TestDatabaseSupport.TEMP_HOME) in that test's @BeforeClass.");
             }
-        } else if (!com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig.describeConnection().endsWith("_test")) {
-            throw new IllegalStateException("A MariaDB test run must use a database whose name ends with _test, but this one is "
-                    + com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig.describeConnection());
+        } else {
+            com.coffeeshop.coffeeshopmanagement.config.DatabaseSettings settings =
+                    com.coffeeshop.coffeeshopmanagement.config.DatabaseSettings.load();
+            if (!settings.database().endsWith("_test")) {
+                throw new IllegalStateException("A MariaDB test run must use a database whose name ends with _test, but this one is "
+                        + settings.describe());
+            }
         }
         com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig.initialize();
+        seedTestAdmin();
+    }
+
+    /** When the database has no account at all, adds {@code admin} / {@code DEFAULT_ADMIN_PASSWORD} (ACTIVE, role ADMIN) with an employee. */
+    static void seedTestAdmin() {
+        try (java.sql.Connection c = com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig.getConnection()) {
+            try (java.sql.Statement st = c.createStatement(); java.sql.ResultSet rs = st.executeQuery("SELECT COUNT(*) FROM users")) {
+                rs.next();
+                if (rs.getInt(1) > 0) return;
+            }
+            String now = com.coffeeshop.coffeeshopmanagement.util.DbTime.format(com.coffeeshop.coffeeshopmanagement.util.AppClock.now(),
+                    com.coffeeshop.coffeeshopmanagement.config.SqlDialect.of(c));
+            int employeeId;
+            try (java.sql.PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO employees (full_name, phone, email, address, position, salary, hire_date, active) VALUES (?, NULL, NULL, NULL, ?, NULL, ?, 1)",
+                    java.sql.Statement.RETURN_GENERATED_KEYS)) {
+                ps.setString(1, "Quản trị viên hệ thống");
+                ps.setString(2, "Owner");
+                ps.setString(3, com.coffeeshop.coffeeshopmanagement.util.AppClock.now().toLocalDate().toString());
+                ps.executeUpdate();
+                try (java.sql.ResultSet keys = ps.getGeneratedKeys()) {
+                    keys.next();
+                    employeeId = keys.getInt(1);
+                }
+            }
+            try (java.sql.PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO users (username, password_hash, role, status, employee_id, created_at) VALUES (?, ?, ?, "
+                            + com.coffeeshop.coffeeshopmanagement.config.SqlStatus.ACTIVE + ", ?, ?)")) {
+                ps.setString(1, "admin");
+                ps.setString(2, com.coffeeshop.coffeeshopmanagement.service.PasswordUtil.hash(
+                        com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig.DEFAULT_ADMIN_PASSWORD));
+                ps.setString(3, com.coffeeshop.coffeeshopmanagement.model.Role.ADMIN.name());
+                ps.setInt(4, employeeId);
+                ps.setString(5, now);
+                ps.executeUpdate();
+            }
+        } catch (java.sql.SQLException e) {
+            throw new IllegalStateException("Could not add the test administrator", e);
+        }
     }
 }

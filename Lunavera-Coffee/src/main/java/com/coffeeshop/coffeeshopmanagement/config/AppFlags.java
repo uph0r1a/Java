@@ -42,6 +42,56 @@ public final class AppFlags {
         }
     }
 
+    /**
+     * A small value kept in the flag table (TODO 2A.34): the flag's name is {@code prefix + value}, so a value must fit the
+     * 100-character name column together with its prefix. Returns the value of the first flag whose name starts with
+     * {@code prefix}, or empty. The prefix must not contain {@code %} or {@code _}.
+     */
+    public static java.util.Optional<String> valueWithPrefix(String prefix) {
+        try (Connection connection = DatabaseConfig.getConnection();
+             Statement create = connection.createStatement()) {
+            create.execute(SqlDialect.of(connection).createFlagsTable());
+            try (PreparedStatement select = connection.prepareStatement("SELECT name FROM app_flags WHERE name LIKE ?")) {
+                select.setString(1, prefix + "%");
+                try (ResultSet rs = select.executeQuery()) {
+                    while (rs.next()) {
+                        String name = rs.getString(1);
+                        if (name != null && name.startsWith(prefix)) return java.util.Optional.of(name.substring(prefix.length()));
+                    }
+                    return java.util.Optional.empty();
+                }
+            }
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to read flag " + prefix, e);
+        }
+    }
+
+    /** Replaces, in one transaction, the value kept under each prefix (see {@link #valueWithPrefix}); keys are prefixes, values the new text. */
+    public static void replaceValues(java.util.Map<String, String> valueByPrefix) {
+        try (Connection connection = DatabaseConfig.getConnection()) {
+            boolean autoCommit = connection.getAutoCommit();
+            connection.setAutoCommit(false);
+            try (Statement create = connection.createStatement()) {
+                create.execute(SqlDialect.of(connection).createFlagsTable());
+                for (java.util.Map.Entry<String, String> entry : valueByPrefix.entrySet()) {
+                    try (PreparedStatement delete = connection.prepareStatement("DELETE FROM app_flags WHERE name LIKE ?")) {
+                        delete.setString(1, entry.getKey() + "%");
+                        delete.executeUpdate();
+                    }
+                    set(connection, entry.getKey() + entry.getValue());
+                }
+                connection.commit();
+            } catch (SQLException | RuntimeException e) {
+                connection.rollback();
+                throw e;
+            } finally {
+                connection.setAutoCommit(autoCommit);
+            }
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to save flags", e);
+        }
+    }
+
     static void set(Connection connection, String name) throws SQLException {
         try (PreparedStatement insert = connection.prepareStatement(SqlDialect.of(connection).insertIgnoreInto("app_flags") + " (name) VALUES (?)")) {
             insert.setString(1, name);

@@ -27,6 +27,15 @@ public class ReportDAO {
         }
     }
 
+    /**
+     * Profit of one paid order line (TODO 3.53): what it sold for, minus the cost recorded when it was paid
+     * ({@code order_items.unit_cost}), minus the line's share of the order's discount. The discount is spread over the lines in
+     * proportion to {@code line_total}, so the report's profit always equals revenue (the order totals, after the discount) minus
+     * costs. The share is fractional and the sums are rounded once at the end. Use only where {@code oi.unit_cost IS NOT NULL}.
+     */
+    private static final String LINE_PROFIT = "(oi.line_total - oi.quantity * oi.unit_cost - "
+            + "(CASE WHEN o.subtotal > 0 THEN o.discount * 1.0 * oi.line_total / o.subtotal ELSE 0 END))";
+
     /** {@code profit} is null when no sold line of this product has a known cost. */
     public record ProductSales(String productName, int quantity, BigDecimal revenue, BigDecimal profit) {
     }
@@ -40,11 +49,12 @@ public class ReportDAO {
     }
 
     /**
-     * Gross profit = sold line total minus quantity times the product's cost, for the lines whose product
-     * has a cost entered. Order-level discounts are not subtracted (they are shown separately). The cost is
-     * the product's <em>current</em> cost: the order lines do not keep the cost they had when sold, so an
-     * old day is recalculated with today's cost. Lines of products without a cost (or deleted products)
-     * are left out and counted in {@code linesWithoutCost} (TODO 4.20).
+     * Gross profit = what the line sold for, minus quantity times the cost recorded on the line when it was paid
+     * ({@code order_items.unit_cost}), minus the line's share of the order's discount (TODO 3.53), so revenue (the order
+     * totals after the discount) minus costs equals the profit printed. Changing a product's cost later does not change an
+     * earlier day. Lines with no cost known at the time (a product with no cost entered, a deleted product) are left out and
+     * counted in {@code linesWithoutCost} (TODO 4.20). Lines paid before the cost was recorded got their product's cost at the
+     * time of the upgrade (see {@code DatabaseConfig.backfillUnitCostOnce}).
      */
     public record Profit(BigDecimal grossProfit, int linesWithCost, int linesWithoutCost) {
     }
@@ -69,10 +79,15 @@ public class ReportDAO {
         }
     }
 
+    /** Every product that sold in the range, best seller first: what the report's CSV needs (TODO 5.34). */
+    public List<ProductSales> allProducts(LocalDate from, LocalDate to) {
+        return topProducts(from, to, Integer.MAX_VALUE);
+    }
+
     /** Best sellers by units sold. Grouped by the name snapshotted on the order item. */
     public List<ProductSales> topProducts(LocalDate from, LocalDate to, int limit) {
         String sql = "SELECT COALESCE(p.name, oi.product_name) AS name, SUM(oi.quantity) AS qty, SUM(oi.line_total) AS revenue, " +
-                "SUM(CASE WHEN p.cost IS NOT NULL THEN oi.line_total - oi.quantity * p.cost END) AS profit " +
+                "SUM(CASE WHEN oi.unit_cost IS NOT NULL THEN " + LINE_PROFIT + " END) AS profit " +
                 "FROM order_items oi JOIN orders o ON oi.order_id = o.id LEFT JOIN products p ON oi.product_id = p.id " +
                 "WHERE o.status = " + SqlStatus.PAID + " AND " + OrderDAO.EFFECTIVE_DAY + " BETWEEN ? AND ? " +
                 // Grouped by product, not by the name saved on the line: a renamed product stays one row (TODO 2.51).
@@ -85,8 +100,8 @@ public class ReportDAO {
             try (ResultSet rs = statement.executeQuery()) {
                 while (rs.next()) {
                     long revenue = rs.getLong("revenue");
-                    long profit = rs.getLong("profit");
-                    boolean noProfit = rs.wasNull(); // must be read right after the profit column
+                    long profit = Math.round(rs.getDouble("profit"));
+                    boolean noProfit = rs.wasNull(); // must be read right after the profit column (Math.round(0.0) does not touch it)
                     result.add(new ProductSales(rs.getString("name"), rs.getInt("qty"),
                             Money.fromDong(revenue), noProfit ? null : Money.fromDong(profit)));
                 }
@@ -101,16 +116,16 @@ public class ReportDAO {
     public List<DailySales> dailySales(LocalDate from, LocalDate to) {
         String sql = "SELECT " + OrderDAO.EFFECTIVE_DAY + " AS d, COUNT(*) AS orders, SUM(total) AS revenue FROM orders " +
                 "WHERE status = " + SqlStatus.PAID + " AND " + OrderDAO.EFFECTIVE_DAY + " BETWEEN ? AND ? GROUP BY " + OrderDAO.EFFECTIVE_DAY + " ORDER BY d";
-        String profitSql = "SELECT " + OrderDAO.EFFECTIVE_DAY + " AS d, SUM(oi.line_total - oi.quantity * p.cost) AS profit " +
-                "FROM order_items oi JOIN orders o ON oi.order_id = o.id JOIN products p ON oi.product_id = p.id " +
-                "WHERE o.status = " + SqlStatus.PAID + " AND p.cost IS NOT NULL AND " + OrderDAO.EFFECTIVE_DAY + " BETWEEN ? AND ? GROUP BY " + OrderDAO.EFFECTIVE_DAY;
+        String profitSql = "SELECT " + OrderDAO.EFFECTIVE_DAY + " AS d, SUM(" + LINE_PROFIT + ") AS profit " +
+                "FROM order_items oi JOIN orders o ON oi.order_id = o.id " +
+                "WHERE o.status = " + SqlStatus.PAID + " AND oi.unit_cost IS NOT NULL AND " + OrderDAO.EFFECTIVE_DAY + " BETWEEN ? AND ? GROUP BY " + OrderDAO.EFFECTIVE_DAY;
         List<DailySales> result = new ArrayList<>();
         try (Connection connection = DatabaseConfig.getConnection()) {
             java.util.Map<String, Long> profitByDay = new java.util.HashMap<>();
             try (PreparedStatement statement = connection.prepareStatement(profitSql)) {
                 bindRange(statement, from, to);
                 try (ResultSet rs = statement.executeQuery()) {
-                    while (rs.next()) profitByDay.put(rs.getString("d"), rs.getLong("profit"));
+                    while (rs.next()) profitByDay.put(rs.getString("d"), Math.round(rs.getDouble("profit")));
                 }
             }
             try (PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -153,21 +168,82 @@ public class ReportDAO {
 
     /** Gross profit of the range, see {@link Profit}. */
     public Profit profit(LocalDate from, LocalDate to) {
-        String sql = "SELECT COALESCE(SUM(CASE WHEN p.cost IS NOT NULL THEN oi.line_total - oi.quantity * p.cost END), 0) AS profit, " +
-                "COALESCE(SUM(CASE WHEN p.cost IS NOT NULL THEN 1 ELSE 0 END), 0) AS known, " +
-                "COALESCE(SUM(CASE WHEN p.cost IS NULL THEN 1 ELSE 0 END), 0) AS unknown " +
-                "FROM order_items oi JOIN orders o ON oi.order_id = o.id LEFT JOIN products p ON oi.product_id = p.id " +
+        String sql = "SELECT COALESCE(SUM(CASE WHEN oi.unit_cost IS NOT NULL THEN " + LINE_PROFIT + " END), 0) AS profit, " +
+                "COALESCE(SUM(CASE WHEN oi.unit_cost IS NOT NULL THEN 1 ELSE 0 END), 0) AS known, " +
+                "COALESCE(SUM(CASE WHEN oi.unit_cost IS NULL THEN 1 ELSE 0 END), 0) AS unknown " +
+                "FROM order_items oi JOIN orders o ON oi.order_id = o.id " +
                 "WHERE o.status = " + SqlStatus.PAID + " AND " + OrderDAO.EFFECTIVE_DAY + " BETWEEN ? AND ?";
         try (Connection connection = DatabaseConfig.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
             bindRange(statement, from, to);
             try (ResultSet rs = statement.executeQuery()) {
                 rs.next();
-                return new Profit(Money.fromDong(rs.getLong("profit")), rs.getInt("known"), rs.getInt("unknown"));
+                return new Profit(Money.fromDong(Math.round(rs.getDouble("profit"))), rs.getInt("known"), rs.getInt("unknown"));
             }
         } catch (SQLException e) {
             throw new DataAccessException("Failed to load profit", e);
         }
+    }
+
+    /** Revenue and units of one category; {@code categoryName} is null for lines whose product has no category (or was deleted). */
+    public record CategorySales(String categoryName, int quantity, BigDecimal revenue) {
+    }
+
+    /**
+     * Sales per category (TODO 4.40): the line totals BEFORE the order discount (a discount belongs to the whole order, not to
+     * a category), biggest first. A line whose product is gone or has no category is grouped under a null name.
+     */
+    public List<CategorySales> categorySales(LocalDate from, LocalDate to) {
+        String sql = "SELECT c.name AS name, SUM(oi.quantity) AS qty, SUM(oi.line_total) AS revenue " +
+                "FROM order_items oi JOIN orders o ON oi.order_id = o.id LEFT JOIN products p ON oi.product_id = p.id " +
+                "LEFT JOIN categories c ON p.category_id = c.id " +
+                "WHERE o.status = " + SqlStatus.PAID + " AND " + OrderDAO.EFFECTIVE_DAY + " BETWEEN ? AND ? " +
+                "GROUP BY c.id, c.name ORDER BY revenue DESC";
+        List<CategorySales> result = new ArrayList<>();
+        try (Connection connection = DatabaseConfig.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            bindRange(statement, from, to);
+            try (ResultSet rs = statement.executeQuery()) {
+                while (rs.next()) {
+                    result.add(new CategorySales(rs.getString("name"), rs.getInt("qty"), Money.fromDong(rs.getLong("revenue"))));
+                }
+            }
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to load sales by category", e);
+        }
+        return result;
+    }
+
+    /**
+     * When each paid order of the range was paid (its opening time when it has no paid time), for the busiest-hours and
+     * weekday figures (TODO 4.40). Hours and weekdays are worked out in Java ({@code SalesPatterns}) so SQLite and MariaDB
+     * give the same answer; a row whose stored time cannot be read is skipped, never a failed report.
+     */
+    public List<com.coffeeshop.coffeeshopmanagement.service.SalesPatterns.PaidOrder> paidOrders(LocalDate from, LocalDate to) {
+        String sql = "SELECT COALESCE(paid_at, order_date) AS paid_time, total FROM orders WHERE status = " + SqlStatus.PAID
+                + " AND " + OrderDAO.EFFECTIVE_DAY + " BETWEEN ? AND ?";
+        List<com.coffeeshop.coffeeshopmanagement.service.SalesPatterns.PaidOrder> result = new ArrayList<>();
+        try (Connection connection = DatabaseConfig.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            bindRange(statement, from, to);
+            try (ResultSet rs = statement.executeQuery()) {
+                while (rs.next()) {
+                    java.time.LocalDateTime time;
+                    try {
+                        time = com.coffeeshop.coffeeshopmanagement.util.DbTime.parse(rs.getString("paid_time"));
+                    } catch (RuntimeException e) {
+                        continue;
+                    }
+                    if (time != null) {
+                        result.add(new com.coffeeshop.coffeeshopmanagement.service.SalesPatterns.PaidOrder(
+                                time, Money.fromDong(rs.getLong("total"))));
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to load paid order times", e);
+        }
+        return result;
     }
 
     /** Units sold per product id in the range (paid orders only), for ordering the POS menu by best sellers (TODO 5.10). */

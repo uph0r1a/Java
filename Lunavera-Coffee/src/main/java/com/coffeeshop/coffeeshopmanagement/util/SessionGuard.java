@@ -103,11 +103,9 @@ public final class SessionGuard {
         SceneNavigator.closeOtherWindows(stage);
         boolean passwordReset = endedByPasswordChange;
         endedByPasswordChange = false;
-        AlertUtil.warning("Phiên đăng nhập đã kết thúc",
-                (passwordReset
-                        ? "Mật khẩu của tài khoản này vừa được đổi hoặc đặt lại. "
-                        : "Tài khoản của bạn đã bị khóa hoặc không còn tồn tại. ")
-                        + "Bạn sẽ được đưa về màn hình đăng nhập.");
+        AlertUtil.warning(I18n.t("session.ended.title"),
+                I18n.t(passwordReset ? "session.ended.passwordchanged" : "session.ended.locked")
+                        + I18n.t("session.ended.tologin"));
         if (stage != null) {
             SceneNavigator.switchScene(stage, "/fxml/dangnhap.fxml");
         }
@@ -129,9 +127,7 @@ public final class SessionGuard {
             SceneNavigator.switchScene(stage, "/fxml/dangnhap.fxml");
         }
         long minutes = Math.max(1, Math.round(idle.toSeconds() / 60.0));
-        AlertUtil.info("Đã tự động đăng xuất",
-                "Không có thao tác nào trong khoảng " + minutes + " phút nên ứng dụng đã đăng xuất để bảo vệ dữ liệu. "
-                        + "Hãy đăng nhập lại để tiếp tục.");
+        AlertUtil.info(I18n.t("session.idle.title"), I18n.t("session.idle.message", minutes));
     }
 
     /** Call right after a successful login. */

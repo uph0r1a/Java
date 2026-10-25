@@ -23,17 +23,7 @@ public class AuthenticationService {
     }
 
     /** Shared by every login screen instance, so logging out and back in does not reset the delay. */
-    private static final LoginThrottle SHARED_THROTTLE = new LoginThrottle();
-
-    /** Hash of a throwaway password, checked when the username is unknown so both cases take equally long. */
-    private static String dummyHash;
-
-    private static synchronized String dummyHash() {
-        if (dummyHash == null) {
-            dummyHash = PasswordUtil.hash("lunavera-not-a-real-password");
-        }
-        return dummyHash;
-    }
+    private static final LoginThrottle SHARED_THROTTLE = LoginThrottle.persistent("login");
 
     private final UserDAO userDAO;
     private final LoginThrottle throttle;
@@ -55,30 +45,49 @@ public class AuthenticationService {
         String name = username == null ? "" : username.trim();
         long wait = throttle.secondsUntilAllowed(name);
         if (wait > 0) {
-            SecurityLog.warn("login blocked for '" + SecurityLog.clean(name) + "' (too many wrong passwords), " + wait + " s left");
+            // Not known yet whether this is an account, and people type passwords into this box: no full text in the log (TODO 2A.39).
+            // Rate-limited: holding Enter on the login screen must not write a line per key press (TODO 2A.25).
+            SecurityLog.warnLimited("blocked:" + SecurityLog.redactTyped(name),
+                    "login blocked for the typed text " + SecurityLog.redactTyped(name)
+                            + " (too many wrong passwords), " + wait + " s left");
             return new LoginResult(LoginStatus.TOO_MANY_ATTEMPTS, null, wait);
         }
         // Customers never sign in (only admin and staff do); an old CUSTOMER row is treated as unknown.
         Optional<User> found = userDAO.findByUsername(name)
                 .filter(u -> u.getRole() != com.coffeeshop.coffeeshopmanagement.model.Role.CUSTOMER);
         if (found.isEmpty()) {
-            PasswordUtil.matches(password, dummyHash()); // same cost as a real check
+            PasswordUtil.matches(password, PasswordUtil.dummyHash()); // same cost as a real check, from the first attempt (2A.32)
             throttle.recordFailure(name);
-            SecurityLog.warn("failed login: no such user '" + SecurityLog.clean(name) + "'");
+            SecurityLog.warnLimited("nouser:" + SecurityLog.redactTyped(name),
+                    "failed login: no such user, typed text " + SecurityLog.redactTyped(name));
             return LoginResult.of(LoginStatus.INVALID_CREDENTIALS);
         }
         User user = found.get();
-        if (!PasswordUtil.matches(password, user.getPasswordHash())) {
+        // One account, one wait: the user name and every spelling of the staff phone reach the same row, so the delay is
+        // also kept per account (TODO 2A.28), not only per typed text.
+        long accountWait = throttle.secondsUntilAllowedForAccount(user.getId());
+        if (accountWait > 0) {
+            SecurityLog.warnLimited("blocked-account:" + user.getId(),
+                    "login blocked for account '" + user.getUsername() + "' (user id " + user.getId()
+                            + ", too many wrong passwords), " + accountWait + " s left");
+            return new LoginResult(LoginStatus.TOO_MANY_ATTEMPTS, null, accountWait);
+        }
+        if (!PasswordUtil.matchesAtConstantCost(password, user.getPasswordHash())) { // an old hash costs as much as a new one (2A.32)
             throttle.recordFailure(name);
-            SecurityLog.warn("failed login: wrong password for '" + SecurityLog.clean(name) + "' (user id " + user.getId() + ")");
+            throttle.recordFailureForAccount(user.getId());
+            // The name comes from the database, never from what was typed (TODO 2A.39).
+            SecurityLog.warnLimited("wrongpw:" + user.getId(),
+                    "failed login: wrong password for '" + user.getUsername() + "' (user id " + user.getId() + ")");
             return LoginResult.of(LoginStatus.INVALID_CREDENTIALS);
         }
         // A locked account is only reported to someone who knows its password.
         if (user.getStatus() == AccountStatus.LOCKED) {
-            SecurityLog.warn("login refused: locked account '" + SecurityLog.clean(name) + "' (user id " + user.getId() + ")");
+            SecurityLog.warnLimited("locked:" + user.getId(),
+                    "login refused: locked account '" + user.getUsername() + "' (user id " + user.getId() + ")");
             return LoginResult.of(LoginStatus.INACTIVE);
         }
         throttle.recordSuccess(name);
+        throttle.recordSuccessForAccount(user.getId());
         SecurityLog.event("login: " + user.getUsername() + " (id " + user.getId() + ", " + user.getRole() + ")");
         upgradeHashIfOld(user, password);
         return new LoginResult(LoginStatus.SUCCESS, user, 0);
@@ -92,7 +101,7 @@ public class AuthenticationService {
         if (!PasswordUtil.needsRehash(user.getPasswordHash())) return;
         try {
             String fresh = PasswordUtil.hash(password);
-            userDAO.updatePasswordHash(user.getId(), fresh);
+            userDAO.rehashPassword(user.getId(), fresh); // not updatePasswordHash: that would clear "must change password" (TODO 2.72)
             user.setPasswordHash(fresh);
         } catch (RuntimeException e) {
             java.util.logging.Logger.getLogger(AuthenticationService.class.getName())

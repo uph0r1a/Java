@@ -58,4 +58,36 @@ public class AppLoggingTest {
         int after = Logger.getLogger("").getHandlers().length;
         assertFalse("a repeat call must not add another handler", after > before);
     }
+
+    /** TODO 2A.25: security events also get a monthly file of their own, and nothing else is written to it. */
+    @Test
+    public void securityEventsAlsoGoToAMonthlyFileThatHoldsNothingElse() throws IOException {
+        AppLogging.install();
+        SecurityLog.resetLimitsForTests();
+        String security = "security log test marker " + System.nanoTime();
+        String other = "not a security event " + System.nanoTime();
+        SecurityLog.event(security);
+        for (int i = 0; i < 20; i++) {
+            SecurityLog.warnLimited("test:flood", security + " limited");
+        }
+        Logger.getLogger(AppLoggingTest.class.getName()).info(other);
+        Path logsDir = TEMP_HOME.resolve("data").resolve("logs");
+        String inSecurityFiles = "";
+        String inAppFiles = "";
+        try (var files = Files.list(logsDir)) {
+            for (Path file : (Iterable<Path>) files::iterator) {
+                String name = file.getFileName().toString();
+                if (name.matches("security-\\d{4}-\\d{2}(\\.\\d+)?\\.log")) {
+                    inSecurityFiles += Files.readString(file);
+                } else if (name.startsWith("app-") && name.endsWith(".log")) {
+                    inAppFiles += Files.readString(file);
+                }
+            }
+        }
+        assertTrue("the event is in the security file", inSecurityFiles.contains(security));
+        assertFalse("nothing but security events is in it", inSecurityFiles.contains(other));
+        assertTrue("the normal log still has everything", inAppFiles.contains(security) && inAppFiles.contains(other));
+        int limitedLines = inSecurityFiles.split(security + " limited", -1).length - 1;
+        assertTrue("twenty repeats leave one line, got " + limitedLines, limitedLines == 1);
+    }
 }

@@ -1,5 +1,6 @@
 package com.coffeeshop.coffeeshopmanagement.service;
 
+import com.coffeeshop.coffeeshopmanagement.util.I18n;
 import com.coffeeshop.coffeeshopmanagement.config.SqlStatus;
 import com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig;
 import com.coffeeshop.coffeeshopmanagement.dao.DataAccessException;
@@ -30,9 +31,9 @@ import java.time.LocalDateTime;
  */
 public class AccountService {
 
-    public static final String LAST_ADMIN_MESSAGE =
-            "Đây là quản trị viên đang hoạt động cuối cùng. Hãy tạo hoặc giữ ít nhất một quản trị viên khác "
-                    + "trước khi hạ quyền hoặc khóa tài khoản này.";
+    public static String lastAdminMessage() {
+        return I18n.t("account.lastadmin");
+    }
 
     private final EmployeeDAO employeeDAO = new EmployeeDAO();
 
@@ -54,19 +55,41 @@ public class AccountService {
         return createAccount(form, true);
     }
 
+    /**
+     * The rules for a user name, a password and a phone, kept here and not only in the dialogs (TODO 2A.35), so a second
+     * caller cannot skip them. A blank password is allowed only when {@code passwordOptional} (editing an account without
+     * changing its password). The messages are the ones the person sees.
+     */
+    static void checkRules(Form form, boolean passwordOptional) {
+        if (form == null || form.username() == null || !ValidationUtil.isValidUsername(form.username())) {
+            throw new DataAccessException(I18n.t("account.rule.username"));
+        }
+        String password = form.password();
+        boolean blank = password == null || password.isBlank();
+        if (blank ? !passwordOptional
+                : (!ValidationUtil.isValidPassword(password) || ValidationUtil.containsUsername(password, form.username()))) {
+            throw new DataAccessException(I18n.t("account.rule.password", ValidationUtil.MAX_PASSWORD_LENGTH));
+        }
+        Employee employee = form.employee();
+        if (employee != null && !ValidationUtil.isBlank(employee.getPhone()) && !ValidationUtil.isValidPhone(employee.getPhone())) {
+            throw new DataAccessException(I18n.t("account.rule.phone"));
+        }
+    }
+
     private User createAccount(Form form, boolean onlyWhenNoAccountExists) {
+        checkRules(form, false);
         String username = form.username().trim();
         try (Connection connection = DatabaseConfig.getConnection()) {
             connection.setAutoCommit(false);
             try {
                 if (onlyWhenNoAccountExists && anyAccountExists(connection)) {
-                    throw new DataAccessException("Đã có tài khoản trong hệ thống nên không thể thiết lập lần đầu nữa.");
+                    throw new DataAccessException(I18n.t("account.setup.done"));
                 }
                 if (usernameTaken(connection, username)) {
-                    throw new DataAccessException("Tên đăng nhập đã tồn tại.");
+                    throw new DataAccessException(I18n.t("account.username.taken"));
                 }
                 if (phoneTaken(connection, form.employee().getPhone(), 0)) {
-                    throw new DataAccessException("Số điện thoại này đã thuộc về một nhân viên khác.");
+                    throw new DataAccessException(I18n.t("employee.phone.taken"));
                 }
                 Employee employee = form.employee();
                 employee.setActive(form.active());
@@ -90,7 +113,7 @@ public class AccountService {
                 throw e;
             }
         } catch (SQLException e) {
-            throw translate("Không thể tạo tài khoản", e);
+            throw translate(I18n.t("account.create.fail"), e);
         }
     }
 
@@ -100,12 +123,18 @@ public class AccountService {
      */
     public void update(User existing, Employee existingEmployee, Form form) {
         Permissions.requireAdmin("change an account");
+        // TODO 2.84: an old customer-role account may be edited (fixed, locked) but never turned into a staff account by saving
+        // a form: the dialog used to show "Nhân viên" for it and Save then gave a customer login a cashier's rights.
+        if (existing.getRole() == Role.CUSTOMER && form.role() != Role.CUSTOMER) {
+            throw new DataAccessException(I18n.t("account.customerrole"));
+        }
+        checkRules(form, true);
         try (Connection connection = DatabaseConfig.getConnection()) {
             connection.setAutoCommit(false);
             try {
                 if (existingEmployee != null) {
                     if (phoneTaken(connection, form.employee().getPhone(), existingEmployee.getId())) {
-                        throw new DataAccessException("Số điện thoại này đã thuộc về một nhân viên khác.");
+                        throw new DataAccessException(I18n.t("employee.phone.taken"));
                     }
                     Employee e = existingEmployee;
                     Employee in = form.employee();
@@ -145,7 +174,7 @@ public class AccountService {
                 throw e;
             }
         } catch (SQLException e) {
-            throw translate("Không thể lưu tài khoản", e);
+            throw translate(I18n.t("accounts.save.fail"), e);
         }
     }
 
@@ -172,7 +201,7 @@ public class AccountService {
                 throw e;
             }
         } catch (SQLException e) {
-            throw translate("Không thể đổi trạng thái tài khoản", e);
+            throw translate(I18n.t("account.status.change.fail"), e);
         }
     }
 
@@ -193,7 +222,7 @@ public class AccountService {
             st.setInt(4, stillActiveAdmin ? 1 : 0);
             st.setInt(5, userId);
             if (st.executeUpdate() == 0) {
-                throw new DataAccessException(LAST_ADMIN_MESSAGE);
+                throw new DataAccessException(lastAdminMessage());
             }
         }
     }
@@ -253,9 +282,9 @@ public class AccountService {
     private static DataAccessException translate(String what, SQLException e) {
         String m = e.getMessage() == null ? "" : e.getMessage();
         if (com.coffeeshop.coffeeshopmanagement.dao.UniqueViolation.isUnique(e)) {
-            if (m.contains("username")) return new DataAccessException("Tên đăng nhập đã tồn tại.", e);
-            if (m.contains("phone")) return new DataAccessException("Số điện thoại này đã thuộc về một nhân viên khác.", e);
-            return new DataAccessException("Thông tin này đã tồn tại trong hệ thống.", e);
+            if (m.contains("username")) return new DataAccessException(I18n.t("account.username.taken"), e);
+            if (m.contains("phone")) return new DataAccessException(I18n.t("employee.phone.taken"), e);
+            return new DataAccessException(I18n.t("account.exists"), e);
         }
         return new DataAccessException(what + ": " + m, e);
     }

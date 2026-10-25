@@ -17,6 +17,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import com.coffeeshop.coffeeshopmanagement.util.Permissions;
 
 public class UserDAO {
 
@@ -120,6 +121,7 @@ public Optional<User> findById(int id) {
     }
 
     public void updateStatus(int userId, AccountStatus status) {
+        Permissions.requireAdmin("change an account status");
         String sql = "UPDATE users SET status = ? WHERE id = ?";
         try (Connection connection = DatabaseConfig.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -128,6 +130,23 @@ public Optional<User> findById(int id) {
             statement.executeUpdate();
         } catch (SQLException e) {
             throw new DataAccessException("Failed to update account status", e);
+        }
+    }
+
+    /**
+     * Stores the same password with a newer iteration count (TODO 2.72). Unlike {@link #updatePasswordHash} it leaves
+     * {@code must_change_password} alone: an account whose password an administrator just reset must still be asked to choose
+     * its own, even when the silent upgrade at login runs first.
+     */
+    public void rehashPassword(int userId, String passwordHash) {
+        String sql = "UPDATE users SET password_hash = ? WHERE id = ?";
+        try (Connection connection = DatabaseConfig.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, passwordHash);
+            statement.setInt(2, userId);
+            statement.executeUpdate();
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to update password", e);
         }
     }
 
@@ -145,6 +164,7 @@ public Optional<User> findById(int id) {
     }
 
     public void updateRole(int userId, Role role) {
+        Permissions.requireAdmin("change an account role");
         String sql = "UPDATE users SET role = ? WHERE id = ?";
         try (Connection connection = DatabaseConfig.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {

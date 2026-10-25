@@ -1,12 +1,12 @@
 # Before a release, an upgrade or a database change
 
-A short checklist (TODO 6.9). Last brought up to date on 2026-10-17 (see `progress.md`, Session 67). This is the only copy: `docs/RELEASE.md`.
+A short checklist (TODO 6.9). Last brought up to date on 2026-10-17 (see `progress.md`, Session 83). This is the only copy: `docs/RELEASE.md`.
 
 ## What the code already does, and what it does not
 
 The code makes safety copies by itself in these places:
 
-- **Both kinds of shop:** an automatic backup `data/backups/auto-<time>.zip` (database and pictures) at start-up and then
+- **Both kinds of shop:** an automatic backup `data/backups/auto-<time>.zip` (database and pictures; only every 7th one holds the pictures, the others are `auto-<time>-db.zip`) at start-up and then
   hourly checks, one at most every 24 hours, newest 14 kept. On MariaDB the zip holds `lunavera.sql` made by `mysqldump`,
   which must be installed on the till computer (`db.mysqldump` in `data/database.properties` if it is not on the PATH).
 - **SQLite shop:** every restore first saves `before-restore-<time>.zip` (newest 3 kept). A one-time
@@ -52,7 +52,7 @@ The SQLite restore code is covered by `BackupServiceTest`; this step proves it o
 
 ## 4. Release
 
-- `./mvnw -B clean test` passes on Windows and Linux (the CI runs both). The project holds 611 `@Test` methods in 109 classes; the
+- `./mvnw -B clean test` passes on Windows and Linux (the CI runs both). The project holds 1156 `@Test` methods in 173 classes; the
   SQLite-only tests are skipped on MariaDB, so the number Maven prints can be lower. Write the number you see in the
   "Release status" block of `progress.md`.
   Known until TODO 3.42 is fixed: `DashboardStatsServiceTest.theLastSevenDaysIncludeTodayAndNoNegativeRevenue` can fail

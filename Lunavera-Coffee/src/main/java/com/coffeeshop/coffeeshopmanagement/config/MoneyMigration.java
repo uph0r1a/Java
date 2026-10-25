@@ -1,5 +1,6 @@
 package com.coffeeshop.coffeeshopmanagement.config;
 
+import com.coffeeshop.coffeeshopmanagement.util.I18n;
 import com.coffeeshop.coffeeshopmanagement.util.DataPaths;
 
 import java.nio.file.Files;

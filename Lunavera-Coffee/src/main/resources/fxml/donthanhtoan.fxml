@@ -45,10 +45,10 @@
         <Label text="LUNAVERA COFFEE"
                styleClass="invoice-shop-name"/>
 
-        <Label text="HÓA ĐƠN THANH TOÁN"
+        <Label text="%receipt.title"
                styleClass="invoice-title"/>
 
-        <Label text="Cảm ơn quý khách đã sử dụng dịch vụ"
+        <Label text="%receipt.thanks.short"
                styleClass="invoice-subtitle"/>
 
         <Label fx:id="statusBannerLabel"
@@ -80,7 +80,7 @@
 
         <!-- MÃ ĐƠN -->
 
-        <Label text="Mã đơn:"
+        <Label text="%receipt.orderid"
                GridPane.columnIndex="0"
                GridPane.rowIndex="0"
                styleClass="invoice-label"/>
@@ -93,7 +93,7 @@
 
         <!-- BÀN -->
 
-        <Label text="Nhân viên:"
+        <Label text="%receipt.employee"
                GridPane.columnIndex="0"
                GridPane.rowIndex="1"
                styleClass="invoice-label"/>
@@ -106,7 +106,7 @@
 
         <!-- BÀN -->
 
-        <Label text="Bàn:"
+        <Label text="%receipt.table"
                GridPane.columnIndex="0"
                GridPane.rowIndex="2"
                styleClass="invoice-label"/>
@@ -119,7 +119,7 @@
 
         <!-- KHÁCH HÀNG -->
 
-        <Label text="Khách hàng:"
+        <Label text="%receipt.customer"
                GridPane.columnIndex="0"
                GridPane.rowIndex="3"
                styleClass="invoice-label"/>
@@ -133,7 +133,7 @@
         <!-- THỜI GIAN -->
 
         <Label fx:id="timeCaptionLabel"
-               text="Thanh toán lúc:"
+               text="%receipt.paidat"
                GridPane.columnIndex="0"
                GridPane.rowIndex="4"
                styleClass="invoice-label"/>
@@ -142,6 +142,16 @@
                GridPane.columnIndex="1"
                GridPane.rowIndex="4"
                styleClass="invoice-value"/>
+
+        <!-- ĐIỂM TÍCH LŨY (filled by code, only for a paid order with a customer) -->
+
+        <Label fx:id="pointsLabel"
+               GridPane.columnIndex="0"
+               GridPane.columnSpan="2"
+               GridPane.rowIndex="5"
+               styleClass="invoice-value"
+               visible="false"
+               managed="false"/>
 
     </GridPane>
 
@@ -153,7 +163,7 @@
     <!-- ORDER DETAILS -->
     <!-- ========================================================= -->
 
-    <Label text="Chi tiết đơn hàng"
+    <Label text="%receipt.details"
            styleClass="detail-title"/>
 
 
@@ -165,7 +175,7 @@
         <columns>
 
             <TableColumn fx:id="productColumn"
-                         text="Sản phẩm"
+                         text="%receipt.col.product"
                          prefWidth="175.0"/>
 
             <TableColumn fx:id="quantityColumn"
@@ -173,18 +183,18 @@
                          prefWidth="45.0"/>
 
             <TableColumn fx:id="priceColumn"
-                         text="Đơn giá"
+                         text="%pos.col.price"
                          prefWidth="90.0"/>
 
             <TableColumn fx:id="subtotalColumn"
-                         text="Thành tiền"
+                         text="%pos.col.total"
                          prefWidth="115.0"/>
 
         </columns>
 
         <placeholder>
 
-            <Label text="Không có sản phẩm"
+            <Label text="%receipt.noitems"
                    styleClass="empty-label"/>
 
         </placeholder>
@@ -203,7 +213,7 @@
 
         <HBox alignment="CENTER_LEFT">
 
-            <Label text="Tạm tính"
+            <Label text="%receipt.subtotal"
                    maxWidth="Infinity"
                    styleClass="total-label"
                    HBox.hgrow="ALWAYS"/>
@@ -217,7 +227,7 @@
 
         <HBox alignment="CENTER_LEFT">
 
-            <Label text="Giảm giá"
+            <Label text="%receipt.discount"
                    maxWidth="Infinity"
                    styleClass="total-label"
                    HBox.hgrow="ALWAYS"/>
@@ -240,7 +250,7 @@
 
         <HBox alignment="CENTER_LEFT">
 
-            <Label text="TỔNG TIỀN"
+            <Label text="%receipt.total"
                    maxWidth="Infinity"
                    styleClass="grand-total-label"
                    HBox.hgrow="ALWAYS"/>
@@ -261,7 +271,7 @@
     <HBox alignment="CENTER_LEFT"
           spacing="10.0">
 
-        <Label text="Thanh toán:"
+        <Label text="%receipt.method"
                styleClass="invoice-label"/>
 
         <Label fx:id="paymentMethodLabel"
@@ -278,7 +288,7 @@
           spacing="6.0"
           styleClass="qr-section">
 
-        <Label text="Mã QR hóa đơn"
+        <Label text="%receipt.qr.title"
                styleClass="qr-title"/>
 
 
@@ -298,7 +308,7 @@
                styleClass="qr-order-id"/>
 
 
-        <Label text="Quét QR để xem hóa đơn"
+        <Label text="%receipt.qr.caption"
                styleClass="qr-subtitle"/>
 
     </VBox>
@@ -314,7 +324,7 @@
         <Label text="LUNAVERA COFFEE"
                styleClass="invoice-footer-shop"/>
 
-        <Label text="Cảm ơn quý khách và hẹn gặp lại!"
+        <Label text="%receipt.thanks"
                styleClass="invoice-footer-text"/>
 
     </VBox>
@@ -328,7 +338,7 @@
           alignment="CENTER">
 
         <Button fx:id="printButton"
-                text="▣  In hóa đơn"
+                text="%pos.print"
                 prefHeight="42.0"
                 HBox.hgrow="ALWAYS"
                 styleClass="print-button"
@@ -336,7 +346,7 @@
 
 
         <Button fx:id="closeButton"
-                text="Đóng"
+                text="%common.close"
                 prefHeight="42.0"
                 HBox.hgrow="ALWAYS"
                 styleClass="close-button"

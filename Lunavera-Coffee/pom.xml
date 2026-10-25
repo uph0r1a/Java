@@ -11,6 +11,14 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- The language and country the test JVM runs with (TODO 6.62), so a run does not depend on the regional settings of the
+             PC that happens to run it. CI runs the tests a second time with -Dtest.locale.language=ar -Dtest.locale.country=SA
+             (Arabic-Indic digits) to catch code that writes digits through the default locale. -->
+        <test.locale.language>en</test.locale.language>
+        <test.locale.country>US</test.locale.country>
+        <!-- TODO 6.59: JaCoCo puts its agent in this property (prepare-agent); surefire's argLine below starts with @{argLine} so the
+             agent reaches the test JVM. Empty by default, so a build that skips JaCoCo still starts. -->
+        <argLine></argLine>
     </properties>
 
     <dependencies>
@@ -62,7 +70,7 @@
 
     <build>
         <!-- TODO 6.33: every plugin the lifecycle uses has an explicit version, so a build does not depend on which defaults the
-             Maven that happens to run it binds (the wrapper's 3.8.5 and a newer one differ). The compiler, surefire and
+             Maven that happens to run it binds (the wrapper's 3.9.16 and an older one differ). The compiler, surefire and
              javafx plugins are pinned where they are configured below. Update these by hand (Dependabot proposes them). -->
         <pluginManagement>
             <plugins>
@@ -96,7 +104,7 @@
         <plugins>
             <plugin>
                 <!-- TODO 6.33: stop early, with a clear message, when the build runs on a JDK or Maven that is too old
-                     (JavaFX 21 and the code need JDK 21; the wrapper brings Maven 3.8.5). -->
+                     (JavaFX 21 and the code need JDK 21; the wrapper brings Maven 3.9.16). -->
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-enforcer-plugin</artifactId>
                 <version>3.5.0</version>
@@ -134,9 +142,9 @@
                             <mainClass>
                                 com.coffeeshop.coffeeshopmanagement/com.coffeeshop.coffeeshopmanagement.LunaveraApplication
                             </mainClass>
-                            <launcher>app</launcher>
-                            <jlinkZipName>app</jlinkZipName>
-                            <jlinkImageName>app</jlinkImageName>
+                            <launcher>lunavera</launcher>
+                            <jlinkZipName>lunavera</jlinkZipName>
+                            <jlinkImageName>lunavera</jlinkImageName>
                             <noManPages>true</noManPages>
                             <stripDebug>true</stripDebug>
                             <noHeaderFiles>true</noHeaderFiles>
@@ -154,7 +162,7 @@
                 <configuration>
                     <!-- FontBundleTest reads the bundled fonts with java.awt.Font; the app itself never uses java.desktop
                          directly, so the test JVM (only) is allowed to read that module. -->
-                    <argLine>--add-reads com.coffeeshop.coffeeshopmanagement=java.desktop</argLine>
+                    <argLine>@{argLine} --add-reads com.coffeeshop.coffeeshopmanagement=java.desktop -Duser.language=${test.locale.language} -Duser.country=${test.locale.country}</argLine>
                     <systemPropertyVariables>
                         <lunavera.dataDir>${project.build.directory}/test-data</lunavera.dataDir>
                         <user.home>${project.build.directory}/test-home</user.home>
@@ -163,6 +171,30 @@
                         <lunavera.db.type>sqlite</lunavera.db.type>
                     </systemPropertyVariables>
                 </configuration>
+            </plugin>
+            <plugin>
+                <!-- TODO 6.59: a coverage report, so "which classes have no test" is read from a page instead of found by hand.
+                     ./mvnw verify writes target/site/jacoco/index.html (CI uploads it). There is deliberately no minimum that
+                     fails the build: the JavaFX controllers show as uncovered, so look at the report first and only then
+                     decide on a number. -->
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.12</version>
+                <executions>
+                    <execution>
+                        <id>jacoco-prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>jacoco-report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

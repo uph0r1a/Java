@@ -1,5 +1,6 @@
 package com.coffeeshop.coffeeshopmanagement.controller;
 
+import com.coffeeshop.coffeeshopmanagement.util.I18n;
 import com.coffeeshop.coffeeshopmanagement.util.Session;
 
 import javafx.scene.Node;
@@ -25,7 +26,7 @@ public final class SidebarExtras {
         if (logout == null || !(logout.getParent() instanceof Pane pane) || pane.lookup("#" + BUTTON_ID) != null) {
             return;
         }
-        Button change = new Button("Đổi mật khẩu");
+        Button change = new Button(I18n.t("password.title"));
         change.setId(BUTTON_ID);
         change.getStyleClass().addAll(logout.getStyleClass());
         change.setPrefHeight(42.0);

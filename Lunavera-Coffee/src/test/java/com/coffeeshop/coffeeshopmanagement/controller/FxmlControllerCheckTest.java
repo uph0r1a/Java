@@ -63,8 +63,7 @@ public class FxmlControllerCheckTest {
     static final Set<String> KNOWN_UNDEFINED_CLASSES = new TreeSet<>(Arrays.asList(
             "admin-trangchu.fxml:primary-button",
             "employee-trangchu.fxml:section-subtitle",
-            "quanlykhachhang.fxml:primary-button", "quanlykhachhang.fxml:search-field",
-            "quanlysanpham.fxml:product-area"));
+            "quanlykhachhang.fxml:primary-button", "quanlykhachhang.fxml:search-field"));
 
     private static final Pattern CONTROLLER = Pattern.compile("fx:controller=\"([^\"]+)\"");
     private static final Pattern HANDLER = Pattern.compile("\\bon[A-Z]\\w*=\"#(\\w+)\"");

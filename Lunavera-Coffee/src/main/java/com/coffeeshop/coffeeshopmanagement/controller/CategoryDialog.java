@@ -71,7 +71,10 @@ public final class CategoryDialog {
                 event.consume();
                 return;
             }
-            Category category = existing != null ? existing : new Category();
+            // Edit a copy: the table shows `existing`, so it must not change until the database accepted the save (TODO 2.76).
+            Category category = existing != null
+                    ? new Category(existing.getId(), existing.getName(), existing.getDescription(), existing.isActive())
+                    : new Category();
             category.setName(nameField.getText().trim());
             category.setDescription(descriptionField.getText());
             category.setActive(activeBox.isSelected());
@@ -80,6 +83,9 @@ public final class CategoryDialog {
                     CATEGORIES.insert(category);
                 } else {
                     CATEGORIES.update(category);
+                    existing.setName(category.getName());
+                    existing.setDescription(category.getDescription());
+                    existing.setActive(category.isActive());
                 }
                 saved[0] = true;
             } catch (DataAccessException e) {

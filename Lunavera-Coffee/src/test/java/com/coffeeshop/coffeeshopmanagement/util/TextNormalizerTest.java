@@ -4,6 +4,7 @@ import com.coffeeshop.coffeeshopmanagement.dao.CategoryDAO;
 import com.coffeeshop.coffeeshopmanagement.dao.DataAccessException;
 import com.coffeeshop.coffeeshopmanagement.dao.TestDatabaseSupport;
 import com.coffeeshop.coffeeshopmanagement.model.Category;
+import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -18,6 +19,12 @@ public class TextNormalizerTest {
     @BeforeClass
     public static void setUpDatabase() {
         TestDatabaseSupport.ensureReady();
+        TestSession.admin();
+    }
+
+    @AfterClass
+    public static void signOut() {
+        TestSession.clear();
     }
 
     @Test

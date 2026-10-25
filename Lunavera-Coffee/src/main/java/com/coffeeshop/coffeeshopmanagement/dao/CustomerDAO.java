@@ -1,5 +1,6 @@
 package com.coffeeshop.coffeeshopmanagement.dao;
 
+import com.coffeeshop.coffeeshopmanagement.util.I18n;
 import com.coffeeshop.coffeeshopmanagement.util.AppClock;
 import com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig;
 import com.coffeeshop.coffeeshopmanagement.util.DbTime;
@@ -83,7 +84,7 @@ public class CustomerDAO {
      */
     private static DataAccessException duplicatePhoneOr(SQLException e, String fallback) {
         if (UniqueViolation.isUnique(e)) {
-            return new DataAccessException("Số điện thoại này đã thuộc về một khách hàng khác.", e);
+            return new DataAccessException(I18n.t("customer.phone.taken"), e);
         }
         return new DataAccessException(fallback, e);
     }
@@ -135,6 +136,33 @@ public class CustomerDAO {
         return Optional.empty();
     }
 
+    /**
+     * Every paid order that has a customer, for the visits / total spent / last visit figures (TODO 4.39). One query; the sums
+     * are made in Java ({@code CustomerStats}). A row whose stored time cannot be read still counts as a visit and as money.
+     */
+    public List<com.coffeeshop.coffeeshopmanagement.service.CustomerStats.Row> paidOrderRows() {
+        String sql = "SELECT customer_id, COALESCE(paid_at, order_date) AS paid_time, total FROM orders WHERE status = "
+                + com.coffeeshop.coffeeshopmanagement.config.SqlStatus.PAID + " AND customer_id IS NOT NULL";
+        List<com.coffeeshop.coffeeshopmanagement.service.CustomerStats.Row> result = new ArrayList<>();
+        try (Connection connection = DatabaseConfig.getConnection();
+             Statement statement = connection.createStatement();
+             ResultSet rs = statement.executeQuery(sql)) {
+            while (rs.next()) {
+                LocalDateTime time;
+                try {
+                    time = DbTime.parse(rs.getString("paid_time"));
+                } catch (RuntimeException e) {
+                    time = null;
+                }
+                result.add(new com.coffeeshop.coffeeshopmanagement.service.CustomerStats.Row(rs.getInt("customer_id"), time,
+                        com.coffeeshop.coffeeshopmanagement.util.Money.fromDong(rs.getLong("total"))));
+            }
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to load customer purchases", e);
+        }
+        return result;
+    }
+
     public List<Customer> findAll() {
         String sql = "SELECT * FROM customers ORDER BY id";
         List<Customer> result = new ArrayList<>();
@@ -146,6 +174,47 @@ public class CustomerDAO {
             }
         } catch (SQLException e) {
             throw new DataAccessException("Failed to load customers", e);
+        }
+        return result;
+    }
+
+    /**
+     * At most {@code limit} customers whose name, phone or e-mail contains {@code typed}, by name (TODO 3.52). The name and the e-mail
+     * are compared without accents or capitals ({@code "nguyen"} finds {@code "Nguyễn"}), the phone as typed or in its canonical form
+     * ({@code "+84 901 111"} finds {@code 0901111222}). A %, _ or ! typed by the person matches itself. A blank text matches everybody,
+     * so the first {@code limit} by name come back. This is the query behind the POS "attach a customer" box: the list on screen is never
+     * the whole customers table.
+     */
+    public List<Customer> search(String typed, int limit) {
+        String keyword = com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.searchKey(typed);
+        StringBuilder sql = new StringBuilder("SELECT * FROM customers");
+        List<String> params = new ArrayList<>();
+        if (!keyword.isEmpty()) {
+            String like = "%" + OrderDAO.escapeLike(keyword) + "%";
+            String phoneKey = ValidationUtil.normalizePhone(keyword);
+            sql.append(" WHERE ").append(DatabaseConfig.searchKeySql("full_name")).append(" LIKE ? ESCAPE '!'")
+                    .append(" OR phone LIKE ? ESCAPE '!'")
+                    .append(" OR ").append(DatabaseConfig.searchKeySql("COALESCE(email, '')")).append(" LIKE ? ESCAPE '!'");
+            params.add(like);
+            params.add("%" + OrderDAO.escapeLike(phoneKey == null ? keyword : phoneKey) + "%");
+            params.add(like);
+        }
+        sql.append(" ORDER BY full_name, id LIMIT ?");
+        List<Customer> result = new ArrayList<>();
+        try (Connection connection = DatabaseConfig.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql.toString())) {
+            int index = 1;
+            for (String param : params) {
+                statement.setString(index++, param);
+            }
+            statement.setInt(index, Math.max(1, limit));
+            try (ResultSet rs = statement.executeQuery()) {
+                while (rs.next()) {
+                    result.add(map(rs));
+                }
+            }
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to search customers", e);
         }
         return result;
     }

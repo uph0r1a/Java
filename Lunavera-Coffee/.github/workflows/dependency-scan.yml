@@ -1,0 +1,29 @@
+# TODO 2A.6: look every pinned dependency up in the OSV vulnerability database (osv.dev, run by Google; free, no key).
+# The versions in pom.xml are fixed by hand, so nothing else would tell the shop that one of them became known as
+# vulnerable. This runs when pom.xml changes and every Monday, so a vulnerability published later is noticed without a push.
+# The job fails when a known vulnerability is found: read the report in the job log, then update the dependency
+# (Dependabot proposes the new version, see dependabot.yml) or, if it does not apply to this app, add it to an
+# osv-scanner.toml with the reason. Upload to GitHub "Code scanning" is off (a private repository needs a paid plan for it).
+name: Dependency scan
+on:
+  pull_request:
+    paths: ['pom.xml', '.github/workflows/dependency-scan.yml']
+  push:
+    paths: ['pom.xml', '.github/workflows/dependency-scan.yml']
+  schedule:
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  osv-scan:
+    # The reusable workflow asks for these three rights; the caller must grant at least them.
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    # Pinned to a commit, not a tag (a tag can be moved); the comment names the release it is.
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@b1d267aea5211fa648d9d442fa64b90dbdcbdd36 # v2.7.0
+    with:
+      upload-sarif: false
+      fail-on-vuln: true

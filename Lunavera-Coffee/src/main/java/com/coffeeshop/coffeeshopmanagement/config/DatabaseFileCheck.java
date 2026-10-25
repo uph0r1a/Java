@@ -1,5 +1,7 @@
 package com.coffeeshop.coffeeshopmanagement.config;
 
+import com.coffeeshop.coffeeshopmanagement.util.I18n;
+
 import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -42,12 +44,7 @@ final class DatabaseFileCheck {
         if (!hasBackup && !hasPictures) {
             return null;
         }
-        return "Tệp dữ liệu " + dbFile.toAbsolutePath() + " đang trống (0 byte) trong khi thư mục này có bản sao lưu"
-                + (hasPictures ? " hoặc ảnh sản phẩm" : "") + ", nên có thể nó đã bị hỏng. "
-                + "Chương trình không tạo quán mới đè lên để tránh mất dữ liệu cũ. "
-                + "Hãy đóng chương trình, rồi dùng bản sao lưu mới nhất trong " + folder.resolve("backups")
-                + " (giải nén, chép lunavera.db trong đó thay vào tệp trống). "
-                + "Nếu thật sự muốn bắt đầu lại từ đầu, hãy xóa tệp trống này.";
+        return I18n.t("db.file.empty", dbFile.toAbsolutePath(), (hasPictures ? " " + I18n.t("db.file.orpictures") : ""), folder.resolve("backups"));
     }
 
     private static boolean containsFile(Path dir, java.util.function.Predicate<String> nameMatches) {

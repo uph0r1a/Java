@@ -3,7 +3,6 @@ package com.coffeeshop.coffeeshopmanagement.util;
 import com.coffeeshop.coffeeshopmanagement.model.Order;
 import com.coffeeshop.coffeeshopmanagement.model.OrderItem;
 import com.coffeeshop.coffeeshopmanagement.model.OrderStatus;
-import com.coffeeshop.coffeeshopmanagement.model.PaymentMethod;
 
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -50,6 +49,12 @@ public final class ThermalReceipt {
 
     public static VBox build(Order order, List<OrderItem> items, String employeeName, String customerName,
                              Image qrImage, double width) {
+        return build(order, items, employeeName, customerName, qrImage, width, null);
+    }
+
+    /** {@code pointsBalance} is the customer's total points when known (TODO 5.28); the line is left out when no customer is attached. */
+    public static VBox build(Order order, List<OrderItem> items, String employeeName, String customerName,
+                             Image qrImage, double width, Integer pointsBalance) {
         double size = fontSizeFor(width);
         VBox root = new VBox(2);
         root.setPrefWidth(width);
@@ -59,32 +64,39 @@ public final class ThermalReceipt {
         root.setStyle("-fx-background-color: white;");
 
         root.getChildren().add(centered("LUNAVERA COFFEE", size + 3, true, width));
-        root.getChildren().add(centered("HÓA ĐƠN THANH TOÁN", size, true, width));
+        root.getChildren().add(centered(ReceiptText.t("receipt.title"), size, true, width));
         if (order.getStatus() == OrderStatus.CANCELLED) {
-            root.getChildren().add(centered("ĐÃ HỦY - KHÔNG CÓ GIÁ TRỊ THANH TOÁN", size, true, width));
+            root.getChildren().add(centered(ReceiptText.t("receipt.cancelled"), size, true, width));
         }
         root.getChildren().add(rule(width));
         java.time.LocalDateTime shown = order.getPaidAt() != null ? order.getPaidAt() : order.getOrderDate();
-        root.getChildren().add(line("Mã đơn: #" + order.getId(), size, false, width));
-        root.getChildren().add(line("Thời gian: " + (shown == null ? "-" : shown.format(TIME)), size, false, width));
-        root.getChildren().add(line("Nhân viên: " + (employeeName == null ? "-" : employeeName), size, false, width));
-        root.getChildren().add(line(order.getTableNumber() != null ? "Bàn " + order.getTableNumber() : "Mang đi", size, false, width));
-        root.getChildren().add(line("Khách hàng: " + (customerName == null ? "Khách lẻ" : customerName), size, false, width));
+        root.getChildren().add(line(ReceiptText.t("receipt.line.orderid", order.getId()), size, false, width));
+        root.getChildren().add(line(ReceiptText.t("receipt.line.time", shown == null ? "-" : shown.format(TIME)), size, false, width));
+        root.getChildren().add(line(ReceiptText.t("receipt.line.employee", employeeName == null ? "-" : employeeName), size, false, width));
+        root.getChildren().add(line(ReceiptText.table(order.getTableNumber()), size, false, width));
+        root.getChildren().add(line(ReceiptText.t("receipt.line.customer", customerName == null ? ReceiptText.t("receipt.guest") : customerName), size, false, width));
+        Integer earned = com.coffeeshop.coffeeshopmanagement.service.LoyaltyPolicy.pointsEarnedBy(order);
+        if (earned != null) {
+            root.getChildren().add(line(ReceiptText.points(earned, pointsBalance), size, false, width));
+        }
         root.getChildren().add(rule(width));
 
         for (OrderItem item : items) {
-            root.getChildren().add(line(item.getProductName(), size, true, width));
+            root.getChildren().add(line(ReceiptText.productName(item.getProductName()), size, true, width));
             root.getChildren().add(pair(item.getQuantity() + " x " + CurrencyUtil.format(item.getUnitPrice()),
                     CurrencyUtil.format(item.getLineTotal()), size, false, width));
         }
         root.getChildren().add(rule(width));
-        root.getChildren().add(pair("Tạm tính", CurrencyUtil.format(order.getSubtotal()), size, false, width));
-        root.getChildren().add(pair("Giảm giá", CurrencyUtil.format(order.getDiscount()), size, false, width));
+        root.getChildren().add(pair(ReceiptText.t("receipt.subtotal"), CurrencyUtil.format(order.getSubtotal()), size, false, width));
+        root.getChildren().add(pair(ReceiptText.t("receipt.discount"), CurrencyUtil.format(order.getDiscount()), size, false, width));
         if (order.getDiscountReason() != null && !order.getDiscountReason().isBlank()) {
-            root.getChildren().add(line("Lý do: " + order.getDiscountReason(), size - 1, false, width));
+            root.getChildren().add(line(ReceiptText.t("receipt.line.reason", order.getDiscountReason()), size - 1, false, width));
         }
-        root.getChildren().add(pair("TỔNG TIỀN", CurrencyUtil.format(order.getTotal()), size + 2, true, width));
-        root.getChildren().add(line("Thanh toán: " + PaymentMethod.labelOf(order.getPaymentMethod()), size, false, width));
+        root.getChildren().add(pair(ReceiptText.t("receipt.total"), CurrencyUtil.format(order.getTotal()), size + 2, true, width));
+        root.getChildren().add(line(ReceiptText.t("receipt.line.method", ReceiptText.paymentMethod(order.getPaymentMethod())), size, false, width));
+        for (String extra : ReceiptText.paymentExtras(order)) { // cash received and change, or the transfer reference (TODO 3.17, 4.31)
+            root.getChildren().add(line(extra, size, false, width));
+        }
         root.getChildren().add(rule(width));
 
         if (qrImage != null) {
@@ -97,9 +109,9 @@ public final class ThermalReceipt {
             box.setAlignment(Pos.CENTER);
             box.setPadding(new Insets(4, 0, 2, 0));
             root.getChildren().add(box);
-            root.getChildren().add(centered("Quét QR để xem hóa đơn #" + order.getId(), size - 1, false, width));
+            root.getChildren().add(centered(ReceiptText.t("receipt.line.qr", order.getId()), size - 1, false, width));
         }
-        root.getChildren().add(centered("Cảm ơn quý khách và hẹn gặp lại!", size, false, width));
+        root.getChildren().add(centered(ReceiptText.t("receipt.thanks"), size, false, width));
         return root;
     }
 

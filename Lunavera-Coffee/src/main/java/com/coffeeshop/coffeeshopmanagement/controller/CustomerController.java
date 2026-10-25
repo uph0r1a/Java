@@ -4,6 +4,9 @@ import com.coffeeshop.coffeeshopmanagement.dao.CustomerDAO;
 import com.coffeeshop.coffeeshopmanagement.dao.DataAccessException;
 import com.coffeeshop.coffeeshopmanagement.model.Customer;
 import com.coffeeshop.coffeeshopmanagement.util.AlertUtil;
+import com.coffeeshop.coffeeshopmanagement.service.CustomerStats;
+import com.coffeeshop.coffeeshopmanagement.service.LoyaltyPolicy;
+import com.coffeeshop.coffeeshopmanagement.util.I18n;
 import com.coffeeshop.coffeeshopmanagement.util.PagedTable;
 import com.coffeeshop.coffeeshopmanagement.util.TextLengthLimiter;
 import com.coffeeshop.coffeeshopmanagement.util.Async;
@@ -58,6 +61,9 @@ public class CustomerController {
     @FXML private TableColumn<Customer, String> customerEmailColumn;
     @FXML private TableColumn<Customer, Number> customerLoyaltyColumn;
     @FXML private TableColumn<Customer, String> customerTierColumn;
+    @FXML private TableColumn<Customer, Number> customerVisitsColumn;
+    @FXML private TableColumn<Customer, String> customerSpentColumn;
+    @FXML private TableColumn<Customer, String> customerLastVisitColumn;
     @FXML private TableColumn<Customer, Void> customerActionColumn;
     @FXML private javafx.scene.layout.HBox customerPagerBox;
     @FXML private javafx.scene.control.Label customerPaginationLabel;
@@ -69,11 +75,19 @@ public class CustomerController {
     @FXML private javafx.scene.layout.VBox adminMenuBox;
 
     private List<Customer> allCustomers = List.of();
+    /** Visits, total spent and last visit per customer id (TODO 4.39). */
+    private java.util.Map<Integer, CustomerStats.Figures> stats = java.util.Map.of();
+    private javafx.scene.control.ComboBox<CustomerStats.Filter> groupFilter;
+
+    private record Loaded(List<Customer> customers, java.util.Map<Integer, CustomerStats.Figures> stats) {
+    }
+
+    private static final java.time.format.DateTimeFormatter LAST_VISIT = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     @FXML
     private void initialize() {
         if (accountNameLabel != null) accountNameLabel.setText(Session.getDisplayName());
-        if (accountRoleLabel != null) accountRoleLabel.setText(Session.isAdmin() ? "Quản trị viên" : "Nhân viên");
+        if (accountRoleLabel != null) accountRoleLabel.setText(I18n.t(Session.isAdmin() ? "role.admin" : "role.employee"));
 
         if (!Session.isAdmin()) {
             if (productMenuButton != null) {
@@ -92,7 +106,13 @@ public class CustomerController {
 
         customerPaged = new PagedTable<>(customerTable, customerPagerBox, 10)
                 .unsortable(customerIndexColumn, customerActionColumn)
-                .sortKey(customerTierColumn, Customer::getLoyaltyPoints); // rank by points, not by the label text
+                .sortKey(customerTierColumn, Customer::getLoyaltyPoints) // rank by points, not by the label text
+                .sortKey(customerVisitsColumn, c -> CustomerStats.of(stats, c.getId()).visits())
+                .sortKey(customerSpentColumn, c -> CustomerStats.of(stats, c.getId()).spent())
+                .sortKey(customerLastVisitColumn, c -> {
+                    java.time.LocalDateTime last = CustomerStats.of(stats, c.getId()).lastVisit();
+                    return last == null ? java.time.LocalDateTime.MIN : last;
+                });
         customerIndexColumn.setCellValueFactory(data -> new SimpleIntegerProperty(
                 customerTable.getItems().indexOf(data.getValue()) + customerPaged.getFromIndex()));
         customerNameColumn.setCellValueFactory(data -> new SimpleStringProperty(data.getValue().getFullName()));
@@ -101,7 +121,17 @@ public class CustomerController {
         customerEmailColumn.setCellValueFactory(data -> new SimpleStringProperty(
                 data.getValue().getEmail() != null ? data.getValue().getEmail() : "-"));
         customerLoyaltyColumn.setCellValueFactory(data -> new SimpleIntegerProperty(data.getValue().getLoyaltyPoints()));
-        customerTierColumn.setCellValueFactory(data -> new SimpleStringProperty(tierFor(data.getValue().getLoyaltyPoints())));
+        customerTierColumn.setCellValueFactory(data -> new SimpleStringProperty(LoyaltyPolicy.tierName(data.getValue().getLoyaltyPoints())));
+        customerVisitsColumn.setCellValueFactory(data -> new SimpleIntegerProperty(CustomerStats.of(stats, data.getValue().getId()).visits()));
+        customerSpentColumn.setCellValueFactory(data -> {
+            CustomerStats.Figures f = CustomerStats.of(stats, data.getValue().getId());
+            return new SimpleStringProperty(f.visits() == 0 ? "-"
+                    : com.coffeeshop.coffeeshopmanagement.util.CurrencyUtil.format(f.spent()));
+        });
+        customerLastVisitColumn.setCellValueFactory(data -> {
+            java.time.LocalDateTime last = CustomerStats.of(stats, data.getValue().getId()).lastVisit();
+            return new SimpleStringProperty(last == null ? "-" : last.format(LAST_VISIT));
+        });
         customerActionColumn.setCellFactory(editOnlyActionColumn(this::openEditDialog));
 
         addExtraButtons();
@@ -115,7 +145,7 @@ public class CustomerController {
     /** "Lịch sử mua" for the selected customer (TODO 4.4) and, for an admin, "Xuất CSV" of the customer list (TODO 4.21). */
     private void addExtraButtons() {
         if (addCustomerButton == null || !(addCustomerButton.getParent() instanceof javafx.scene.layout.HBox bar)) return;
-        Button history = new Button("Lịch sử mua");
+        Button history = new Button(I18n.t("customers.history"));
         history.setPrefHeight(42);
         history.setDisable(true);
         history.setOnAction(e -> openPurchaseHistory());
@@ -123,10 +153,28 @@ public class CustomerController {
         customerTable.setOnMouseClicked(e -> {
             if (e.getClickCount() == 2) openPurchaseHistory();
         });
+        groupFilter = new javafx.scene.control.ComboBox<>(javafx.collections.FXCollections.observableArrayList(CustomerStats.Filter.values()));
+        groupFilter.setPrefHeight(42);
+        groupFilter.setValue(CustomerStats.Filter.ALL);
+        groupFilter.setConverter(new javafx.util.StringConverter<>() {
+            @Override public String toString(CustomerStats.Filter f) {
+                if (f == null) return "";
+                return switch (f) {
+                    case REGULARS -> I18n.t("customers.group.regulars", CustomerStats.REGULAR_VISITS);
+                    case TOP -> I18n.t("customers.group.top", CustomerStats.TOP_COUNT);
+                    case LAPSED -> I18n.t("customers.group.lapsed", CustomerStats.LAPSED_DAYS);
+                    default -> I18n.t("customers.group.all");
+                };
+            }
+            @Override public CustomerStats.Filter fromString(String text) { return CustomerStats.Filter.ALL; }
+        });
+        groupFilter.valueProperty().addListener((o, old, value) -> applyFilter());
+        int searchAt = bar.getChildren().indexOf(customerSearchField);
+        bar.getChildren().add(searchAt + 1, groupFilter);
         int at = bar.getChildren().indexOf(addCustomerButton);
         bar.getChildren().add(at, history);
         if (Session.isAdmin()) {
-            Button export = new Button("Xuất CSV");
+            Button export = new Button(I18n.t("common.exportcsv"));
             export.setPrefHeight(42);
             export.setOnAction(e -> exportCsv());
             bar.getChildren().add(at + 1, export);
@@ -142,63 +190,57 @@ public class CustomerController {
     /** Exports the whole customer list, not only the rows matching the search box. */
     private void exportCsv() {
         if (!Session.isAdmin()) {
-            AlertUtil.warning("Không đủ quyền", "Chỉ quản trị viên mới xuất được danh sách khách hàng.");
+            AlertUtil.warning(I18n.t("admin.only.title"), I18n.t("customers.export.adminonly"));
             return;
         }
         javafx.stage.FileChooser chooser = new javafx.stage.FileChooser();
-        chooser.setTitle("Xuất danh sách khách hàng");
+        chooser.setTitle(I18n.t("customers.export.title"));
         chooser.setInitialFileName("khach-hang-" + java.time.LocalDate.now() + ".csv");
         chooser.getExtensionFilters().add(new javafx.stage.FileChooser.ExtensionFilter("CSV", "*.csv"));
         java.io.File file = chooser.showSaveDialog(customerTable.getScene().getWindow());
         if (file == null) return;
+        Runnable pointer = com.coffeeshop.coffeeshopmanagement.util.BusyIndicator.waitCursor(customerTable); // TODO 5.16
         Async.run(
                 () -> {
                     com.coffeeshop.coffeeshopmanagement.util.Permissions.requireAdmin("export customers");
                     List<Customer> all = customerDAO.findAll();
+                    java.util.Map<Integer, CustomerStats.Figures> figures = CustomerStats.aggregate(customerDAO.paidOrderRows());
                     com.coffeeshop.coffeeshopmanagement.util.ExportCsv.write(file.toPath(),
-                            com.coffeeshop.coffeeshopmanagement.util.ExportCsv.customers(all));
+                            com.coffeeshop.coffeeshopmanagement.util.ExportCsv.customers(all, figures));
                     com.coffeeshop.coffeeshopmanagement.util.SecurityLog.event("exported " + all.size() + " customers to CSV");
                     return all.size();
                 },
-                count -> AlertUtil.info("Xuất danh sách khách hàng", "Đã lưu " + count + " khách hàng vào:\n" + file.getAbsolutePath()),
-                error -> AlertUtil.error("Không thể lưu file", error.getMessage()));
+                count -> {
+                    pointer.run();
+                    AlertUtil.info(I18n.t("customers.export.title"), I18n.t("customers.export.done", count, file.getAbsolutePath()));
+                },
+                error -> {
+                    pointer.run();
+                    AlertUtil.error(I18n.t("common.file.savefail"), error.getMessage());
+                });
     }
 
     private void reloadCustomers() {
         Async.run(
-                customerDAO::findAll,
-                result -> { allCustomers = result; applyFilter(); },
-                error -> AlertUtil.error("Lỗi tải dữ liệu", "Không thể tải danh sách khách hàng: " + error.getMessage())
+                () -> new Loaded(customerDAO.findAll(), CustomerStats.aggregate(customerDAO.paidOrderRows())),
+                result -> { allCustomers = result.customers(); stats = result.stats(); applyFilter(); },
+                error -> AlertUtil.error(I18n.t("dashboard.load.title"), I18n.t("customers.load.error", error.getMessage()))
         );
     }
 
     private void applyFilter() {
-        String keyword = customerSearchField.getText() != null ? com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.searchKey(customerSearchField.getText()) : "";
-        // A typed "+84 901 111 222" must find the stored "0901111222" (TODO 3.39).
-        String phoneKeyword = com.coffeeshop.coffeeshopmanagement.util.ValidationUtil.normalizePhone(keyword);
-        List<Customer> filtered = keyword.isEmpty()
-                ? allCustomers
-                : allCustomers.stream()
-                        .filter(c -> com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.searchKey(c.getFullName()).contains(keyword)
-                                || (c.getPhone() != null && (c.getPhone().toLowerCase().contains(keyword)
-                                        || c.getPhone().contains(phoneKeyword))))
-                        .collect(Collectors.toList());
+        // Name, phone and e-mail, by the rule in CustomerSearch (TODO 5.35; a typed "+84 901 111 222" finds "0901111222", TODO 3.39).
+        String typed = customerSearchField.getText();
+        List<Customer> filtered = allCustomers.stream()
+                .filter(c -> com.coffeeshop.coffeeshopmanagement.service.CustomerSearch.matches(c, typed))
+                .collect(Collectors.toList());
+        if (groupFilter != null) {
+            filtered = CustomerStats.apply(groupFilter.getValue(), filtered, stats, com.coffeeshop.coffeeshopmanagement.util.AppClock.today());
+        }
         customerPaged.setItems(filtered);
         if (customerPaginationLabel != null) {
-            customerPaginationLabel.setText(String.format("Hiển thị %d – %d / %d khách hàng",
-                    customerPaged.getFromIndex(), customerPaged.getToIndex(), customerPaged.getTotalCount()));
+            customerPaginationLabel.setText(I18n.t("customers.pagination", customerPaged.getFromIndex(), customerPaged.getToIndex(), customerPaged.getTotalCount()));
         }
-    }
-
-    /**
-     * Simple, transparent thresholds on real loyalty-point data - not a stored field, so a
-     * shop can't misconfigure it, but also not something they can currently customize. Revisit
-     * if the shop wants configurable tiers.
-     */
-    private String tierFor(int points) {
-        if (points >= 500) return "Vàng";
-        if (points >= 100) return "Bạc";
-        return "Thành viên mới";
     }
 
     @FXML
@@ -212,9 +254,9 @@ public class CustomerController {
 
     private void openCustomerDialog(Customer existing) {
         Dialog<Void> dialog = new Dialog<>();
-        dialog.setTitle(existing == null ? "Thêm khách hàng" : "Chỉnh sửa khách hàng");
+        dialog.setTitle(I18n.t(existing == null ? "customers.dialog.add" : "customers.dialog.edit"));
         AlertUtil.configure(dialog);
-        ButtonType saveButtonType = new ButtonType("Lưu", ButtonData.OK_DONE);
+        ButtonType saveButtonType = new ButtonType(I18n.t("common.save"), ButtonData.OK_DONE);
         dialog.getDialogPane().getButtonTypes().addAll(saveButtonType, ButtonType.CANCEL);
         AlertUtil.setDefaultButton(dialog, saveButtonType);
         AlertUtil.setCancelButton(dialog, ButtonType.CANCEL);
@@ -228,7 +270,7 @@ public class CustomerController {
                 ? ValidationUtil.normalizePhone(existing.getPhone()) : "";
         if (existing != null && !Session.isAdmin()) {
             phoneField.setDisable(true);
-            phoneField.setTooltip(new javafx.scene.control.Tooltip("Chỉ quản trị viên được đổi số điện thoại của khách hàng."));
+            phoneField.setTooltip(new javafx.scene.control.Tooltip(I18n.t("customers.phone.adminonly")));
         }
         TextField emailField = new TextField(existing != null ? existing.getEmail() : "");
         TextLengthLimiter.limit(emailField, TextLengthLimiter.EMAIL_MAX);
@@ -237,38 +279,38 @@ public class CustomerController {
         grid.setHgap(10);
         grid.setVgap(10);
         grid.setPadding(new Insets(20));
-        grid.addRow(0, new Label("Họ và tên:"), nameField);
-        grid.addRow(1, new Label("Số điện thoại:"), phoneField);
+        grid.addRow(0, new Label(I18n.t("customers.label.name")), nameField);
+        grid.addRow(1, new Label(I18n.t("customers.label.phone")), phoneField);
         grid.addRow(2, new Label("Email:"), emailField);
         dialog.getDialogPane().setContent(grid);
 
         Button saveButton = (Button) dialog.getDialogPane().lookupButton(saveButtonType);
         saveButton.addEventFilter(ActionEvent.ACTION, event -> {
             if (ValidationUtil.isBlank(nameField.getText())) {
-                AlertUtil.warning("Thiếu thông tin", "Vui lòng nhập họ và tên.");
+                AlertUtil.warning(I18n.t("common.missing.title"), I18n.t("customers.val.name"));
                 event.consume();
                 return;
             }
             if (!ValidationUtil.isBlank(phoneField.getText()) && !ValidationUtil.isValidPhone(phoneField.getText())) {
-                AlertUtil.warning("Số điện thoại không hợp lệ", "Vui lòng nhập đúng định dạng số điện thoại.");
+                AlertUtil.warning(I18n.t("customers.val.phone.title"), I18n.t("customers.val.phone.message"));
                 event.consume();
                 return;
             }
             if (!ValidationUtil.isBlank(emailField.getText()) && !ValidationUtil.isValidEmail(emailField.getText())) {
-                AlertUtil.warning("Email không hợp lệ", "Vui lòng nhập đúng định dạng email.");
+                AlertUtil.warning(I18n.t("customers.val.email.title"), I18n.t("customers.val.email.message"));
                 event.consume();
                 return;
             }
             if (!ValidationUtil.isBlank(phoneField.getText())
                     && customerDAO.existsByPhone(phoneField.getText().trim(), existing != null ? existing.getId() : 0)) {
-                AlertUtil.warning("Trùng số điện thoại", "Đã có khách hàng khác dùng số điện thoại này.");
+                AlertUtil.warning(I18n.t("customers.val.dup.title"), I18n.t("customers.val.dup.message"));
                 event.consume();
                 return;
             }
             String typedPhone = ValidationUtil.isBlank(phoneField.getText()) ? "" : ValidationUtil.normalizePhone(phoneField.getText());
             boolean phoneChanged = existing != null && !typedPhone.equals(originalPhone);
             if (phoneChanged && !Session.isAdmin()) {
-                AlertUtil.warning("Không đủ quyền", "Chỉ quản trị viên được đổi số điện thoại của khách hàng.");
+                AlertUtil.warning(I18n.t("admin.only.title"), I18n.t("customers.phone.adminonly"));
                 event.consume();
                 return;
             }
@@ -288,7 +330,7 @@ public class CustomerController {
                     customerDAO.update(customer);
                 }
             } catch (DataAccessException ex) {
-                AlertUtil.error("Không thể lưu khách hàng", ex.getMessage());
+                AlertUtil.error(I18n.t("customers.save.fail"), ex.getMessage());
                 event.consume();
             }
         });
@@ -304,8 +346,8 @@ public class CustomerController {
         return column -> new TableCell<>() {
             private final Button editButton = new Button("✎");
             {
-                editButton.setTooltip(new javafx.scene.control.Tooltip("Sửa"));
-                editButton.setAccessibleText("Sửa");
+                editButton.setTooltip(new javafx.scene.control.Tooltip(I18n.t("common.edit")));
+                editButton.setAccessibleText(I18n.t("common.edit"));
                 editButton.setOnAction(e -> onEdit.accept(getTableView().getItems().get(getIndex())));
             }
 
@@ -331,7 +373,7 @@ public class CustomerController {
     @FXML
     public void openProductManagement(ActionEvent event) {
         if (!Session.isAdmin()) {
-            AlertUtil.warning("Không đủ quyền", "Chức năng này chỉ dành cho Quản trị viên.");
+            AlertUtil.warning(I18n.t("admin.only.title"), I18n.t("admin.only.message"));
             return;
         }
         SceneNavigator.switchScene(event, "/fxml/quanlysanpham.fxml");
@@ -345,7 +387,7 @@ public class CustomerController {
     @FXML
     public void openCategoryManagement(ActionEvent event) {
         if (!Session.isAdmin()) {
-            AlertUtil.warning("Không đủ quyền", "Chức năng này chỉ dành cho Quản trị viên.");
+            AlertUtil.warning(I18n.t("admin.only.title"), I18n.t("admin.only.message"));
             return;
         }
         SceneNavigator.switchScene(event, "/fxml/quanlydanhmuc.fxml");
@@ -354,7 +396,7 @@ public class CustomerController {
     @FXML
     public void openAccountManagement(ActionEvent event) {
         if (!Session.isAdmin()) {
-            AlertUtil.warning("Không đủ quyền", "Chức năng này chỉ dành cho Quản trị viên.");
+            AlertUtil.warning(I18n.t("admin.only.title"), I18n.t("admin.only.message"));
             return;
         }
         SceneNavigator.switchScene(event, "/fxml/quanlytaikhoan.fxml");
@@ -362,7 +404,9 @@ public class CustomerController {
 
     @FXML
     public void logout(ActionEvent event) {
-        Session.clear();
-        SceneNavigator.switchScene(event, "/fxml/dangnhap.fxml");
+        BackupDialogs.offerBeforeLeaving(BackupDialogs.windowOf(event), () -> { // TODO 5.18
+            Session.clear();
+            SceneNavigator.switchScene(event, "/fxml/dangnhap.fxml");
+        });
     }
 }

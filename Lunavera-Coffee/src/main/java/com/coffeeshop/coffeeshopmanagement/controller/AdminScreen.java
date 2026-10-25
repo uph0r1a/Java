@@ -1,5 +1,6 @@
 package com.coffeeshop.coffeeshopmanagement.controller;
 
+import com.coffeeshop.coffeeshopmanagement.util.I18n;
 import com.coffeeshop.coffeeshopmanagement.util.AlertUtil;
 import com.coffeeshop.coffeeshopmanagement.util.Session;
 import com.coffeeshop.coffeeshopmanagement.util.SessionGuard;
@@ -36,7 +37,7 @@ public abstract class AdminScreen {
     @FXML
     public void openProductManagement(ActionEvent event) {
         if (!Session.isAdmin()) {
-            AlertUtil.warning("Không đủ quyền", "Chức năng này chỉ dành cho Quản trị viên.");
+            AlertUtil.warning(I18n.t("admin.only.title"), I18n.t("admin.only.message"));
             return;
         }
         SceneNavigator.switchScene(event, "/fxml/quanlysanpham.fxml");
@@ -55,7 +56,7 @@ public abstract class AdminScreen {
     @FXML
     public void openCategoryManagement(ActionEvent event) {
         if (!Session.isAdmin()) {
-            AlertUtil.warning("Không đủ quyền", "Chức năng này chỉ dành cho Quản trị viên.");
+            AlertUtil.warning(I18n.t("admin.only.title"), I18n.t("admin.only.message"));
             return;
         }
         SceneNavigator.switchScene(event, "/fxml/quanlydanhmuc.fxml");
@@ -64,7 +65,7 @@ public abstract class AdminScreen {
     @FXML
     public void openAccountManagement(ActionEvent event) {
         if (!Session.isAdmin()) {
-            AlertUtil.warning("Không đủ quyền", "Chức năng này chỉ dành cho Quản trị viên.");
+            AlertUtil.warning(I18n.t("admin.only.title"), I18n.t("admin.only.message"));
             return;
         }
         SceneNavigator.switchScene(event, "/fxml/quanlytaikhoan.fxml");
@@ -72,8 +73,11 @@ public abstract class AdminScreen {
 
     @FXML
     public void logout(ActionEvent event) {
-        Session.clear();
-        SceneNavigator.switchScene(event, "/fxml/dangnhap.fxml");
+        // An administrator who has not saved a backup by hand for a week is asked once (TODO 5.18).
+        BackupDialogs.offerBeforeLeaving(BackupDialogs.windowOf(event), () -> {
+            Session.clear();
+            SceneNavigator.switchScene(event, "/fxml/dangnhap.fxml");
+        });
     }
 
     protected boolean requireAdmin() {
@@ -84,7 +88,7 @@ public abstract class AdminScreen {
             return false;
         }
         if (!Session.isAdmin()) {
-            AlertUtil.warning("Không đủ quyền", "Chỉ quản trị viên mới có thể thực hiện thao tác này.");
+            AlertUtil.warning(I18n.t("admin.only.title"), I18n.t("admin.only.operation"));
             return false;
         }
         return true;
@@ -100,10 +104,10 @@ public abstract class AdminScreen {
 
             {
                 // Icon-only buttons need words: a tooltip for the mouse, accessible text for screen readers (TODO 2.34).
-                editButton.setTooltip(new javafx.scene.control.Tooltip("Sửa"));
-                editButton.setAccessibleText("Sửa");
-                deleteButton.setTooltip(new javafx.scene.control.Tooltip("Xóa"));
-                deleteButton.setAccessibleText("Xóa");
+                editButton.setTooltip(new javafx.scene.control.Tooltip(I18n.t("common.edit")));
+                editButton.setAccessibleText(I18n.t("common.edit"));
+                deleteButton.setTooltip(new javafx.scene.control.Tooltip(I18n.t("common.delete")));
+                deleteButton.setAccessibleText(I18n.t("common.delete"));
                 editButton.setOnAction(e -> onEdit.accept(getTableView().getItems().get(getIndex())));
                 if (onDelete != null) {
                     deleteButton.setOnAction(e -> onDelete.accept(getTableView().getItems().get(getIndex())));
@@ -146,7 +150,7 @@ public abstract class AdminScreen {
             return false;
         }
         javafx.application.Platform.runLater(() -> {
-            AlertUtil.warning("Không đủ quyền", "Chức năng này chỉ dành cho Quản trị viên.");
+            AlertUtil.warning(I18n.t("admin.only.title"), I18n.t("admin.only.message"));
             if (anchor != null && anchor.getScene() != null && anchor.getScene().getWindow() instanceof Stage stage) {
                 SceneNavigator.switchScene(stage, "/fxml/employee-trangchu.fxml");
             }

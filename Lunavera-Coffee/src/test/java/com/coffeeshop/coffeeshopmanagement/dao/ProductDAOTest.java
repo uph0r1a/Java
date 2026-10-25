@@ -3,6 +3,7 @@ package com.coffeeshop.coffeeshopmanagement.dao;
 import com.coffeeshop.coffeeshopmanagement.model.Category;
 import com.coffeeshop.coffeeshopmanagement.model.Product;
 import org.junit.Before;
+import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -21,6 +22,12 @@ public class ProductDAOTest {
     @BeforeClass
     public static void setUpDatabase() {
         TestDatabaseSupport.ensureReady();
+        com.coffeeshop.coffeeshopmanagement.util.TestSession.admin();
+    }
+
+    @AfterClass
+    public static void signOut() {
+        com.coffeeshop.coffeeshopmanagement.util.TestSession.clear();
     }
 
     @Before
@@ -121,5 +128,84 @@ public class ProductDAOTest {
         productDAO.update(inDialog);
 
         assertEquals(25, reload(created).getStock());
+    }
+
+    @Test
+    public void insertAllStoresEveryRowOrNone() {
+        // TODO 2.69: the last row points at a category that does not exist, so the database refuses it
+        String tag = "bulk-" + java.util.UUID.randomUUID();
+        java.util.List<Product> rows = new java.util.ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            Product p = new Product();
+            p.setName(tag + "-" + i);
+            p.setPrice(new java.math.BigDecimal("10000"));
+            p.setActive(true);
+            rows.add(p);
+        }
+        Product bad = new Product();
+        bad.setName(tag + "-bad");
+        bad.setPrice(new java.math.BigDecimal("10000"));
+        bad.setCategoryId(987_654_321);
+        bad.setActive(true);
+        rows.add(bad);
+        try {
+            productDAO.insertAll(rows);
+            org.junit.Assert.fail("the refused row must fail the whole import");
+        } catch (DataAccessException expected) {
+            // fine
+        }
+        assertEquals("nothing was added", 0, productDAO.findAll().stream().filter(p -> p.getName().startsWith(tag)).count());
+        rows.remove(bad);
+        productDAO.insertAll(rows);
+        assertEquals(3, productDAO.findAll().stream().filter(p -> p.getName().startsWith(tag)).count());
+        assertTrue("ids are filled in", rows.stream().allMatch(p -> p.getId() > 0));
+    }
+
+    // ---- TODO 3.21 + 4.19: a reorder level per product
+
+    private boolean inLowStockList(Product product) {
+        return productDAO.findLowStock(ProductDAO.LOW_STOCK_THRESHOLD, 100000).stream().anyMatch(p -> p.getId() == product.getId());
+    }
+
+    @Test
+    public void theReorderLevelIsStoredAndNullMeansTheShopDefault() {
+        Product product = newProduct(new BigDecimal("25000"), 50);
+        Product reloaded = productDAO.findAll().stream().filter(p -> p.getId() == product.getId()).findFirst().orElseThrow();
+        assertNull(reloaded.getReorderLevel());
+
+        reloaded.setReorderLevel(60);
+        productDAO.update(reloaded);
+        reloaded = productDAO.findAll().stream().filter(p -> p.getId() == product.getId()).findFirst().orElseThrow();
+        assertEquals(Integer.valueOf(60), reloaded.getReorderLevel());
+
+        reloaded.setReorderLevel(null);
+        productDAO.update(reloaded);
+        reloaded = productDAO.findAll().stream().filter(p -> p.getId() == product.getId()).findFirst().orElseThrow();
+        assertNull(reloaded.getReorderLevel());
+    }
+
+    @Test
+    public void aProductIsLowAtItsOwnLevelNotAtTheGlobalTen() {
+        Product fast = newProduct(new BigDecimal("25000"), 30); // plenty by the old global 10
+        assertFalse(inLowStockList(fast));
+        fast.setReorderLevel(40);
+        productDAO.update(fast);
+        assertTrue("30 left with its own level 40 is low", inLowStockList(fast));
+
+        Product slow = newProduct(new BigDecimal("25000"), 8); // low by the old global 10
+        assertTrue(inLowStockList(slow));
+        slow.setReorderLevel(3);
+        productDAO.update(slow);
+        assertFalse("8 left with its own level 3 is fine", inLowStockList(slow));
+    }
+
+    @Test
+    public void theCountFollowsTheSameRuleAsTheList() {
+        int before = productDAO.countLowStock(ProductDAO.LOW_STOCK_THRESHOLD);
+        Product product = newProduct(new BigDecimal("25000"), 30);
+        assertEquals(before, productDAO.countLowStock(ProductDAO.LOW_STOCK_THRESHOLD));
+        product.setReorderLevel(40);
+        productDAO.update(product);
+        assertEquals(before + 1, productDAO.countLowStock(ProductDAO.LOW_STOCK_THRESHOLD));
     }
 }

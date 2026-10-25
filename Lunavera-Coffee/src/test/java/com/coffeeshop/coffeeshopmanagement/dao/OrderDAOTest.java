@@ -174,6 +174,19 @@ public class OrderDAOTest {
     }
 
     @Test
+    public void aRefundCanLeaveTheStockAloneButStillTakesBackThePoints() {
+        // TODO 2.66: a drink that was made and thrown away must not raise the stock
+        Product product = newProduct(10, new BigDecimal("20000"));
+        Customer customer = newCustomer();
+        Order saved = orderDAO.insert(paidOrderTotaling(new BigDecimal("60000"), customer.getId()), List.of(lineFor(product, 3)));
+        orderDAO.cancelPaidOrder(saved.getId(), false);
+        assertEquals(OrderStatus.CANCELLED, orderDAO.findById(saved.getId()).orElseThrow().getStatus());
+        Product reloaded = productDAO.findAll().stream().filter(p -> p.getId() == product.getId()).findFirst().orElseThrow();
+        assertEquals("the 3 units were sold and not put back", 7, reloaded.getStock());
+        assertEquals(0, customerDAO.findById(customer.getId()).orElseThrow().getLoyaltyPoints());
+    }
+
+    @Test
     public void cancelPaidOrderRefusesAnOrderThatIsNotPaid() {
         Product product = newProduct(5, new BigDecimal("10000"));
         OrderItem line = lineFor(product, 1);

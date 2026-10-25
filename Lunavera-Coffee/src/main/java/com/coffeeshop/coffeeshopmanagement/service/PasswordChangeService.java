@@ -18,7 +18,7 @@ public class PasswordChangeService {
 
     private static final java.util.logging.Logger LOGGER = java.util.logging.Logger.getLogger(PasswordChangeService.class.getName());
     /** Same slow-down as the login screen, so an unlocked till cannot be used to guess the owner's password (TODO 2.63). */
-    static final LoginThrottle THROTTLE = new LoginThrottle();
+    static final LoginThrottle THROTTLE = LoginThrottle.persistent("password");
 
     private final UserDAO userDAO;
 

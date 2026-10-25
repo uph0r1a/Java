@@ -6,6 +6,7 @@
 <?import javafx.scene.chart.NumberAxis?>
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ScrollPane?>
 <?import javafx.scene.control.Separator?>
 <?import javafx.scene.layout.BorderPane?>
 <?import javafx.scene.layout.ColumnConstraints?>
@@ -47,18 +48,18 @@
             <Separator styleClass="sidebar-separator"/>
 
             <VBox spacing="6.0" VBox.vgrow="NEVER">
-                <Button text="⌂   Trang chủ"
+                <Button text="%nav.home"
                         prefHeight="48.0"
                         maxWidth="1.7976931348623157E308"
                         styleClass="menu-button,menu-button-active"/>
 
-                <Button text="▤   Quản lý đơn hàng"
+                <Button text="%nav.orders"
                         prefHeight="48.0"
                         maxWidth="1.7976931348623157E308"
                         styleClass="menu-button"
                         onAction="#openOrderManagement"/>
 
-                <Button text="♙   Quản lý khách hàng"
+                <Button text="%nav.customers"
                         prefHeight="48.0"
                         maxWidth="1.7976931348623157E308"
                         styleClass="menu-button"
@@ -71,13 +72,13 @@
                 <padding>
                     <Insets top="20.0" right="20.0" bottom="20.0" left="20.0"/>
                 </padding>
-                <Button text="←   Đăng xuất"
+                <Button text="%nav.logout"
                         prefHeight="42.0"
                         maxWidth="1.7976931348623157E308"
                         styleClass="logout-button"
                         onAction="#logout"/>
 
-                <Label text="Cà phê ngon&#10;Ngày thêm tốt đẹp"
+                <Label text="%nav.tagline"
                        styleClass="sidebar-footer"/>
             </VBox>
         </VBox>
@@ -90,8 +91,8 @@
             <!-- HEADER -->
             <HBox alignment="CENTER_LEFT" prefHeight="70.0">
                 <VBox spacing="4.0">
-                    <Label fx:id="dashboardGreetingLabel" text="Chào mừng, Employee!" styleClass="page-title"/>
-                    <Label text="Chúc bạn có một ngày làm việc hiệu quả!"
+                    <Label fx:id="dashboardGreetingLabel" text="%dashboard.greeting.default" styleClass="page-title"/>
+                    <Label text="%dashboard.subtitle"
                            styleClass="page-subtitle"/>
                 </VBox>
 
@@ -99,7 +100,7 @@
 
                 <VBox alignment="CENTER_RIGHT" spacing="3.0">
                     <Label fx:id="dashboardAccountNameLabel" text="Employee" styleClass="account-name"/>
-                    <Label text="Nhân viên" styleClass="account-role"/>
+                    <Label text="%role.employee" styleClass="account-role"/>
                 </VBox>
             </HBox>
 
@@ -115,45 +116,45 @@
                 <VBox GridPane.columnIndex="0"
                       prefHeight="145.0"
                       styleClass="stat-card">
-                    <Label text="SẢN PHẨM" styleClass="stat-title"/>
+                    <Label text="%stats.products.title" styleClass="stat-title"/>
                     <Label fx:id="dashboardProductCountLabel"
                            text="0"
                            styleClass="stat-value"/>
                     <Label fx:id="dashboardLowStockNoteLabel"
-                           text="Đang tải..."
+                           text="%common.loading"
                            styleClass="stat-description"/>
                 </VBox>
 
                 <VBox GridPane.columnIndex="1"
                       prefHeight="145.0"
                       styleClass="stat-card">
-                    <Label text="ĐƠN HÀNG HÔM NAY" styleClass="stat-title"/>
+                    <Label text="%stats.orders.title" styleClass="stat-title"/>
                     <Label fx:id="todayOrderLabel"
                            text="0"
                            styleClass="stat-value"/>
-                    <Label text="Đơn hàng phát sinh hôm nay"
+                    <Label text="%stats.orders.caption"
                            styleClass="stat-description"/>
                 </VBox>
 
                 <VBox GridPane.columnIndex="2"
                       prefHeight="145.0"
                       styleClass="stat-card">
-                    <Label text="DOANH THU HÔM NAY" styleClass="stat-title"/>
+                    <Label text="%stats.revenue.title" styleClass="stat-title"/>
                     <Label fx:id="todayRevenueLabel"
-                           text="0đ"
+                           text="%money.zero"
                            styleClass="stat-value"/>
-                    <Label text="Tổng doanh thu trong ngày"
+                    <Label text="%stats.revenue.caption"
                            styleClass="stat-description"/>
                 </VBox>
 
                 <VBox GridPane.columnIndex="3"
                       prefHeight="145.0"
                       styleClass="stat-card">
-                    <Label text="KHÁCH HÀNG HÔM NAY" styleClass="stat-title"/>
+                    <Label text="%stats.customers.title" styleClass="stat-title"/>
                     <Label fx:id="todayCustomerLabel"
                            text="0"
                            styleClass="stat-value"/>
-                    <Label text="Số khách hàng đã phục vụ"
+                    <Label text="%stats.customers.caption"
                            styleClass="stat-description"/>
                 </VBox>
             </GridPane>
@@ -169,9 +170,9 @@
 
                     <HBox alignment="CENTER_LEFT" spacing="12.0">
                         <VBox spacing="3.0">
-                            <Label text="Sơ đồ bàn phục vụ"
+                            <Label text="%tables.map.title"
                                    styleClass="section-title"/>
-                            <Label text="Chọn bàn để tạo hoặc xem đơn"
+                            <Label text="%tables.map.subtitle"
                                    styleClass="section-subtitle"/>
                         </VBox>
 
@@ -181,33 +182,27 @@
                         <HBox spacing="14.0" alignment="CENTER">
                             <HBox spacing="6.0" alignment="CENTER">
                                 <Label text="●" styleClass="status-dot-occupied"/>
-                                <Label text="Đang sử dụng" styleClass="status-legend-text"/>
+                                <Label text="%tables.status.occupied" styleClass="status-legend-text"/>
                             </HBox>
 
                             <HBox spacing="6.0" alignment="CENTER">
                                 <Label text="●" styleClass="status-dot-empty"/>
-                                <Label text="Không hoạt động" styleClass="status-legend-text"/>
+                                <Label text="%tables.status.free" styleClass="status-legend-text"/>
                             </HBox>
                         </HBox>
                     </HBox>
 
-                    <!-- GRID BÀN (3x4 = 12 BÀN) -->
-                    <GridPane fx:id="homeTableGrid"
-                              hgap="12.0"
-                              vgap="12.0"
-                              VBox.vgrow="ALWAYS">
-                        <columnConstraints>
-                            <ColumnConstraints percentWidth="33.333" hgrow="ALWAYS"/>
-                            <ColumnConstraints percentWidth="33.333" hgrow="ALWAYS"/>
-                            <ColumnConstraints percentWidth="33.333" hgrow="ALWAYS"/>
-                        </columnConstraints>
-                        <rowConstraints>
-                            <RowConstraints minHeight="78.0" prefHeight="88.0" vgrow="ALWAYS"/>
-                            <RowConstraints minHeight="78.0" prefHeight="88.0" vgrow="ALWAYS"/>
-                            <RowConstraints minHeight="78.0" prefHeight="88.0" vgrow="ALWAYS"/>
-                            <RowConstraints minHeight="78.0" prefHeight="88.0" vgrow="ALWAYS"/>
-                        </rowConstraints>
-                    </GridPane>
+                    <!-- TABLE MAP: rows are made in code from the list of tables and it scrolls when there are many (TODO 3.48) -->
+                    <ScrollPane fitToWidth="true" hbarPolicy="NEVER" VBox.vgrow="ALWAYS"
+                                style="-fx-background-color: transparent; -fx-background: transparent;">
+                        <GridPane fx:id="homeTableGrid" hgap="12.0" vgap="12.0">
+                            <columnConstraints>
+                                <ColumnConstraints percentWidth="33.333" hgrow="ALWAYS"/>
+                                <ColumnConstraints percentWidth="33.333" hgrow="ALWAYS"/>
+                                <ColumnConstraints percentWidth="33.333" hgrow="ALWAYS"/>
+                            </columnConstraints>
+                        </GridPane>
+                    </ScrollPane>
                 </VBox>
 
                 <!-- INVENTORY -->
@@ -216,7 +211,7 @@
                       styleClass="content-card">
 
                     <HBox alignment="CENTER_LEFT">
-                        <Label text="Cảnh báo tồn kho"
+                        <Label text="%stock.alert.title"
                                styleClass="section-title"/>
                     </HBox>
 

@@ -33,24 +33,24 @@
             <Separator styleClass="sidebar-separator"/>
 
             <VBox spacing="6.0" VBox.vgrow="NEVER">
-                <Button text="⌂   Trang chủ"
+                <Button text="%nav.home"
                         prefHeight="48.0"
                         maxWidth="1.7976931348623157E308"
                         styleClass="menu-button"
                         onAction="#openDashboard"/>
 
-                <Button text="▣   Quản lý sản phẩm"
+                <Button text="%nav.products"
                         prefHeight="48.0"
                         maxWidth="1.7976931348623157E308"
                         styleClass="menu-button,menu-button-active"/>
 
-                <Button text="▤   Quản lý đơn hàng"
+                <Button text="%nav.orders"
                         prefHeight="48.0"
                         maxWidth="1.7976931348623157E308"
                         styleClass="menu-button"
                         onAction="#openOrderManagement"/>
 
-                <Button text="♙   Quản lý khách hàng"
+                <Button text="%nav.customers"
                         prefHeight="48.0"
                         maxWidth="1.7976931348623157E308"
                         styleClass="menu-button"
@@ -60,13 +60,13 @@
             <Separator styleClass="sidebar-separator"/>
 
             <VBox spacing="6.0">
-                <Button text="▦   Quản lý danh mục"
+                <Button text="%nav.categories"
                         prefHeight="48.0"
                         maxWidth="1.7976931348623157E308"
                         styleClass="menu-button"
                         onAction="#openCategoryManagement"/>
 
-                <Button text="♙   Quản lý tài khoản"
+                <Button text="%nav.accounts"
                         prefHeight="48.0"
                         maxWidth="1.7976931348623157E308"
                         styleClass="menu-button"
@@ -79,13 +79,13 @@
                 <padding>
                     <Insets top="20.0" right="20.0" bottom="20.0" left="20.0"/>
                 </padding>
-                <Button text="←   Đăng xuất"
+                <Button text="%nav.logout"
                         prefHeight="42.0"
                         maxWidth="1.7976931348623157E308"
                         styleClass="logout-button"
                         onAction="#logout"/>
 
-                <Label text="Cà phê ngon&#10;Ngày thêm tốt đẹp"
+                <Label text="%nav.tagline"
                        styleClass="sidebar-footer"/>
             </VBox>
         </VBox>
@@ -104,9 +104,9 @@
                   styleClass="page-header">
 
                 <VBox HBox.hgrow="ALWAYS" spacing="3">
-                    <Label text="Quản lý sản phẩm"
+                    <Label text="%products.title"
                            styleClass="page-title"/>
-                    <Label text="Danh sách và quản lý các sản phẩm trong cửa hàng"
+                    <Label text="%products.subtitle"
                            styleClass="page-description"/>
                 </VBox>
 
@@ -116,7 +116,7 @@
                 <VBox alignment="CENTER_RIGHT" spacing="2">
                     <Label text="Admin"
                            styleClass="admin-name"/>
-                    <Label text="Quản trị viên"
+                    <Label text="%role.admin"
                            styleClass="admin-role"/>
                 </VBox>
 
@@ -139,8 +139,7 @@
             <!-- ================= PRODUCT AREA ================= -->
 
             <HBox spacing="12"
-                  VBox.vgrow="ALWAYS"
-                  styleClass="product-area">
+                  VBox.vgrow="ALWAYS">
 
                 <!-- ================= CATEGORY LIST ================= -->
 
@@ -150,7 +149,7 @@
                       spacing="8"
                       styleClass="category-card">
 
-                    <Label text="Danh mục sản phẩm"
+                    <Label text="%products.categories.title"
                            styleClass="card-title"/>
 
                     <ScrollPane fitToWidth="true"
@@ -166,7 +165,7 @@
                             prefHeight="36"
                             mnemonicParsing="false"
                             styleClass="add-category-button"
-                            text="+   Thêm danh mục"
+                            text="%categories.add"
                             fx:id="addCategoryButton"
                             onAction="#handleAddCategory"/>
                 </VBox>
@@ -182,26 +181,30 @@
                     <HBox alignment="CENTER_LEFT" spacing="8">
 
                         <TextField fx:id="searchField"
-                                   promptText="Tìm kiếm theo tên sản phẩm..."
+                                   promptText="%products.search.prompt"
                                    HBox.hgrow="ALWAYS"
                                    styleClass="search-field"/>
 
                         <ComboBox fx:id="categoryFilter"
                                   prefWidth="125"
-                                  promptText="Danh mục"
+                                  promptText="%products.col.category"
                                   styleClass="filter-combo"
                                   onAction="#handleCategoryFilter"/>
 
                         <ComboBox fx:id="statusFilter"
                                   prefWidth="115"
-                                  promptText="Trạng thái sản phẩm"
+                                  promptText="%products.filter.status.prompt"
                                   styleClass="filter-combo"
                                   onAction="#handleStatusFilter"/>
+
+                        <!-- Move the selected product within its category on the sales screen (TODO 5.31) -->
+                        <Button mnemonicParsing="false" onAction="#handleMoveProductUp" text="%sort.up"/>
+                        <Button mnemonicParsing="false" onAction="#handleMoveProductDown" text="%sort.down"/>
 
                         <Button fx:id="addProductButton"
                                 mnemonicParsing="false"
                                 styleClass="primary-button"
-                                text="+   Thêm sản phẩm"
+                                text="%products.add"
                                 onAction="#handleAddProduct"/>
                     </HBox>
 
@@ -213,31 +216,31 @@
 
                         <columns>
                             <TableColumn fx:id="imageColumn"
-                                         text="Ảnh"
+                                         text="%products.col.image"
                                          prefWidth="65"/>
 
                             <TableColumn fx:id="nameColumn"
-                                         text="Tên sản phẩm"
+                                         text="%products.col.name"
                                          prefWidth="220"/>
 
                             <TableColumn fx:id="categoryColumn"
-                                         text="Danh mục"
+                                         text="%products.col.category"
                                          prefWidth="120"/>
 
                             <TableColumn fx:id="sellingPriceColumn"
-                                         text="Giá"
+                                         text="%products.col.price"
                                          prefWidth="110"/>
 
                             <TableColumn fx:id="stockColumn"
-                                         text="Tồn kho"
+                                         text="%products.col.stock"
                                          prefWidth="90"/>
 
                             <TableColumn fx:id="productStatusColumn"
-                                         text="Trạng thái"
+                                         text="%history.col.status"
                                          prefWidth="120"/>
 
                             <TableColumn fx:id="actionColumn"
-                                         text="Thao tác"
+                                         text="%customers.col.actions"
                                          prefWidth="120"/>
                         </columns>
 
@@ -246,7 +249,7 @@
                     </columnResizePolicy>
 
                         <placeholder>
-                            <Label text="Chưa có sản phẩm"
+                            <Label text="%products.empty"
                                    styleClass="empty-label"/>
                         </placeholder>
                     </TableView>
@@ -256,7 +259,7 @@
                     <HBox alignment="CENTER_LEFT" spacing="5">
 
                         <Label fx:id="totalProductLabel"
-                               text="Tổng cộng: 0 sản phẩm"
+                               text="%products.total.initial"
                                styleClass="table-footer"/>
 
                         <Region HBox.hgrow="ALWAYS"/>

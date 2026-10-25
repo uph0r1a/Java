@@ -1,5 +1,7 @@
 package com.coffeeshop.coffeeshopmanagement.service;
 
+import com.coffeeshop.coffeeshopmanagement.util.I18n;
+
 import com.coffeeshop.coffeeshopmanagement.dao.DataAccessException;
 import com.coffeeshop.coffeeshopmanagement.model.Role;
 import com.coffeeshop.coffeeshopmanagement.util.CurrencyUtil;
@@ -58,12 +60,12 @@ public final class DiscountPolicy {
     public static String messageFor(Result result, Role role, BigDecimal subtotal) {
         return switch (result) {
             case OK -> throw new IllegalArgumentException("OK has no problem to describe");
-            case NEGATIVE -> "Vui lòng nhập một số hợp lệ.";
-            case ABOVE_SUBTOTAL -> "Giảm giá không được lớn hơn tạm tính.";
-            case ABOVE_STAFF_LIMIT -> "Nhân viên chỉ được giảm tối đa " + STAFF_MAX_PERCENT + "% ("
-                    + CurrencyUtil.format(maxDiscount(role, subtotal)) + "). Hãy nhờ quản trị viên đăng nhập để giảm nhiều hơn.";
-            case REASON_REQUIRED -> "Vui lòng nhập lý do giảm giá.";
-            case REASON_TOO_LONG -> "Lý do giảm giá tối đa " + REASON_MAX_LENGTH + " ký tự.";
+            case NEGATIVE -> I18n.t("pos.discount.invalid.number");
+            case ABOVE_SUBTOTAL -> I18n.t("discount.problem.abovesubtotal");
+            case ABOVE_STAFF_LIMIT -> I18n.t("discount.problem.stafflimit", STAFF_MAX_PERCENT,
+                    CurrencyUtil.format(maxDiscount(role, subtotal)));
+            case REASON_REQUIRED -> I18n.t("discount.problem.reasonrequired");
+            case REASON_TOO_LONG -> I18n.t("discount.problem.reasonlong", REASON_MAX_LENGTH);
         };
     }
 

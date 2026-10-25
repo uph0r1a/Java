@@ -2,6 +2,7 @@ package com.coffeeshop.coffeeshopmanagement.dao;
 
 import com.coffeeshop.coffeeshopmanagement.model.Category;
 import com.coffeeshop.coffeeshopmanagement.model.Product;
+import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -19,6 +20,12 @@ public class ProductNameCheckTest {
     @BeforeClass
     public static void setUpDatabase() {
         TestDatabaseSupport.ensureReady();
+        com.coffeeshop.coffeeshopmanagement.util.TestSession.admin();
+    }
+
+    @AfterClass
+    public static void signOut() {
+        com.coffeeshop.coffeeshopmanagement.util.TestSession.clear();
     }
 
     private int newCategory() {

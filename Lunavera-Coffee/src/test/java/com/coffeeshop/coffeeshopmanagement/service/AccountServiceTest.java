@@ -41,14 +41,14 @@ public class AccountServiceTest {
     }
 
     private static String phone() {
-        return "09" + String.format("%08d", new Random().nextInt(100_000_000));
+        return "09" + String.format(java.util.Locale.ROOT, "%08d", new Random().nextInt(100_000_000));
     }
 
     private static AccountService.Form form(String username, String phone, Role role, boolean active) {
         Employee e = new Employee();
         e.setFullName("Test " + username);
         e.setPhone(phone);
-        return new AccountService.Form(username, "abc123", role, active, e);
+        return new AccountService.Form(username, "Abc12345x", role, active, e);
     }
 
     private static int count(String sql) throws Exception {
@@ -138,7 +138,7 @@ public class AccountServiceTest {
                 service.setLocked(only, true);
                 fail("locking the last admin must be refused");
             } catch (DataAccessException expected) {
-                assertEquals(AccountService.LAST_ADMIN_MESSAGE, expected.getMessage());
+                assertEquals(AccountService.lastAdminMessage(), expected.getMessage());
             }
             Employee emp = employeeDAO.findById(only.getEmployeeId()).orElseThrow();
             try {
@@ -175,8 +175,108 @@ public class AccountServiceTest {
         assertTrue(ValidationUtil.isValidUsername("ab1234"));
     }
 
+    @Test
+    public void theServiceItselfEnforcesTheUsernamePasswordAndPhoneRules() {
+        String u = name();
+        Employee e = new Employee();
+        e.setFullName("Rules");
+        AccountService.Form[] bad = {
+                new AccountService.Form("ab", "Abc12345x", Role.EMPLOYEE, true, e),                 // user name too short
+                new AccountService.Form("0901234567", "Abc12345x", Role.EMPLOYEE, true, e),         // user name is a phone number
+                new AccountService.Form(u, "short1", Role.EMPLOYEE, true, e),                       // password too short
+                new AccountService.Form(u, "", Role.EMPLOYEE, true, e),                             // no password on a new account
+                new AccountService.Form(u, "12345678", Role.EMPLOYEE, true, e),                     // common password
+                new AccountService.Form(u, "abcdefgh", Role.EMPLOYEE, true, e),                     // no digit
+                new AccountService.Form(u, u + "9", Role.EMPLOYEE, true, e),                        // contains the user name
+                new AccountService.Form(u, "a1" + "x".repeat(ValidationUtil.MAX_PASSWORD_LENGTH), Role.EMPLOYEE, true, e), // too long
+        };
+        for (AccountService.Form form : bad) {
+            try {
+                service.create(form);
+                fail("the service must refuse " + form.username() + " / " + form.password().length() + " characters");
+            } catch (DataAccessException expected) {
+                // refused before anything is stored
+            }
+        }
+        Employee badPhone = new Employee();
+        badPhone.setFullName("Rules");
+        badPhone.setPhone("12ab");
+        try {
+            service.create(new AccountService.Form(u, "Abc12345x", Role.EMPLOYEE, true, badPhone));
+            fail("a phone that is not a phone number must be refused");
+        } catch (DataAccessException expected) {
+            assertTrue(expected.getMessage(), expected.getMessage().contains("Số điện thoại"));
+        }
+        // the same limits when an existing account gets a new password; a blank one means "keep the password"
+        User user = service.create(form(name(), phone(), Role.EMPLOYEE, true));
+        Employee emp = new Employee();
+        emp.setFullName("Rules");
+        try {
+            service.update(user, null, new AccountService.Form(user.getUsername(), "weak", Role.EMPLOYEE, true, emp));
+            fail("a weak new password must be refused");
+        } catch (DataAccessException expected) {
+            assertTrue(expected.getMessage(), expected.getMessage().contains("Mật khẩu"));
+        }
+        service.update(user, null, new AccountService.Form(user.getUsername(), "", Role.EMPLOYEE, true, emp));
+    }
+
     @org.junit.AfterClass
     public static void signOut() {
         com.coffeeshop.coffeeshopmanagement.util.TestSession.clear();
     }
+
+    // ---- TODO 2.84: an old customer-role account is never turned into a staff account by an edit ----
+
+    private User legacyCustomerAccount() throws Exception {
+        String username = name();
+        try (Connection c = DatabaseConfig.getConnection(); java.sql.PreparedStatement st = c.prepareStatement(
+                "INSERT INTO users (username, password_hash, role, status, created_at) VALUES (?, ?, 'CUSTOMER', 'ACTIVE', ?)")) {
+            st.setString(1, username);
+            st.setString(2, PasswordUtil.hash("abc123"));
+            st.setString(3, "2026-01-01T00:00:00");
+            st.executeUpdate();
+        }
+        return userDAO.findByUsername(username).orElseThrow();
+    }
+
+    private static AccountService.Form formWithoutEmployee(String username, Role role, boolean active) {
+        return new AccountService.Form(username, "", role, active, null);
+    }
+
+    @Test
+    public void savingACustomerAccountAsStaffIsRefusedAndNothingChanges() throws Exception {
+        User customer = legacyCustomerAccount();
+        try {
+            service.update(customer, null, formWithoutEmployee(customer.getUsername(), Role.EMPLOYEE, true));
+            fail("a customer account must not become a staff account");
+        } catch (DataAccessException expected) {
+            assertTrue(expected.getMessage(), expected.getMessage().contains("khách hàng cũ"));
+        }
+        assertEquals(Role.CUSTOMER, userDAO.findById(customer.getId()).orElseThrow().getRole());
+        try {
+            service.update(customer, null, formWithoutEmployee(customer.getUsername(), Role.ADMIN, true));
+            fail("nor an administrator");
+        } catch (DataAccessException expected) {
+            assertEquals(Role.CUSTOMER, userDAO.findById(customer.getId()).orElseThrow().getRole());
+        }
+    }
+
+    @Test
+    public void aCustomerAccountCanStillBeLockedThroughTheFormWithItsRoleKept() throws Exception {
+        User customer = legacyCustomerAccount();
+        service.update(customer, null, formWithoutEmployee(customer.getUsername(), Role.CUSTOMER, false));
+        User after = userDAO.findById(customer.getId()).orElseThrow();
+        assertEquals(Role.CUSTOMER, after.getRole());
+        assertEquals(AccountStatus.LOCKED, after.getStatus());
+    }
+
+    @Test
+    public void aStaffAccountCanStillChangeBetweenEmployeeAndAdministrator() throws Exception {
+        String u = name();
+        User user = service.create(form(u, phone(), Role.EMPLOYEE, true));
+        Employee employee = employeeDAO.findById(user.getEmployeeId()).orElseThrow();
+        service.update(user, employee, form(u, employee.getPhone(), Role.ADMIN, true));
+        assertEquals(Role.ADMIN, userDAO.findById(user.getId()).orElseThrow().getRole());
+    }
 }
+

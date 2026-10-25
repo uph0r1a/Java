@@ -46,13 +46,13 @@ public class PasswordResetSessionTest {
     private static AccountService.Form form(String username, String password) {
         Employee e = new Employee();
         e.setFullName("Test " + username);
-        e.setPhone("09" + String.format("%08d", new Random().nextInt(100_000_000)));
+        e.setPhone("09" + String.format(java.util.Locale.ROOT, "%08d", new Random().nextInt(100_000_000)));
         return new AccountService.Form(username, password, Role.EMPLOYEE, true, e);
     }
 
     @Test
     public void anAccountMadeByAnAdminMustChangeItsPassword() {
-        User created = service.create(form(name(), "abc12345"));
+        User created = service.create(form(name(), "Start98765"));
         assertTrue(userDAO.findById(created.getId()).orElseThrow().isMustChangePassword());
     }
 
@@ -66,9 +66,9 @@ public class PasswordResetSessionTest {
 
     @Test
     public void anAdminResetForcesAChangeAndChangingItClearsTheMark() {
-        User user = service.create(form(name(), "abc12345"));
+        User user = service.create(form(name(), "Start98765"));
         PasswordChangeService changer = new PasswordChangeService();
-        assertEquals(PasswordChangeService.Result.OK, changer.change(user.getId(), "abc12345", "newpass99", true));
+        assertEquals(PasswordChangeService.Result.OK, changer.change(user.getId(), "Start98765", "newpass99", true));
         assertFalse("own change clears the mark", userDAO.findById(user.getId()).orElseThrow().isMustChangePassword());
 
         Employee employee = new com.coffeeshop.coffeeshopmanagement.dao.EmployeeDAO().findById(user.getEmployeeId()).orElseThrow();
@@ -79,7 +79,7 @@ public class PasswordResetSessionTest {
 
     @Test
     public void anAdminChangingTheirOwnPasswordIsNotForced() {
-        User me = service.create(new AccountService.Form(name(), "abc12345", Role.ADMIN, true, form("x", "y").employee()));
+        User me = service.create(new AccountService.Form(name(), "Mine98765", Role.ADMIN, true, form("x", "y").employee()));
         User stored = userDAO.findById(me.getId()).orElseThrow();
         Session.start(stored, null);
         Employee employee = new com.coffeeshop.coffeeshopmanagement.dao.EmployeeDAO().findById(stored.getEmployeeId()).orElseThrow();
@@ -90,7 +90,7 @@ public class PasswordResetSessionTest {
 
     @Test
     public void aPasswordResetByAnAdminEndsTheOpenSessionOfThatPerson() {
-        User user = service.create(form(name(), "abc12345"));
+        User user = service.create(form(name(), "Start98765"));
         User stored = userDAO.findById(user.getId()).orElseThrow();
         Session.start(stored, null);
         assertTrue(SessionGuard.validateNow());
@@ -101,10 +101,10 @@ public class PasswordResetSessionTest {
 
     @Test
     public void changingYourOwnPasswordKeepsYourOwnSession() {
-        User user = service.create(form(name(), "abc12345"));
+        User user = service.create(form(name(), "Start98765"));
         Session.start(userDAO.findById(user.getId()).orElseThrow(), null);
         assertEquals(PasswordChangeService.Result.OK,
-                new PasswordChangeService().change(user.getId(), "abc12345", "newpass99", true));
+                new PasswordChangeService().change(user.getId(), "Start98765", "newpass99", true));
         assertTrue(SessionGuard.validateNow());
     }
 }

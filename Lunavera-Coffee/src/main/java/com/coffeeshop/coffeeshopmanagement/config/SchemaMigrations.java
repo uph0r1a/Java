@@ -4,6 +4,7 @@ import com.coffeeshop.coffeeshopmanagement.model.AccountStatus;
 import com.coffeeshop.coffeeshopmanagement.model.OrderStatus;
 import com.coffeeshop.coffeeshopmanagement.model.Role;
 import com.coffeeshop.coffeeshopmanagement.model.TableStatus;
+import com.coffeeshop.coffeeshopmanagement.util.I18n;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -55,14 +56,14 @@ public final class SchemaMigrations {
     static void upgrade(Connection connection) throws SQLException {
         if (SqlDialect.of(connection) != SqlDialect.SQLITE) {
             ensureMariaEmployeePhoneKey(connection); // MariaDB/MySQL: MariaDbSchema creates everything else; this key came later
+            ensureMariaLoginNameKey(connection);      // so did this one (TODO 1.9)
             ensureMariaDataRules(connection);
             return;
         }
         int version = userVersion(connection);
         if (version > LATEST_VERSION) {
             // A database made (or restored) by a newer build: older code must not open and change it (TODO 2.42).
-            throw new IllegalStateException("Dữ liệu này thuộc về một phiên bản Lunavera mới hơn (v" + version
-                    + ", phiên bản này chỉ hiểu đến v" + LATEST_VERSION + "). Hãy cập nhật ứng dụng.");
+            throw new IllegalStateException(I18n.t("db.newer.sqlite", version, LATEST_VERSION));
         }
         // The missing steps in order, the version written after each one, so a failure half way resumes from the right place.
         for (int step : MariaDbMigrations.plan(version, LATEST_VERSION, SQLITE_STEPS.keySet())) {
@@ -253,6 +254,72 @@ public final class SchemaMigrations {
             statement.execute("ALTER TABLE employees ADD UNIQUE KEY ux_employees_phone (phone)");
         }
         return List.of();
+    }
+
+    static final String MARIA_LOGIN_KEY_COLUMN = "username_key";
+    static final String MARIA_LOGIN_KEY_INDEX = "ux_users_username_key";
+
+    /**
+     * MariaDB/MySQL: makes the database refuse two accounts whose names differ only in capitals (TODO 1.9). SQLite has
+     * {@code ux_users_username_nocase}; on MariaDB {@code users.username} is an exact ({@code utf8mb4_bin}) column, so only the
+     * app's checks stood in the way, and two tills creating {@code Mai} and {@code mai} at the same moment, or a hand edit in
+     * phpMyAdmin, could still make a pair, after which one of the two could not log in reliably. A new database gets the
+     * stored column {@code username_key} (the lower-case name) with a unique key from {@link MariaDbSchema}; an older one gets
+     * both here. If the names already contain such a pair the key is NOT built (a warning with a query to list them is
+     * logged and the next start tries again), exactly like the SQLite rule and the staff-phone key.
+     *
+     * @return the lower-case names that are taken more than once (empty when the key exists or was built)
+     */
+    static List<String> ensureMariaLoginNameKey(Connection connection) throws SQLException {
+        if (!mariaColumnExists(connection, "users", MARIA_LOGIN_KEY_COLUMN)) {
+            try (Statement statement = connection.createStatement()) {
+                statement.execute("ALTER TABLE users ADD COLUMN " + MARIA_LOGIN_KEY_COLUMN
+                        + " VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin AS (LOWER(username)) STORED");
+            }
+        }
+        if (mariaIndexExists(connection, "users", MARIA_LOGIN_KEY_INDEX)) {
+            return List.of();
+        }
+        List<String> duplicates = new ArrayList<>();
+        try (Statement statement = connection.createStatement();
+             ResultSet rs = statement.executeQuery(
+                     "SELECT " + MARIA_LOGIN_KEY_COLUMN + " FROM users GROUP BY " + MARIA_LOGIN_KEY_COLUMN + " HAVING COUNT(*) > 1")) {
+            while (rs.next()) duplicates.add(rs.getString(1));
+        }
+        if (!duplicates.isEmpty()) {
+            // Count only: login names do not go into the log (TODO 6.28). The query below lists them from the database.
+            LOGGER.warning(duplicates.size() + " login name(s) exist more than once in different capitals; the unique rule "
+                    + MARIA_LOGIN_KEY_INDEX + " cannot be enforced by the database until they are fixed. List them with: "
+                    + "SELECT username FROM users WHERE username_key IN (SELECT username_key FROM users GROUP BY username_key "
+                    + "HAVING COUNT(*) > 1)");
+            return duplicates;
+        }
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("ALTER TABLE users ADD UNIQUE KEY " + MARIA_LOGIN_KEY_INDEX + " (" + MARIA_LOGIN_KEY_COLUMN + ")");
+        }
+        return List.of();
+    }
+
+    private static boolean mariaColumnExists(Connection connection, String table, String column) throws SQLException {
+        try (java.sql.PreparedStatement statement = connection.prepareStatement(
+                "SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?")) {
+            statement.setString(1, table);
+            statement.setString(2, column);
+            try (ResultSet rs = statement.executeQuery()) {
+                return rs.next();
+            }
+        }
+    }
+
+    private static boolean mariaIndexExists(Connection connection, String table, String index) throws SQLException {
+        try (java.sql.PreparedStatement statement = connection.prepareStatement(
+                "SELECT 1 FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?")) {
+            statement.setString(1, table);
+            statement.setString(2, index);
+            try (ResultSet rs = statement.executeQuery()) {
+                return rs.next();
+            }
+        }
     }
 
     static void createPerformanceIndexes(Connection connection) throws SQLException {

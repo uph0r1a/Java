@@ -47,5 +47,9 @@ public final class AppLogging {
             Logger.getLogger(AppLogging.class.getName())
                     .log(Level.WARNING, "Could not set up file logging; continuing with console only", e);
         }
+        // The security events also get a file of their own, one per month, so a burst of other messages (or of failed
+        // logins) cannot push them out of the 3 x 1 MB above (TODO 2A.25). It is set up on its own: a problem with the
+        // normal log file must not leave the security events without theirs. A repeat call does nothing.
+        SecurityLog.install(DataPaths.logsDir());
     }
 }

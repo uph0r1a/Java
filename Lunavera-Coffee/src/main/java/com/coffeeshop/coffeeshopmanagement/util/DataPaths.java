@@ -6,7 +6,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.AclEntry;
+import java.nio.file.attribute.AclEntryFlag;
+import java.nio.file.attribute.AclEntryPermission;
+import java.nio.file.attribute.AclEntryType;
+import java.nio.file.attribute.AclFileAttributeView;
 import java.nio.file.attribute.PosixFileAttributeView;
+import java.nio.file.attribute.UserPrincipal;
+import java.util.EnumSet;
+import java.util.List;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.time.LocalDateTime;
 import java.util.logging.Level;
@@ -125,26 +133,65 @@ public final class DataPaths {
     }
 
     /**
-     * Makes the data folder readable only by the user who runs the app (mode {@code rwx------}), because it holds customer
-     * phone numbers, password hashes and backups (TODO 2A.4, 2A.14). Only the folder itself is changed: nothing inside it can be
-     * reached by other users while the folder is closed to them. Works on Linux and macOS. On Windows (no POSIX permissions) it
-     * does nothing and returns false; there the folder's rights come from the place it sits in (see the README).
+     * Makes the data folder readable only by the user who runs the app, because it holds customer phone numbers, password hashes
+     * and backups (TODO 2A.4, 2A.14). On Linux and macOS the folder gets mode {@code rwx------}; only the folder itself is changed,
+     * because nothing inside can be reached while the folder is closed. On Windows (no POSIX rights) the folder's access list is
+     * replaced by one entry that gives the owner full control and is inherited by everything inside, and the files and folders
+     * already inside get the same list (Windows would otherwise keep the rights they inherited from the parent folder). Other users
+     * and the "Users" group lose access; an administrator can still take ownership.
      * Never throws: a folder that cannot be changed (not ours, read-only file system) is only logged.
      *
      * @return true if the folder is now owner-only
      */
     public static boolean restrictToOwner(Path dir) {
-        if (dir == null) return false;
+        if (dir == null || !Files.isDirectory(dir)) return false;
         try {
             PosixFileAttributeView view = Files.getFileAttributeView(dir, PosixFileAttributeView.class);
-            if (view == null || !Files.isDirectory(dir)) return false;
-            if (Files.getPosixFilePermissions(dir).equals(PosixFilePermissions.fromString("rwx------"))) return true;
-            Files.setPosixFilePermissions(dir, PosixFilePermissions.fromString("rwx------"));
-            return true;
+            if (view != null) {
+                if (Files.getPosixFilePermissions(dir).equals(PosixFilePermissions.fromString("rwx------"))) return true;
+                Files.setPosixFilePermissions(dir, PosixFilePermissions.fromString("rwx------"));
+                return true;
+            }
+            AclFileAttributeView acl = Files.getFileAttributeView(dir, AclFileAttributeView.class);
+            if (acl == null) return false;
+            return restrictWithAcl(dir);
         } catch (IOException | UnsupportedOperationException | SecurityException e) {
             LOGGER.log(Level.WARNING, "Could not make the data folder owner-only: " + dir, e);
             return false;
         }
+    }
+
+    /** The one access entry of an owner-only folder on Windows: the owner, everything allowed, passed on to what is inside. */
+    static List<AclEntry> ownerOnlyAcl(UserPrincipal owner) {
+        return List.of(AclEntry.newBuilder()
+                .setType(AclEntryType.ALLOW)
+                .setPrincipal(owner)
+                .setPermissions(EnumSet.allOf(AclEntryPermission.class))
+                .setFlags(AclEntryFlag.FILE_INHERIT, AclEntryFlag.DIRECTORY_INHERIT)
+                .build());
+    }
+
+    /** Windows way of {@link #restrictToOwner}: the folder first, then what is already inside it (a failure inside is only logged). */
+    private static boolean restrictWithAcl(Path dir) throws IOException {
+        UserPrincipal owner = Files.getOwner(dir);
+        List<AclEntry> wanted = ownerOnlyAcl(owner);
+        AclFileAttributeView view = Files.getFileAttributeView(dir, AclFileAttributeView.class);
+        if (!wanted.equals(view.getAcl())) view.setAcl(wanted);
+        try (Stream<Path> walk = Files.walk(dir)) {
+            for (Path inside : (Iterable<Path>) walk.skip(1)::iterator) {
+                try {
+                    AclFileAttributeView v = Files.getFileAttributeView(inside, AclFileAttributeView.class, java.nio.file.LinkOption.NOFOLLOW_LINKS);
+                    if (v == null) continue;
+                    // a file gets the list without the inherit flags, which only mean something on a folder
+                    List<AclEntry> forThis = Files.isDirectory(inside, java.nio.file.LinkOption.NOFOLLOW_LINKS) ? wanted
+                            : List.of(AclEntry.newBuilder(wanted.get(0)).setFlags().build());
+                    if (!forThis.equals(v.getAcl())) v.setAcl(forThis);
+                } catch (IOException | RuntimeException e) {
+                    LOGGER.log(Level.WARNING, "Could not close this file to other users: " + inside, e);
+                }
+            }
+        }
+        return true;
     }
 
     /**
@@ -173,8 +220,7 @@ public final class DataPaths {
         // A journal next to the old database means the old app is still open (or crashed mid-write): a copy now could be
         // inconsistent (TODO 3.40).
         if (Files.exists(legacy.resolve(DATABASE_FILE_NAME + "-journal")) || Files.exists(legacy.resolve(DATABASE_FILE_NAME + "-wal"))) {
-            throw new IllegalStateException("Dữ liệu cũ ở " + legacy + " đang được một bản Lunavera cũ sử dụng. "
-                    + "Hãy đóng bản cũ rồi mở lại chương trình để chuyển dữ liệu. Dữ liệu cũ vẫn còn nguyên.");
+            throw new IllegalStateException(I18n.t("data.legacy.inuse", legacy));
         }
         Path temporary = target.resolve(DATABASE_FILE_NAME + ".copying");
         try {
@@ -191,8 +237,7 @@ public final class DataPaths {
             } catch (IOException ignored) {
                 // nothing more to do
             }
-            throw new IllegalStateException("Không thể chuyển dữ liệu cũ từ " + legacy + " sang " + target
-                    + ". Dữ liệu cũ vẫn còn nguyên ở chỗ cũ. Lý do: " + e.getMessage(), e);
+            throw new IllegalStateException(I18n.t("data.legacy.movefail", legacy, target, e.getMessage()), e);
         }
         int pictures = copyFolderQuietly(legacy.resolve("images"), target.resolve("images"));
         int backups = copyFolderQuietly(legacy.resolve("backups"), target.resolve("backups"));

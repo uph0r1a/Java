@@ -196,9 +196,29 @@ public class DataPathsTest {
             // only the folder is changed: the files in it keep their own rights (the closed folder already protects them)
             assertEquals("rw-r--r--", java.nio.file.attribute.PosixFilePermissions.toString(Files.getPosixFilePermissions(inside)));
             assertTrue("a second call changes nothing and still says yes", DataPaths.restrictToOwner(folder));
+        } else if (Files.getFileAttributeView(folder, java.nio.file.attribute.AclFileAttributeView.class) != null) {
+            // Windows (TODO 2A.14): one owner entry on the folder and on what is inside
+            assertTrue(DataPaths.restrictToOwner(folder));
+            java.nio.file.attribute.AclFileAttributeView view =
+                    Files.getFileAttributeView(inside, java.nio.file.attribute.AclFileAttributeView.class);
+            assertEquals(1, view.getAcl().size());
+            assertEquals(Files.getOwner(folder), view.getAcl().get(0).principal());
         } else {
-            assertFalse("no POSIX rights on this system: nothing is changed", DataPaths.restrictToOwner(folder));
+            assertFalse("no POSIX or ACL rights on this system: nothing is changed", DataPaths.restrictToOwner(folder));
         }
+    }
+
+    @Test
+    public void theWindowsAccessListHasOneOwnerEntryPassedOnToEverythingInside() {
+        java.nio.file.attribute.UserPrincipal owner = () -> "shop-owner";
+        java.util.List<java.nio.file.attribute.AclEntry> acl = DataPaths.ownerOnlyAcl(owner);
+        assertEquals(1, acl.size());
+        java.nio.file.attribute.AclEntry entry = acl.get(0);
+        assertEquals(java.nio.file.attribute.AclEntryType.ALLOW, entry.type());
+        assertEquals(owner, entry.principal());
+        assertEquals(java.util.EnumSet.allOf(java.nio.file.attribute.AclEntryPermission.class), entry.permissions());
+        assertTrue(entry.flags().contains(java.nio.file.attribute.AclEntryFlag.FILE_INHERIT));
+        assertTrue(entry.flags().contains(java.nio.file.attribute.AclEntryFlag.DIRECTORY_INHERIT));
     }
 
     @Test

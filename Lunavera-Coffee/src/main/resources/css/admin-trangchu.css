@@ -526,6 +526,12 @@
     -fx-font-weight: bold;
 }
 
+/* The database health line under the page title (TODO 4.24). */
+.db-health-line {
+    -fx-text-fill: #5b6b52;
+    -fx-font-size: 12px;
+}
+
 /* Open orders that were started long ago and never closed (TODO 2.11). */
 .stale-order-warning {
     -fx-text-fill: #8a5a00;

@@ -41,6 +41,25 @@ public class CurrencyUtilTest {
         assertEquals("100đ", CurrencyUtil.format(new BigDecimal("99.6")));
     }
 
+    /** TODO 3.60: the screen rounds half-up like Money.toDong, so a shown amount equals the stored one. */
+    @Test
+    public void roundsHalfUpLikeMoneyToDong() {
+        for (String v : new String[]{"0.5", "1.5", "2.5", "999.5", "-0.5", "-2.5"}) {
+            BigDecimal value = new BigDecimal(v);
+            assertEquals(CurrencyUtil.format(Money.fromDong(Money.toDong(value))), CurrencyUtil.format(value));
+        }
+        assertEquals("1đ", CurrencyUtil.format(new BigDecimal("0.5")));
+        assertEquals("3đ", CurrencyUtil.format(new BigDecimal("2.5")));
+    }
+
+    /** TODO 3.60: a value that rounds to zero is "0đ", never "-0đ". */
+    @Test
+    public void tinyNegativeAmountShowsAsPlainZero() {
+        assertEquals("0đ", CurrencyUtil.format(new BigDecimal("-0.0000001")));
+        assertEquals("0đ", CurrencyUtil.format(new BigDecimal("-0.4")));
+        assertEquals("-1đ", CurrencyUtil.format(new BigDecimal("-0.5")));
+    }
+
     /** TODO 6.19: a shared DecimalFormat mixes up digits when two threads format at once; one per thread does not. */
     @Test
     public void formattingFromManyThreadsAtOnceStaysCorrect() throws Exception {

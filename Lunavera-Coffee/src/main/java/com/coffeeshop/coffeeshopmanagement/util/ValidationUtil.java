@@ -61,6 +61,8 @@ public final class ValidationUtil {
         return u.length() >= 3 && password.toLowerCase(java.util.Locale.ROOT).contains(u);
     }
 
+    public static final int MAX_PASSWORD_LENGTH = 128;
+
     /** Passwords everybody tries first (TODO 2A.20); compared in lower case. */
     private static final java.util.Set<String> COMMON_PASSWORDS = java.util.Set.of(
             "12345678", "123456789", "1234567890", "12345678a", "123456789a", "a12345678", "abc12345", "abcd1234",
@@ -70,10 +72,12 @@ public final class ValidationUtil {
 
     /**
      * At least 8 characters, with at least one letter and one digit, not on a short list of passwords everybody tries
-     * first, and not containing the shop's name. (Containing the username is checked by {@link #containsUsername}.)
+     * first, and not containing the shop's name, and at most {@value #MAX_PASSWORD_LENGTH} characters (a pasted megabyte would
+     * make every one of the 600,000 hashing rounds copy it, TODO 2A.35). (Containing the username is checked by
+     * {@link #containsUsername}.)
      */
     public static boolean isValidPassword(String password) {
-        if (password == null || password.length() < 8) {
+        if (password == null || password.length() < 8 || password.length() > MAX_PASSWORD_LENGTH) {
             return false;
         }
         String lower = password.toLowerCase(java.util.Locale.ROOT);

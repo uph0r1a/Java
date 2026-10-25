@@ -1,5 +1,6 @@
 package com.coffeeshop.coffeeshopmanagement.config;
 
+import com.coffeeshop.coffeeshopmanagement.util.I18n;
 import com.coffeeshop.coffeeshopmanagement.util.DataPaths;
 import com.coffeeshop.coffeeshopmanagement.util.DbTime;
 
@@ -29,7 +30,9 @@ import java.util.logging.Logger;
  * itself on a first start (see {@link State}); real data is never overwritten or duplicated. It keeps every id
  * (so orders still point at the right products and customers), converts the date text to DATETIME, and checks that every
  * table ended up with the same number of rows. It is all one transaction: if anything fails, nothing is kept and the
- * app stops with a message, so you never get half a shop. The SQLite file itself is only read, never changed.
+ * app stops with a message, so you never get half a shop. The SQLite file itself is only read, never changed: it is opened read-only
+ * (so SQLite cannot replay or delete a leftover {@code -wal} / {@code -journal} file next to it), and before anything is copied its
+ * version, its health and its foreign keys are checked ({@link #checkSource}, TODO 3.62).
  */
 final class SqliteToMariaDbImporter {
 
@@ -48,13 +51,15 @@ final class SqliteToMariaDbImporter {
                     Set.of("created_at"), Set.of()),
             spec("users", List.of("id", "username", "password_hash", "role", "status", "employee_id", "customer_id", "created_at", "must_change_password"),
                     Set.of("created_at"), Set.of()),
-            spec("categories", List.of("id", "name", "description", "active"), Set.of(), Set.of()),
-            spec("products", List.of("id", "name", "category_id", "price", "cost", "stock", "description", "image_path", "active"),
+            spec("categories", List.of("id", "name", "description", "active", "sort_order"), Set.of(), Set.of()),
+            spec("products", List.of("id", "name", "category_id", "price", "cost", "stock", "description", "image_path", "active",
+                    "sort_order", "reorder_level"),
                     Set.of(), Set.of()),
             spec("orders", List.of("id", "order_date", "employee_id", "customer_id", "status", "subtotal", "discount", "total",
-                    "payment_method", "paid_at", "table_number", "discount_reason", "paid_by"),
+                    "payment_method", "paid_at", "table_number", "discount_reason", "paid_by", "points_earned", "cash_received", "change_given",
+                    "transfer_ref"),
                     Set.of("order_date", "paid_at"), Set.of()),
-            spec("order_items", List.of("id", "order_id", "product_id", "product_name", "quantity", "unit_price", "line_total"),
+            spec("order_items", List.of("id", "order_id", "product_id", "product_name", "quantity", "unit_price", "line_total", "unit_cost"),
                     Set.of(), Set.of()),
             spec("dining_tables", List.of("id", "table_number", "name", "status", "capacity", "current_order_id"),
                     Set.of(), Set.of()),
@@ -116,13 +121,87 @@ final class SqliteToMariaDbImporter {
         }
         LOGGER.info("Importing the SQLite database " + file + " into the "
                 + (state == State.EMPTY ? "empty" : "new (first-run data only)") + " MariaDB database ...");
-        try (Connection sqlite = DriverManager.getConnection("jdbc:sqlite:" + file)) {
+        try (Connection sqlite = openSourceReadOnly(file)) {
             if (!sqliteHasTable(sqlite, "users")) {
                 LOGGER.warning("The file " + file + " is not a Lunavera database (it has no users table); nothing was imported or changed.");
                 return false;
             }
+            SourceCheck check = checkSource(sqlite);
+            if (check.warning() != null) {
+                LOGGER.warning("SQLite import, " + file + ": " + check.warning());
+            }
+            if (check.problem() != null) {
+                // Stop, do not carry on with an empty shop: the owner would create a new administrator and believe the old data was imported.
+                LOGGER.severe("SQLite import refused for " + file + ": " + check.problem());
+                throw new IllegalStateException(I18n.t("db.import.failed", file, check.problem()));
+            }
             return copyEverything(maria, sqlite, file, state == State.ONLY_FIRST_RUN_DATA);
         }
+    }
+
+    /** The old file opened so that SQLite can never write to it (no replay or removal of a leftover -wal / -journal, no new data). */
+    static Connection openSourceReadOnly(Path file) throws SQLException {
+        org.sqlite.SQLiteConfig config = new org.sqlite.SQLiteConfig();
+        config.setReadOnly(true);
+        return DriverManager.getConnection("jdbc:sqlite:" + file, config.toProperties());
+    }
+
+    /**
+     * What looking at the old file found. A {@code problem} stops the import and is shown to the owner (so it is written in plain words,
+     * never with SQLite's own text); a {@code warning} only goes to the log.
+     */
+    record SourceCheck(String problem, String warning) {
+    }
+
+    /** At most this many orphan rows are named in the message; the number of all of them is still given. */
+    private static final int ORPHANS_SHOWN = 5;
+
+    /**
+     * Looks at the old file before one row is copied (TODO 3.62): a file from a <b>newer</b> version of the app is refused (its extra columns
+     * would be dropped without a word); a file that fails {@code PRAGMA integrity_check} is refused; so is a file with rows that point at
+     * something that is not there (the copy runs with foreign keys off, so such rows would only fail later, on the first screen that joins
+     * them). Version 0 is a file from before the money migration: it is copied (whole dong, so rounding changes nothing for real data) but a
+     * warning is logged. The version compared with is {@link SchemaMigrations#LATEST_VERSION}, as for a restored backup; the money
+     * migration's {@code CURRENT_SCHEMA_VERSION} is only step 1 of it.
+     */
+    static SourceCheck checkSource(Connection sqlite) throws SQLException {
+        int version = 0;
+        try (Statement statement = sqlite.createStatement(); ResultSet rs = statement.executeQuery("PRAGMA user_version")) {
+            if (rs.next()) {
+                version = rs.getInt(1);
+            }
+        }
+        if (version > SchemaMigrations.LATEST_VERSION) {
+            return new SourceCheck(I18n.t("db.import.newer", version, SchemaMigrations.LATEST_VERSION), null);
+        }
+        try (Statement statement = sqlite.createStatement(); ResultSet rs = statement.executeQuery("PRAGMA integrity_check")) {
+            String first = rs.next() ? rs.getString(1) : null;
+            if (!"ok".equalsIgnoreCase(first)) {
+                LOGGER.warning("integrity_check of the old SQLite file said: " + first); // the owner gets plain words, the log gets SQLite's
+                return new SourceCheck(I18n.t("db.import.damaged"), null);
+            }
+        } catch (SQLException unreadable) {
+            LOGGER.warning("The old SQLite file could not be read to the end: " + unreadable.getMessage());
+            return new SourceCheck(I18n.t("db.import.damaged"), null);
+        }
+        int orphans = 0;
+        List<String> examples = new ArrayList<>();
+        try (Statement statement = sqlite.createStatement(); ResultSet rs = statement.executeQuery("PRAGMA foreign_key_check")) {
+            while (rs.next()) {
+                orphans++;
+                if (examples.size() < ORPHANS_SHOWN) {
+                    examples.add(rs.getString(1) + " #" + rs.getLong(2) + " -> " + rs.getString(3));
+                }
+            }
+        }
+        if (orphans > 0) {
+            return new SourceCheck(I18n.t("db.import.orphans", orphans, String.join(", ", examples)), null);
+        }
+        String warning = version == 0
+                ? "The file is from before the money migration (version 0): prices stored as decimals are rounded to whole dong. "
+                + "If you can, open it once with the SQLite version of the app, which upgrades it, and import that file instead."
+                : null;
+        return new SourceCheck(null, warning);
     }
 
     private static boolean copyEverything(Connection maria, Connection sqlite, Path file, boolean replaceFirstRunData) throws SQLException {
@@ -142,8 +221,7 @@ final class SqliteToMariaDbImporter {
             for (Map.Entry<String, Integer> entry : copied.entrySet()) {
                 int inMaria = count(maria, entry.getKey());
                 if (inMaria != entry.getValue()) {
-                    throw new SQLException("Bảng " + entry.getKey() + ": đã chép " + entry.getValue()
-                            + " dòng nhưng MariaDB đếm được " + inMaria + ".");
+                    throw new SQLException(I18n.t("db.import.mismatch", entry.getKey(), entry.getValue(), inMaria));
                 }
             }
             maria.commit();
@@ -155,9 +233,7 @@ final class SqliteToMariaDbImporter {
             } catch (SQLException rollbackProblem) {
                 e.addSuppressed(rollbackProblem);
             }
-            throw new IllegalStateException("Không nhập được dữ liệu từ tệp SQLite " + file
-                    + " vào MariaDB. Mọi thay đổi đã được hoàn tác (MariaDB giữ nguyên như trước, tệp SQLite không bị sửa). Lý do: "
-                    + describeFailure(e), e);
+            throw new IllegalStateException(I18n.t("db.import.failed", file, describeFailure(e)), e);
         } finally {
             try {
                 setForeignKeyChecks(maria, true);
@@ -178,9 +254,7 @@ final class SqliteToMariaDbImporter {
                 int end = message.indexOf('\'', start);
                 phone = end > start ? message.substring(start, end) : "";
             }
-            return "hai khách hàng trong tệp SQLite có cùng số điện thoại" + (phone.isEmpty() ? "" : " (" + phone + ")")
-                    + ", mà MariaDB chỉ cho phép mỗi số điện thoại một khách. Hãy sửa hoặc gộp hai khách đó trong Quản lý khách hàng "
-                    + "(chạy bản SQLite) rồi thử lại.";
+            return I18n.t("db.import.dupphone", (phone.isEmpty() ? "" : " (" + phone + ")"));
         }
         return String.valueOf(error.getMessage());
     }
@@ -301,7 +375,7 @@ final class SqliteToMariaDbImporter {
     /** What to bind for one SQLite value: date text becomes DATETIME / DATE text, everything else is passed through. */
     static Object convert(TableSpec table, String column, Object value) {
         if (value == null) {
-            return "must_change_password".equals(column) ? Integer.valueOf(0) : null; // an older file has no such column
+            return "must_change_password".equals(column) || "sort_order".equals(column) ? Integer.valueOf(0) : null; // an older file has no such column
         }
         if (table.dateTimeColumns().contains(column)) {
             return DbTime.toSqlDateTime(value.toString());

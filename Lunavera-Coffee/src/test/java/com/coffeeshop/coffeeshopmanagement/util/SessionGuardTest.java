@@ -3,6 +3,7 @@ package com.coffeeshop.coffeeshopmanagement.util;
 import com.coffeeshop.coffeeshopmanagement.dao.TestDatabaseSupport;
 import com.coffeeshop.coffeeshopmanagement.dao.UserDAO;
 import com.coffeeshop.coffeeshopmanagement.model.AccountStatus;
+import com.coffeeshop.coffeeshopmanagement.model.Employee;
 import com.coffeeshop.coffeeshopmanagement.model.Role;
 import com.coffeeshop.coffeeshopmanagement.model.User;
 import com.coffeeshop.coffeeshopmanagement.service.PasswordUtil;
@@ -66,11 +67,11 @@ public class SessionGuardTest {
         User user = newEmployeeUser();
         Session.start(user, null);
 
-        dao.updateRole(user.getId(), Role.ADMIN);
+        asAdmin(() -> dao.updateRole(user.getId(), Role.ADMIN));
         assertTrue(SessionGuard.validateNow());
         assertTrue("role refreshed to ADMIN without re-login", Session.isAdmin());
 
-        dao.updateRole(user.getId(), Role.EMPLOYEE);
+        asAdmin(() -> dao.updateRole(user.getId(), Role.EMPLOYEE));
         SessionGuard.validateNow();
         assertFalse("role refreshed back to EMPLOYEE", Session.isAdmin());
     }
@@ -80,10 +81,10 @@ public class SessionGuardTest {
         User user = newEmployeeUser();
         Session.start(user, null);
 
-        dao.updateStatus(user.getId(), AccountStatus.LOCKED);
+        asAdmin(() -> dao.updateStatus(user.getId(), AccountStatus.LOCKED));
         assertFalse(SessionGuard.validateNow());
 
-        dao.updateStatus(user.getId(), AccountStatus.ACTIVE);
+        asAdmin(() -> dao.updateStatus(user.getId(), AccountStatus.ACTIVE));
         Session.start(user, null);
         assertTrue(SessionGuard.validateNow());
     }
@@ -96,5 +97,21 @@ public class SessionGuardTest {
         ghost.setStatus(AccountStatus.ACTIVE);
         Session.start(ghost, null);
         assertFalse(SessionGuard.validateNow());
+    }
+
+    /** An account is changed by an administrator (TODO 2A.3); the session under test keeps the copy it had before. */
+    private static void asAdmin(Runnable change) {
+        User current = Session.getCurrentUser();
+        Employee employee = Session.getCurrentEmployee();
+        TestSession.admin();
+        try {
+            change.run();
+        } finally {
+            if (current == null) {
+                Session.clear();
+            } else {
+                Session.start(current, employee);
+            }
+        }
     }
 }

@@ -19,7 +19,7 @@ public class StaffPhoneUniqueTest {
     }
 
     private static String randomPhone() {
-        return "09" + String.format("%08d", Math.abs(UUID.randomUUID().getMostSignificantBits() % 100_000_000L));
+        return "09" + String.format(java.util.Locale.ROOT, "%08d", Math.abs(UUID.randomUUID().getMostSignificantBits() % 100_000_000L));
     }
 
     private Employee staff(String phone) {

@@ -1,5 +1,7 @@
 package com.coffeeshop.coffeeshopmanagement.service;
 
+import com.coffeeshop.coffeeshopmanagement.util.I18n;
+
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -21,8 +23,6 @@ public final class ClockCheck {
         if (now == null || newestRecorded == null) return null;
         if (!now.plus(TOLERANCE).isBefore(newestRecorded)) return null;
         DateTimeFormatter f = DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy");
-        return "Đồng hồ của máy này đang chỉ " + now.format(f) + ", nhưng đã có đơn hàng ghi lúc "
-                + newestRecorded.format(f) + ".\nNgày giờ máy có thể bị sai nên đơn mới sẽ được ghi vào sai ngày "
-                + "và báo cáo sẽ lệch. Hãy chỉnh lại ngày giờ của máy rồi mở lại chương trình.";
+        return I18n.t("clock.wrong", now.format(f), newestRecorded.format(f));
     }
 }

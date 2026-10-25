@@ -3,6 +3,7 @@ package com.coffeeshop.coffeeshopmanagement.dao;
 import com.coffeeshop.coffeeshopmanagement.util.AppClock;
 import com.coffeeshop.coffeeshopmanagement.model.*;
 import com.coffeeshop.coffeeshopmanagement.service.CustomerService;
+import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -22,6 +23,12 @@ public class EdgeCasesTest {
     @BeforeClass
     public static void setUpDatabase() {
         TestDatabaseSupport.ensureReady();
+        com.coffeeshop.coffeeshopmanagement.util.TestSession.admin();
+    }
+
+    @AfterClass
+    public static void signOut() {
+        com.coffeeshop.coffeeshopmanagement.util.TestSession.clear();
     }
 
     private Product product(boolean active) {
@@ -128,4 +135,20 @@ public class EdgeCasesTest {
                 BigDecimal.valueOf(20_000), List.of(line(p)), null);
         assertFalse("paid meanwhile: the screen is told", orderDAO.updateIfStillOpen(saved, List.of()));
     }
+
+    @Test
+    public void anOrderPaidOnAFutureDayDoesNotAddAnEighthDayToTheWeeklyChart() {
+        // A till clock set days ahead leaves an order "paid" in the future (TODO 3.42): it must not become an 8th bar.
+        Product on = product(true);
+        Order future = paid();
+        future.setOrderDate(AppClock.now().plusDays(3));
+        future.setPaidAt(AppClock.now().plusDays(3));
+        orderDAO.insert(future, List.of(line(on)));
+
+        java.util.Map<java.time.LocalDate, BigDecimal> week = orderDAO.revenueForLast7Days();
+        assertEquals("exactly the seven days asked for", 7, week.size());
+        assertFalse(week.containsKey(AppClock.today().plusDays(3)));
+        assertTrue(week.containsKey(AppClock.today()));
+    }
 }
+

@@ -170,7 +170,7 @@ public class BackupServiceTest {
         Path dir = DataPaths.backupsDir();
         Files.createDirectories(dir);
         for (int day = 1; day <= 20; day++) {
-            Files.writeString(dir.resolve(String.format("auto-202601%02d-120000.zip", day)), "x");
+            Files.writeString(dir.resolve(String.format(java.util.Locale.ROOT, "auto-202601%02d-120000.zip", day)), "x");
         }
         Files.writeString(dir.resolve("lunavera-backup-manual.zip"), "mine");
         Files.writeString(dir.resolve("before-money-migration.db"), "old db");
@@ -190,6 +190,134 @@ public class BackupServiceTest {
     }
 
     // ---------------------------------------------------------------- restore
+
+    @Test
+    public void aRestoreNamesTheAccountsItBringsBack() throws Exception {
+        Path live = liveDatabase();
+        String ins = "INSERT INTO users(username, password_hash, role, status, created_at) VALUES ('%s','%s','EMPLOYEE','ACTIVE','2026-01-01T00:00:00')";
+        exec(live, String.format(java.util.Locale.ROOT, ins, "zz-removed", "hash-a"));
+        exec(live, String.format(java.util.Locale.ROOT, ins, "zz-locked", "hash-b"));
+        exec(live, String.format(java.util.Locale.ROOT, ins, "zz-newpw", "OLD-SECRET-HASH"));
+        exec(live, String.format(java.util.Locale.ROOT, ins, "zz-same", "hash-d"));
+        // The backup must hold the four accounts above, which exist only in this scratch copy: BackupService.createBackup
+        // reads the connection's own database (the shared test database), so a copy of the scratch file is the backup here.
+        Path backup = scratch.resolve("outside").resolve("b.db");
+        Files.createDirectories(backup.getParent());
+        Files.copy(live, backup);
+
+        // afterwards one is removed, one locked, one gets a new password, one is untouched, and one is created
+        exec(live, "DELETE FROM users WHERE username='zz-removed'");
+        exec(live, "UPDATE users SET status='LOCKED' WHERE username='zz-locked'");
+        exec(live, "UPDATE users SET password_hash='NEW-SECRET-HASH' WHERE username='zz-newpw'");
+        exec(live, String.format(java.util.Locale.ROOT, ins, "zz-created-later", "hash-e"));
+
+        BackupService.scheduleRestore(backup);
+        RestoreResult result = BackupService.applyPendingRestore();
+        assertEquals(result.message(), RestoreOutcome.RESTORED, result.outcome());
+        String message = result.message();
+        assertTrue(message, message.contains("'zz-removed'"));
+        assertTrue(message, message.contains("'zz-locked'"));
+        assertTrue(message, message.contains("'zz-newpw'"));
+        assertFalse("an account that did not change is not listed", message.contains("zz-same"));
+        assertFalse("an account that the restore removes is not 'brought back'", message.contains("zz-created-later"));
+        assertFalse("no password hash is ever shown", message.contains("SECRET-HASH"));
+    }
+
+    @Test
+    public void aBackupWithoutAnActiveAdministratorIsRefused() throws Exception {
+        liveDatabase();
+        Path noAdmin = scratch.resolve("outside").resolve("no-admin.db");
+        Files.createDirectories(noAdmin.getParent());
+        DatabaseConfig.backupTo(noAdmin);
+        exec(noAdmin, "UPDATE users SET status='LOCKED' WHERE role='ADMIN'");
+        for (java.util.concurrent.Callable<Object> look : java.util.List.<java.util.concurrent.Callable<Object>>of(
+                () -> BackupService.inspect(noAdmin), () -> BackupService.scheduleRestore(noAdmin))) {
+            try {
+                look.call();
+                fail("a backup nobody can administer must be refused");
+            } catch (IOException expected) {
+                assertTrue(expected.getMessage(), expected.getMessage().contains("quản trị viên"));
+            }
+        }
+        assertFalse("nothing was parked", BackupService.restorePending());
+        exec(noAdmin, "UPDATE users SET status='ACTIVE' WHERE role='ADMIN'");
+        assertNotNull("with an active administrator it is fine", BackupService.inspect(noAdmin));
+    }
+
+    @Test
+    public void lookingAtABackupKeepsToTheSizeLimits() throws Exception {
+        liveDatabase();
+        Path good = Files.createTempFile("good", ".db");
+        DatabaseConfig.backupTo(good);
+        long dbSize = Files.size(good);
+
+        // a database entry bigger than the cap
+        Path bigDb = scratch.resolve("big-db.zip");
+        try (OutputStream out = Files.newOutputStream(bigDb); ZipOutputStream z = new ZipOutputStream(out)) {
+            z.putNextEntry(new ZipEntry("lunavera.db"));
+            Files.copy(good, z);
+            z.closeEntry();
+        }
+        try {
+            BackupService.inspect(bigDb, new BackupService.Limits(dbSize - 1, 1 << 20, 1 << 20));
+            fail("a database entry over the cap must be refused");
+        } catch (IOException expected) {
+            assertTrue(expected.getMessage(), expected.getMessage().contains("lớn bất thường"));
+        }
+        try (Stream<Path> left = Files.list(DataPaths.tmpDir())) {
+            assertEquals("no partial copy is left in the temporary folder", 0, left.filter(p -> p.getFileName().toString().startsWith("lunavera-inspect")).count());
+        }
+        assertNotNull(BackupService.inspect(bigDb, new BackupService.Limits(dbSize, 1 << 20, 1 << 20)));
+
+        // one picture over the per-picture cap, and pictures over the total cap
+        Path bigPicture = scratch.resolve("big-picture.zip");
+        try (OutputStream out = Files.newOutputStream(bigPicture); ZipOutputStream z = new ZipOutputStream(out)) {
+            z.putNextEntry(new ZipEntry("lunavera.db"));
+            Files.copy(good, z);
+            z.closeEntry();
+            for (int i = 0; i < 3; i++) {
+                z.putNextEntry(new ZipEntry("images/p" + i + ".jpg"));
+                z.write(new byte[1000]);
+                z.closeEntry();
+            }
+        }
+        try {
+            BackupService.inspect(bigPicture, new BackupService.Limits(dbSize, 999, 1 << 20));
+            fail("a picture over the cap must be refused");
+        } catch (IOException expected) {
+            assertTrue(expected.getMessage(), expected.getMessage().contains("lớn bất thường"));
+        }
+        try {
+            BackupService.inspect(bigPicture, new BackupService.Limits(dbSize, 1000, 2999));
+            fail("pictures over the total cap must be refused");
+        } catch (IOException expected) {
+            assertTrue(expected.getMessage(), expected.getMessage().contains("Ảnh"));
+        }
+        assertEquals(3, BackupService.inspect(bigPicture, new BackupService.Limits(dbSize, 1000, 3000)).pictures());
+
+        // an info entry that is not a few lines
+        Path bigInfo = scratch.resolve("big-info.zip");
+        try (OutputStream out = Files.newOutputStream(bigInfo); ZipOutputStream z = new ZipOutputStream(out)) {
+            z.putNextEntry(new ZipEntry("backup-info.txt"));
+            z.write(new byte[BackupService.MAX_INFO_BYTES + 1]);
+            z.closeEntry();
+            z.putNextEntry(new ZipEntry("lunavera.db"));
+            Files.copy(good, z);
+            z.closeEntry();
+        }
+        try {
+            BackupService.inspect(bigInfo);
+            fail("an oversized info entry must be refused");
+        } catch (IOException expected) {
+            assertTrue(expected.getMessage(), expected.getMessage().contains("lớn bất thường"));
+        }
+    }
+
+    @Test
+    public void noAccountNotesWhenThereIsNothingToCompare() throws Exception {
+        assertTrue(BackupService.accountsBroughtBack(null, scratch.resolve("x.db")).isEmpty());
+        assertTrue(BackupService.accountsBroughtBack(scratch.resolve("missing.db"), scratch.resolve("also-missing.db")).isEmpty());
+    }
 
     @Test
     public void aRestoreBringsBackTheDatabaseAndThePicturesAndSavesTheCurrentState() throws Exception {
@@ -439,8 +567,223 @@ public class BackupServiceTest {
         assertTrue(Files.exists(scratch.resolve("restore-failed-20260105-000000.zip")));
     }
 
+    // ---------------------------------------------------------------- locked with a passphrase (TODO 2A.4)
+
+    @Test
+    public void aBackupLockedWithAPassphraseOpensOnlyWithIt() throws Exception {
+        liveDatabase();
+        write(DataPaths.imagesDir().resolve("1-1.jpg"), "picture");
+        char[] phrase = "a long enough phrase".toCharArray();
+        Path locked = BackupService.createEncryptedBackup(scratch.resolve("outside").resolve("mine"), phrase);
+        assertTrue(locked.getFileName().toString().endsWith(BackupService.ENCRYPTED_EXTENSION));
+        assertTrue(BackupService.isEncryptedBackup(locked));
+
+        try {
+            BackupService.inspect(locked);
+            fail("a locked backup must not be read without its passphrase");
+        } catch (IOException expected) {
+            assertTrue(expected.getMessage(), expected.getMessage().contains("mật khẩu"));
+        }
+        BackupService.Summary summary = BackupService.inspect(locked, phrase);
+        assertEquals(1, summary.pictures());
+        try {
+            BackupService.inspect(locked, "another phrase here".toCharArray());
+            fail("a wrong passphrase must be refused");
+        } catch (BackupCrypto.WrongPassphraseException expected) {
+            // good
+        }
+        try (Stream<Path> left = Files.list(locked.getParent())) {
+            assertTrue("only the locked file is left next to it, no plain zip and no .part file",
+                    left.allMatch(f -> f.getFileName().toString().endsWith(BackupService.ENCRYPTED_EXTENSION)));
+        }
+    }
+
+    @Test
+    public void aLockedBackupRestoresLikeAPlainOne() throws Exception {
+        Path live = liveDatabase();
+        char[] phrase = "a long enough phrase".toCharArray();
+        Path locked = BackupService.createEncryptedBackup(scratch.resolve("outside").resolve("b"), phrase);
+        exec(live, "INSERT INTO categories(name, description, active) VALUES ('after-marker','',1)");
+
+        BackupService.scheduleRestore(locked, phrase);
+        assertTrue(BackupService.restorePending());
+        RestoreResult result = BackupService.applyPendingRestore();
+        assertEquals(result.message(), RestoreOutcome.RESTORED, result.outcome());
+        assertEquals(0, count(live, "SELECT COUNT(*) FROM categories WHERE name='after-marker'"));
+    }
+
+    @Test
+    public void aShortPassphraseIsRefusedBeforeAnythingIsWritten() throws Exception {
+        liveDatabase();
+        Path target = scratch.resolve("outside").resolve("never");
+        try {
+            BackupService.createEncryptedBackup(target, "short".toCharArray());
+            fail("a passphrase under the minimum must be refused");
+        } catch (IOException expected) {
+            assertTrue(expected.getMessage(), expected.getMessage().contains("ít nhất"));
+        }
+        assertFalse(Files.exists(BackupService.withEncryptedExtension(target)));
+    }
+
+    @Test
+    public void theLockedExtensionReplacesZipAndIsAddedWhenMissing() {
+        assertEquals("a.lvbak", BackupService.withEncryptedExtension(Path.of("a")).getFileName().toString());
+        assertEquals("a.lvbak", BackupService.withEncryptedExtension(Path.of("a.zip")).getFileName().toString());
+        assertEquals("a.lvbak", BackupService.withEncryptedExtension(Path.of("a.lvbak")).getFileName().toString());
+        assertEquals("a.LVBAK", BackupService.withEncryptedExtension(Path.of("a.LVBAK")).getFileName().toString());
+    }
+
     @org.junit.AfterClass
     public static void signOut() {
         com.coffeeshop.coffeeshopmanagement.util.TestSession.clear();
     }
+
+    // ---- TODO 2.85: sales still in the write-ahead log after a crash are in the restore's safety copy ----
+
+    @Test
+    public void aRestoreAfterACrashSavesTheSalesThatWereStillInTheWriteAheadLog() throws Exception {
+        Path live = liveDatabase();
+        Path backup = BackupService.createBackup(scratch.resolve("outside").resolve("b.zip"));
+
+        // A "crash": a sale is committed into the log, and the program dies before any checkpoint, so the files on disk are the
+        // main file (without the sale) plus lunavera.db-wal (with it).
+        Path crashFolder = Files.createTempDirectory("lunavera-crash");
+        Path log = live.resolveSibling(live.getFileName() + "-wal");
+        try (Connection keep = DriverManager.getConnection("jdbc:sqlite:" + live.toAbsolutePath());
+             Statement st = keep.createStatement()) {
+            st.execute("PRAGMA journal_mode = WAL");
+            st.execute("PRAGMA wal_autocheckpoint = 0");
+            st.execute("INSERT INTO categories(name, description, active) VALUES ('wal-marker','',1)");
+            assertTrue("the sale sits in the log file", Files.size(log) > 0);
+            Files.copy(live, crashFolder.resolve("lunavera.db"));
+            Files.copy(log, crashFolder.resolve("lunavera.db-wal"));
+        }
+        // Put the crashed pair back as the shop's files.
+        Files.deleteIfExists(live);
+        Files.deleteIfExists(log);
+        Files.deleteIfExists(live.resolveSibling(live.getFileName() + "-shm"));
+        Files.copy(crashFolder.resolve("lunavera.db"), live);
+        Files.copy(crashFolder.resolve("lunavera.db-wal"), log);
+
+        BackupService.scheduleRestore(backup);
+        RestoreResult result = BackupService.applyPendingRestore();
+        assertEquals(result.message(), RestoreOutcome.RESTORED, result.outcome());
+
+        Path safety;
+        try (Stream<Path> files = Files.list(DataPaths.backupsDir())) {
+            safety = files.filter(p -> p.getFileName().toString().startsWith("before-restore-")).findFirst().orElseThrow();
+        }
+        Path safetyDb = Files.createTempFile("safety", ".db");
+        try (ZipFile z = new ZipFile(safety.toFile())) {
+            Files.copy(z.getInputStream(z.getEntry("lunavera.db")), safetyDb, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        }
+        assertEquals("the sale that was only in the log is in the safety copy", 1,
+                count(safetyDb, "SELECT COUNT(*) FROM categories WHERE name='wal-marker'"));
+        Files.deleteIfExists(safetyDb);
+        assertEquals("the restored database is the backup", 0, count(live, "SELECT COUNT(*) FROM categories WHERE name='wal-marker'"));
+        assertFalse("no old log file is left to be applied to the restored database", Files.exists(log));
+    }
+
+    @Test
+    public void foldingWhenThereIsNoLogIsANoOpAndAnEmptyFolderIsFine() throws Exception {
+        Path live = liveDatabase();
+        assertTrue(BackupService.foldLeftoverLogInto(live));
+        assertTrue(BackupService.foldLeftoverLogInto(scratch.resolve("does-not-exist.db")));
+    }
+
+    @Test
+    public void aLogThatCannotBeFoldedIsKeptNotDeleted() throws Exception {
+        Path notADatabase = scratch.resolve("broken.db");
+        Files.writeString(notADatabase, "this is not an SQLite file at all, just text to be sure of it. ".repeat(20));
+        Files.writeString(scratch.resolve("broken.db-wal"), "log bytes");
+        assertFalse(BackupService.foldLeftoverLogInto(notADatabase));
+        assertTrue("the log file is still there", Files.exists(scratch.resolve("broken.db-wal")));
+    }
+
+    // ---------------------------------------------------------------- TODO 3.63 / 3.65
+
+    @Test
+    public void aBackupWithATimeFarInTheFutureDoesNotBlockTheNextOne() throws Exception {
+        Path dir = DataPaths.backupsDir();
+        Files.createDirectories(dir);
+        Path wrong = dir.resolve("auto-20990101-000000.zip");
+        Files.writeString(wrong, "made while the clock was wrong");
+        Files.setLastModifiedTime(wrong, FileTime.from(Instant.now().plusSeconds(400L * 86_400)));
+        assertTrue("only a wrong-dated copy exists: a backup is due", BackupService.isDue(dir, Instant.now()));
+
+        Path recent = dir.resolve("auto-20200101-000000.zip");
+        Files.writeString(recent, "real, an hour old");
+        Files.setLastModifiedTime(recent, FileTime.from(Instant.now().minusSeconds(3600)));
+        assertFalse("a real recent copy counts, the wrong-dated one is ignored", BackupService.isDue(dir, Instant.now()));
+    }
+
+    @Test
+    public void aTruncatedBackupFailsTheReadBackCheck() throws Exception {
+        Path good = Files.createTempFile("lunavera-verify", ".zip");
+        try (ZipOutputStream zip = new ZipOutputStream(Files.newOutputStream(good))) {
+            zip.putNextEntry(new ZipEntry("notes.txt"));
+            zip.write(new byte[200_000]);
+            zip.closeEntry();
+        }
+        BackupService.verifyZip(good, false); // a sound zip passes (the database check is separate)
+        byte[] bytes = Files.readAllBytes(good);
+        Path cut = Files.createTempFile("lunavera-verify-cut", ".zip");
+        Files.write(cut, java.util.Arrays.copyOf(bytes, bytes.length / 2));
+        try {
+            BackupService.verifyZip(cut, false);
+            fail("a cut-off zip must not pass");
+        } catch (IOException expected) {
+            // good
+        }
+    }
+
+    @Test
+    public void aFreshBackupIsReadBackAndKept() throws Exception {
+        Path made = BackupService.createBackup(scratch.resolve("fresh.zip"));
+        assertTrue(Files.isRegularFile(made));
+        assertNotNull(BackupService.inspect(made));
+    }
+
+    @Test
+    public void aBackupWithoutPicturesSaysSoAndARestoreFromItKeepsTheCurrentPictures() throws Exception {
+        Path live = liveDatabase();
+        write(DataPaths.imagesDir().resolve("keep.jpg"), "my picture");
+        Path backup = BackupService.createBackup(scratch.resolve("outside").resolve("nopics.zip"), false);
+
+        Set<String> names = entries(backup);
+        assertTrue(names.toString(), names.contains("lunavera.db") && names.contains("backup-info.txt"));
+        assertFalse("no picture inside", names.stream().anyMatch(n -> n.startsWith("images/")));
+        assertFalse(BackupService.picturesIncluded(backup));
+        assertFalse(BackupService.inspect(backup).picturesIncluded());
+        assertTrue(BackupService.inspect(backup).describe().contains(com.coffeeshop.coffeeshopmanagement.util.I18n.t("backup.nopictures")));
+
+        exec(live, "INSERT INTO categories(name, description, active) VALUES ('after-nopics','',1)");
+        write(DataPaths.imagesDir().resolve("later.jpg"), "added later");
+        BackupService.scheduleRestore(backup);
+        RestoreResult result = BackupService.applyPendingRestore();
+        assertEquals(result.message(), RestoreOutcome.RESTORED, result.outcome());
+        assertEquals("the database is the backup's", 0, count(live, "SELECT COUNT(*) FROM categories WHERE name='after-nopics'"));
+        assertTrue("the pictures of the shop are still there", Files.exists(DataPaths.imagesDir().resolve("keep.jpg")));
+        assertTrue(Files.exists(DataPaths.imagesDir().resolve("later.jpg")));
+    }
+
+    @Test
+    public void anAutomaticBackupAfterAFullOneLeavesThePicturesOut() throws Exception {
+        write(DataPaths.imagesDir().resolve("p.jpg"), "picture");
+        assertTrue("the first automatic backup is a full one", BackupService.autoBackupIfDue().isPresent());
+        Path dir = DataPaths.backupsDir();
+        try (Stream<Path> files = Files.list(dir)) {
+            Path first = files.filter(p -> p.getFileName().toString().startsWith("auto-")).findFirst().orElseThrow();
+            assertTrue(entries(first).contains("images/p.jpg"));
+            assertTrue(BackupService.picturesIncluded(first));
+            // make it look two days old so the next one is due, then run again
+            Files.setLastModifiedTime(first, java.nio.file.attribute.FileTime.from(java.time.Instant.now().minus(java.time.Duration.ofDays(2))));
+        }
+        assertTrue(BackupService.autoBackupIfDue().isPresent());
+        try (Stream<Path> files = Files.list(dir)) {
+            Path second = files.filter(p -> p.getFileName().toString().endsWith("-db.zip")).findFirst().orElseThrow();
+            assertFalse(entries(second).stream().anyMatch(n -> n.startsWith("images/")));
+        }
+    }
 }
+

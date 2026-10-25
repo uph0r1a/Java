@@ -26,8 +26,17 @@ import java.util.List;
  */
 public class CheckoutService {
 
-    /** What was agreed at the payment dialog. */
-    public record Payment(PaymentMethod method, BigDecimal discount, String discountReason, BigDecimal total) {
+    /**
+     * What was agreed at the payment dialog. {@code cashReceived} is what a cash customer handed over (null when not asked or not
+     * cash) and {@code transferRef} the bank's reference typed for a transfer (null when none); both are optional and are saved
+     * with the order (TODO 3.17, 4.31). The change is worked out from them when the order is saved.
+     */
+    public record Payment(PaymentMethod method, BigDecimal discount, String discountReason, BigDecimal total,
+                          BigDecimal cashReceived, String transferRef) {
+        /** A payment without the optional details. */
+        public Payment(PaymentMethod method, BigDecimal discount, String discountReason, BigDecimal total) {
+            this(method, discount, discountReason, total, null, null);
+        }
     }
 
     /** The saved order and the customer it ended up linked to (null for a sale without a customer). */
@@ -75,7 +84,8 @@ public class CheckoutService {
             if (openOrder != null && openOrder.getId() > 0) {
                 // Also frees the table, in the same transaction.
                 savedOrder = orderDAO.payExistingOrder(openOrder.getId(), customerId,
-                        payment.method(), payment.discount(), discountReason, payment.total(), items, employeeId);
+                        payment.method(), payment.discount(), discountReason, payment.total(), items, employeeId,
+                        payment.cashReceived(), payment.transferRef());
             } else {
                 Order order = new Order();
                 order.setOrderDate(AppClock.now());
@@ -87,6 +97,8 @@ public class CheckoutService {
                 order.setDiscountReason(discountReason);
                 order.setTotal(payment.total());
                 order.setPaymentMethod(payment.method());
+                order.setCashReceived(payment.cashReceived());
+                order.setTransferRef(payment.transferRef());
                 order.setPaidAt(AppClock.now());
                 order.setTableNumber(tableNumber);
                 savedOrder = orderDAO.insert(order, items);

@@ -22,7 +22,9 @@ public final class Cart {
         /** The product was already in the cart: its line has one more piece. */
         INCREASED,
         /** One more piece would be more than the stock; nothing changed. */
-        NOT_ENOUGH_STOCK
+        NOT_ENOUGH_STOCK,
+        /** One more piece would be more than {@link Limits#MAX_LINE_QUANTITY} on one line; nothing changed (TODO 3.59). */
+        LINE_LIMIT
     }
 
     /** What {@link #add} did; {@code stock} is the product's stock, for the "only N left" message. */
@@ -46,6 +48,9 @@ public final class Cart {
     public Result add(Product product) {
         Optional<OrderItem> existing = lineFor(product.getId());
         int newQuantity = existing.map(OrderItem::getQuantity).orElse(0) + 1;
+        if (newQuantity > Limits.MAX_LINE_QUANTITY) {
+            return new Result(Outcome.LINE_LIMIT, product.getStock());
+        }
         if (newQuantity > product.getStock()) {
             return new Result(Outcome.NOT_ENOUGH_STOCK, product.getStock());
         }
@@ -63,14 +68,23 @@ public final class Cart {
         return new Result(Outcome.ADDED, product.getStock());
     }
 
-    /** Sets a line's quantity and its total; a quantity of zero or less removes the line. */
+    /**
+     * Sets a line's quantity and its total; a quantity of zero or less removes the line, and one above
+     * {@link Limits#MAX_LINE_QUANTITY} is held at it (the screens ask before they get here, TODO 3.59).
+     */
     public void setQuantity(OrderItem line, int newQuantity) {
         if (newQuantity <= 0) {
             lines.remove(line);
         } else {
-            line.setQuantity(newQuantity);
-            line.setLineTotal(line.getUnitPrice().multiply(BigDecimal.valueOf(newQuantity)));
+            int quantity = Math.min(newQuantity, Limits.MAX_LINE_QUANTITY);
+            line.setQuantity(quantity);
+            line.setLineTotal(line.getUnitPrice().multiply(BigDecimal.valueOf(quantity)));
         }
+    }
+
+    /** Would {@code wantedQuantity} pieces on one line be more than the ceiling? */
+    public static boolean exceedsLineLimit(int wantedQuantity) {
+        return wantedQuantity > Limits.MAX_LINE_QUANTITY;
     }
 
     /** Would {@code wantedQuantity} pieces be more than the stock? A product that is not known (null) has no limit here. */
@@ -82,7 +96,8 @@ public final class Cart {
         return lines.stream().map(OrderItem::getLineTotal).reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    public int totalQuantity() {
-        return lines.stream().mapToInt(OrderItem::getQuantity).sum();
+    /** A long: many lines of the largest quantity would not fit an int (TODO 3.59). */
+    public long totalQuantity() {
+        return lines.stream().mapToLong(OrderItem::getQuantity).sum();
     }
 }

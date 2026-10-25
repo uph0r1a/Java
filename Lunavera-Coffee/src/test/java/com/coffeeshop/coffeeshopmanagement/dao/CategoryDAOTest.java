@@ -1,6 +1,7 @@
 package com.coffeeshop.coffeeshopmanagement.dao;
 
 import com.coffeeshop.coffeeshopmanagement.model.Category;
+import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -18,6 +19,12 @@ public class CategoryDAOTest {
     @BeforeClass
     public static void setUpDatabase() {
         TestDatabaseSupport.ensureReady();
+        com.coffeeshop.coffeeshopmanagement.util.TestSession.admin();
+    }
+
+    @AfterClass
+    public static void signOut() {
+        com.coffeeshop.coffeeshopmanagement.util.TestSession.clear();
     }
 
     private Category newCategory(String description, boolean active) {

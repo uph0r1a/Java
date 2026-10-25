@@ -75,7 +75,9 @@ public class MariaDbSchemaTest {
             for (String[] later : SqliteSchema.LATER_COLUMNS) {
                 if (later[0].equals(table)) expected.add(later[1]);
             }
-            assertEquals("columns of " + table, expected, new HashSet<>(SchemaColumns.columns(maria.get(table))));
+            Set<String> actual = new HashSet<>(SchemaColumns.columns(maria.get(table)));
+            if (table.equals("users")) actual.remove("username_key"); // MariaDB only: the lower-case key that makes login names unique (TODO 1.9)
+            assertEquals("columns of " + table, expected, actual);
         }
         List<String> onlyInMaria = new ArrayList<>(maria.keySet());
         onlyInMaria.removeAll(sqlite.keySet());
@@ -100,6 +102,9 @@ public class MariaDbSchemaTest {
     public void loginNamesStayCaseSensitiveAndCustomersKeepOnePhoneEach() {
         String users = SchemaColumns.byTable(MariaDbSchema.TABLES).get("users");
         assertTrue(users, users.contains("username VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL UNIQUE"));
+        // ...yet Admin and admin are one account for the server (TODO 1.9): a stored lower-case copy with its own unique key
+        assertTrue(users, users.contains("username_key VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin AS (LOWER(username)) STORED"));
+        assertTrue(users, users.contains("UNIQUE KEY ux_users_username_key (username_key)"));
         String customers = SchemaColumns.byTable(MariaDbSchema.TABLES).get("customers");
         assertTrue(customers, customers.contains("UNIQUE KEY ux_customers_phone (phone)"));
     }

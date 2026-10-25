@@ -26,12 +26,15 @@ In phpMyAdmin open the **SQL** tab and run (change the password; use a long one)
 ```sql
 CREATE DATABASE lunavera CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER 'lunavera'@'localhost' IDENTIFIED BY 'a-long-password';
-GRANT ALL PRIVILEGES ON lunavera.* TO 'lunavera'@'localhost';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, REFERENCES, TRIGGER, LOCK TABLES ON lunavera.* TO 'lunavera'@'localhost';
 FLUSH PRIVILEGES;
 ```
 
+Why not `ALL PRIVILEGES`: the app reads and writes every day (`SELECT, INSERT, UPDATE, DELETE`) and needs `CREATE, ALTER, INDEX, REFERENCES, TRIGGER, LOCK TABLES` only when it starts and creates or upgrades its tables. It never needs `DROP`, `GRANT OPTION`, `CREATE USER` or any right on another database. With the narrow grant, a stolen till or a leaked `database.properties` cannot drop the tables. `DROP` (and a restore from phpMyAdmin) stays with your own administrator account, not the app's user.
+If an upgrade of the app ever stops with "command denied" for a table, run `SHOW GRANTS FOR 'lunavera'@'localhost';`, add the missing right once, and tell the developer (it means the app needs something this list does not have).
+
 The app creates its own tables the first time it connects (it needs the right to create and alter tables in this one database; it needs nothing on any other).
-For other tills on the shop network create the user as `'lunavera'@'192.168.1.%'` (your network) as well, and see "Security" below.
+For other tills on the shop network create the user as `'lunavera'@'192.168.1.%'` (your network) as well, with the same `GRANT` line for that name, and see "Security" below.
 
 ## 3. Tell the app
 
@@ -46,8 +49,12 @@ db.user=lunavera
 db.password=a-long-password
 ```
 
+The file is read **literally** (since TODO 2.82): the password is everything after the first `=`, exactly as typed, so it may contain a backslash, `#`, `!`, `=`, `:` or spaces, and nothing in it is an escape. Do not put a comment on the same line as a setting (`db.password=abc # old` is a password with a comment in it); put comments on their own line, starting with `#`.
+
+Optional keys for a server on another computer: `db.ssl=true` (encrypt the connection, see section 7), `db.sslServerCert=` (the certificate file of a self-signed server), `db.sslMode=` (disable, trust, verify-ca or verify-full, instead of `db.ssl`) and `db.socketTimeoutMs=` (how long a call waits for the server, default 30000, `0` = for ever).
+
 Every key can also be given on the command line as `-Dlunavera.db.name=...` (a command-line value wins over the file).
-Start the app. The first start creates the tables, the 12 dining tables and the starter menu, then asks the owner to create the first administrator (there is no built-in `admin` password), exactly like a new SQLite database. If `db.import.sqlite` is set (section 4), the old accounts come over instead and no account is asked for.
+Start the app. The first start creates the tables, 12 starter dining tables (changeable under "Quản lý bàn" on the dashboard) and the starter menu, then asks the owner to create the first administrator (there is no built-in `admin` password), exactly like a new SQLite database. If `db.import.sqlite` is set (section 4), the old accounts come over instead and no account is asked for.
 
 ## 4. Bring the existing data over (once)
 
@@ -70,7 +77,9 @@ When it runs:
   The common failure is two customers with the same phone number (MariaDB allows one customer per phone): the message names the number; fix or merge those two
   customers in the SQLite version of the app (Quản lý khách hàng) and start again.
 - If you already created your own first account (a name other than `admin`) before importing, the database no longer counts as new, so the import is skipped. Drop the database, create it again empty and start once more.
+- A file made before the columns for the order of tabs and products, a product's reorder level, the points an order gave, the cash received and the bank reference were added simply has none of them: the order of tabs and products stays the order of creation, and the other fields stay empty (an old order is refunded with the loyalty rule of today).
 - A file that has no `users` table is not a Lunavera database: it is ignored with a warning and nothing is changed.
+- The old file is opened **read-only**, so SQLite cannot replay or delete a leftover `lunavera.db-wal` or `-journal` next to it, and it is looked at before one row is copied (TODO 3.62). The app **stops with a message** and copies nothing when the file comes from a **newer** version of Lunavera (it has columns this version would drop), when it is **damaged** (SQLite's own check fails), or when some rows **point at something that is not in the file** (an order line whose product is gone: the copy runs with foreign keys off, so they would only fail later, on the first screen that uses them). The message names the first rows; open the file with the SQLite version of the app and repair or remove them, then start again. A file from before the money migration (version 0) is copied, with a warning in the log; if you can, open it once with the SQLite version first, which upgrades it, and import that.
 
 Afterwards remove the line (or leave it: once there is real data it does nothing but write one log line), and keep `data/lunavera.db` as a safety copy until you are sure.
 
@@ -97,7 +106,7 @@ phpMyAdmin changes the data **without the app's rules**, so be careful:
 ## 6. Backups and restore
 
 - The dashboard button **"Sao lưu dữ liệu"** and the daily automatic backup make a `.zip` that holds `lunavera.sql` (a `mysqldump`) plus the pictures. They run the `mysqldump` program, which must be on the computer that runs the app:
-  XAMPP has it at `C:\xampp\mysql\bin\mysqldump.exe`; if it is not on the PATH, set `db.mysqldump=C:\\xampp\\mysql\\bin\\mysqldump.exe` in `data/database.properties`. The password is not shown in the process list (it travels in an environment variable).
+  XAMPP has it at `C:\xampp\mysql\bin\mysqldump.exe`; if it is not on the PATH, set `db.mysqldump=C:\xampp\mysql\bin\mysqldump.exe` in `data/database.properties` (write the path as it is, with single backslashes; a file written with doubled backslashes in an older version still works on Windows). The password is not shown in the process list (it travels in an environment variable).
 - **Restore** is done by hand (the in-app "Khôi phục dữ liệu" is for SQLite only): unzip the backup, in phpMyAdmin choose the database, **Import**, pick `lunavera.sql` (it replaces the tables), then copy the zip's `images` folder into `data/images`.
 - Copy backups off the computer (USB stick, another PC). A backup holds customer phones and password hashes.
 
@@ -111,6 +120,9 @@ when complete, so a broken half-file is never mistaken for a good one.
 - Open one in DB Browser for SQLite to look at the data without the server.
 - To run the app on a snapshot (for example the server is gone): close the app, copy the snapshot over `data/lunavera.db` (and delete `data/lunavera.db-wal` / `-shm` if they exist), put `db.type=sqlite` in `data/database.properties`, start.
 - A snapshot does **not** contain the product pictures (`data/images`) and holds customer phones and password hashes, like any backup.
+- **With several tills only one makes the copies.** The tills share the server, so one copy an hour is enough: the till that starts first takes a lock on the server and keeps it while it is open, and the other tills skip. When that till is closed, another one takes over at its next hour. The snapshots therefore sit in the `data/snapshots/` folder of whichever till was open; to keep them in one place, switch them off on the other tills with `db.snapshots=false` in their `data/database.properties`. The daily backup zips (which include a `mysqldump`) are separate and each till still makes its own.
+- When two tills start in the same second after an upgrade, the first one creates and updates the tables while the other waits (up to a minute, a server lock); you do not need to start them one by one.
+- On MariaDB the database itself refuses two login names that differ only in capitals (`Mai` and `mai`): `users.username_key` holds the lower-case name and has a unique key. If an older database already has such a pair, the key is not built; the start-up log says so ("login name(s) exist more than once") and gives the query that lists them. Rename or delete one of the two accounts and restart; the key is built at the next start.
 - A SQLite shop gets no snapshots (the database already is a file; the backup button and the daily zip cover it). A failed snapshot is written to the log and tried again an hour later.
 
 ## 7. Security (read this)
@@ -121,12 +133,26 @@ when complete, so a broken half-file is never mistaken for a good one.
 - `data/database.properties` contains the database password: it is outside git; do not email it or put it in a shared folder.
 - Use the `lunavera` user (not `root`) in that file.
 
+### Another till on the network: switch TLS on
+
+Without TLS everything the app sends to a server on another computer crosses the shop's wifi or cable as plain text: customer names and phone numbers, password hashes, and the database password itself. A server on the same computer (`127.0.0.1`, `localhost`) is not affected. The app says it in two places when the server is somewhere else and nothing is encrypted: a warning line in `data/logs/` at start-up, and "KHÔNG mã hóa" on the line at the bottom of the login screen.
+
+1. **On the server computer**, give MariaDB a certificate and a key (ask whoever set the server up; `openssl` can make a self-signed one) and name them in `my.ini`, under `[mysqld]`: `ssl-cert=`, `ssl-key=` and `ssl-ca=` with full paths. Restart MariaDB and check that `SHOW VARIABLES LIKE 'have_ssl';` says `YES`.
+2. To make the server refuse an unencrypted login from the other tills: `ALTER USER 'lunavera'@'192.168.1.%' REQUIRE SSL;`
+3. **On each till**, in `data/database.properties`: `db.ssl=true`. If the certificate is self-signed or from your own CA, copy the CA file next to `database.properties` and add `db.sslServerCert=ca-cert.pem`.
+4. `db.ssl=true` checks the certificate **and** that its name matches `db.host`. If the till connects by IP address and the certificate carries a name, use `db.sslMode=verify-ca` (checks the certificate only). `db.sslMode=trust` encrypts but does not check who answers: it stops someone listening in, not someone pretending to be the server; use it only to get going, and say so in `progress.md`.
+
+The backup button runs `mysqldump`, and passes it the same TLS settings (TODO 2A.42): with `db.ssl`, `db.sslMode` or `db.sslServerCert` set, the dump is encrypted and the server is checked like the till's own queries, and the backup works against a server that requires TLS. It first asks the program for `mysqldump --version`, because MySQL's and MariaDB's programs spell the options differently (`--ssl-mode=...` and `--ssl-ca=` for MySQL; `--ssl`, `--ssl-verify-server-cert` and `--ssl-ca=` for MariaDB). If it cannot tell which one it is, the backup does **not** start and says so, rather than sending the data in the clear: write the full path of the server's own `mysqldump` in `db.mysqldump`. MariaDB's program cannot check the certificate without also checking the host name, so with `db.sslMode=verify-ca` it is a little stricter than the connection; if that gets in the way (an IP address and a certificate with a name), use `trust` for the backup or a certificate that carries the address. Nothing in this repository has tried this against a real server; the `[client]` / `ssl-ca=` way in `my.ini` still works as before and is not needed any more.
+
+A call to the server now gives up after 30 seconds (`db.socketTimeoutMs`) with an error message, instead of freezing the till for ever when the server stops answering (a power cut at the router, a stuck query). Raise it only if a report really takes longer.
+
 ## 8. When something is wrong
 
 | Message / symptom | Usual cause |
 | --- | --- |
 | The app does not open and says it cannot reach the database server | The server is not running (XAMPP: start MySQL), wrong `db.host` / `db.port`, or a firewall. The till cannot sell without the server. |
 | `Access denied for user ...` | Wrong `db.user` / `db.password`, or the user was created for another host (`'lunavera'@'localhost'` only allows this computer). |
+| `Access denied; you need (at least one of) the PROCESS privilege(s)` while backing up | Older versions of this app (MySQL 8.0.21 and later only): the backup asks for tablespace information that a database-level user may not read. This version passes `--no-tablespaces`; if you still see it, the `mysqldump` you use is not the one of the server package: set `db.mysqldump`. |
 | `Unknown database` | The `CREATE DATABASE` step was skipped, or `db.name` is spelled differently. |
 | `Public Key Retrieval is not allowed` (MySQL 8) | Make the user use the older login: `ALTER USER 'lunavera'@'localhost' IDENTIFIED WITH mysql_native_password BY '...';` (MariaDB does not need this). |
 | Backup says it cannot run `mysqldump` | Set `db.mysqldump` to its full path (section 6). |
@@ -141,11 +167,12 @@ To go back to SQLite put `db.type=sqlite` in the file (the app then uses `data/l
 - Text compares ignoring **accents and capitals**: the categories `Trà` and `tra` count as the same name, and a search for `ca phe` finds `Cà phê`. Login names also ignore capitals in the app (`admin` and `ADMIN` are the same account when signing in or creating one). On SQLite the database enforces it as well; on MariaDB only the app does, so do not add two accounts that differ only in capitals in phpMyAdmin.
 - Dates are real `DATETIME` columns; money is `BIGINT` (whole dong), the same numbers as before.
 - Only one connection is opened per action (no connection pool yet).
+- A brand-new *table* (not a new column) needs no numbered step and no version change: add its `CREATE TABLE IF NOT EXISTS` to both `SqliteSchema.TABLES` and `MariaDbSchema.TABLES` (and to `MariaDbSchema.DROP_ORDER`), because that list runs at every start-up; `login_attempts` (TODO 2A.19) was added this way. Say in `SqliteToMariaDbImporterTest` if its rows are not worth copying to a new server.
 - For whoever changes the tables later: a *new* MariaDB database is created at the latest version; an *existing* one is brought up by numbered steps in `MariaDbMigrations` (empty today), driven by the `schema_version` table. An app older than the database refuses to start and says to update.
 
 ## 10. Running the automated tests on MariaDB (for whoever develops the app)
 
-`mvn test` always uses SQLite (the pom sets `lunavera.db.type=sqlite` for the tests), so it needs no server. To run every database test on a real server, create a **throw-away** database and user:
+`./mvnw test` always uses SQLite (the pom sets `lunavera.db.type=sqlite` for the tests), so it needs no server. To run every database test on a real server, create a **throw-away** database and user:
 
 ```sql
 CREATE DATABASE lunavera_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -157,4 +184,4 @@ GRANT ALL PRIVILEGES ON lunavera_test.* TO 'lunavera_test'@'localhost';
 mvn test -Dlunavera.test.db=mariadb -Dlunavera.test.db.password=test-password
 ```
 
-(`-Dlunavera.test.db.host / .port / .name / .user` change the other defaults.) **Every table in that database is dropped first**, so the name must end with `_test`; anything else is refused. Tests about SQLite files and PRAGMAs skip themselves in this mode.
+(`-Dlunavera.test.db.host / .port / .name / .user` change the other defaults.) **Every table in that database is dropped first**, so the name must end with `_test`; anything else is refused. Tests about SQLite files and PRAGMAs skip themselves in this mode. The CI runs exactly this on every push, in the job `test-mariadb` of `.github/workflows/ci.yml` (a `mariadb:10.11` service container with the throw-away database above); the number of tests it prints is lower than on SQLite for that reason.

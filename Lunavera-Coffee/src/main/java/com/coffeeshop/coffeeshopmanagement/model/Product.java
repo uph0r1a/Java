@@ -1,5 +1,7 @@
 package com.coffeeshop.coffeeshopmanagement.model;
 
+import com.coffeeshop.coffeeshopmanagement.util.I18n;
+
 import java.math.BigDecimal;
 
 public class Product {
@@ -15,6 +17,10 @@ public class Product {
     private String description;
     private String imagePath;
     private boolean active;
+    /** Position among the products of its category on the sales screen, smallest first; equal numbers keep the order of creation (TODO 5.31). */
+    private int sortOrder;
+    /** The product's own reorder level (TODO 4.19); null = the shop default, see {@code StockLevel}. */
+    private Integer reorderLevel;
 
     public Product() {
     }
@@ -37,6 +43,9 @@ public class Product {
     public BigDecimal getCost() { return cost; }
     public void setCost(BigDecimal cost) { this.cost = cost; }
 
+    public int getSortOrder() { return sortOrder; }
+    public void setSortOrder(int sortOrder) { this.sortOrder = sortOrder; }
+
     public int getStock() { return stock; }
     public void setStock(int stock) { this.stock = stock; }
     public Integer getLoadedStock() { return loadedStock; }
@@ -49,6 +58,11 @@ public class Product {
 
     public String getImagePath() { return imagePath; }
     public void setImagePath(String imagePath) { this.imagePath = imagePath; }
+
+    public Integer getReorderLevel() { return reorderLevel; }
+    public void setReorderLevel(Integer reorderLevel) { this.reorderLevel = reorderLevel; }
+    /** True when the stock is at or below this product's reorder level (its own, or the shop default). */
+    public boolean isLowStock() { return com.coffeeshop.coffeeshopmanagement.service.StockLevel.isLow(stock, reorderLevel); }
 
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }

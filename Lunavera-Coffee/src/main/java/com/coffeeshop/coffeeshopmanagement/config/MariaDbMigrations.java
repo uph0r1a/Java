@@ -1,5 +1,7 @@
 package com.coffeeshop.coffeeshopmanagement.config;
 
+import com.coffeeshop.coffeeshopmanagement.util.I18n;
+
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -44,8 +46,7 @@ final class MariaDbMigrations {
      */
     static List<Integer> plan(int current, int latest, Collection<Integer> stepVersions) {
         if (current > latest) {
-            throw new IllegalStateException("Cơ sở dữ liệu thuộc phiên bản mới hơn (" + current + ") so với ứng dụng này ("
-                    + latest + "). Hãy cập nhật ứng dụng lên phiên bản mới nhất rồi mở lại.");
+            throw new IllegalStateException(I18n.t("db.newer.maria", current, latest));
         }
         List<Integer> toRun = new ArrayList<>();
         for (int version : new java.util.TreeSet<>(stepVersions)) {

@@ -1,5 +1,6 @@
 package com.coffeeshop.coffeeshopmanagement.controller;
 
+import com.coffeeshop.coffeeshopmanagement.util.I18n;
 import com.coffeeshop.coffeeshopmanagement.dao.CategoryDAO;
 import com.coffeeshop.coffeeshopmanagement.service.CategoryService;
 import com.coffeeshop.coffeeshopmanagement.model.Category;
@@ -84,7 +85,7 @@ public class CategoryController extends AdminScreen {
                 new javafx.beans.property.SimpleIntegerProperty(
                         categoryProductCounts.getOrDefault(data.getValue().getId(), 0)));
         categoryStatusColumn.setCellValueFactory(data ->
-                new SimpleStringProperty(data.getValue().isActive() ? "Đang hoạt động" : "Đã ẩn"));
+                new SimpleStringProperty(data.getValue().isActive() ? I18n.t("categories.status.active") : I18n.t("categories.status.hidden")));
         categoryActionColumn.setCellFactory(actionColumnFactory(
                 this::openEditCategoryDialog,
                 this::deleteCategory
@@ -99,14 +100,27 @@ public class CategoryController extends AdminScreen {
     }
 
     private void reloadCategories() {
+        reloadCategories(null);
+    }
+
+    /** Reloads the list; when {@code selectId} is given and on the page shown, that category is selected again (after an arrow). */
+    private void reloadCategories(Integer selectId) {
         Async.run(
                 () -> new Object[]{categoryDAO.findAll(), categoryDAO.countProductsByCategory()},
                 result -> {
                     allCategories = castList(result[0]);
                     categoryProductCounts = castCountMap(result[1]);
                     applyCategoryFilter();
+                    if (selectId != null) {
+                        for (Category category : categoryTable.getItems()) {
+                            if (category.getId() == selectId) {
+                                categoryTable.getSelectionModel().select(category);
+                                break;
+                            }
+                        }
+                    }
                 },
-                error -> AlertUtil.error("Lỗi", error.getMessage())
+                error -> AlertUtil.error(I18n.t("common.error.title"), error.getMessage())
         );
     }
 
@@ -133,14 +147,41 @@ public class CategoryController extends AdminScreen {
             totalCategoryProductLabel.setText(String.valueOf(totalProducts));
         }
         if (categoryPaginationLabel != null && categoryPaged != null) {
-            categoryPaginationLabel.setText(String.format("Hiển thị %d – %d trong tổng số %d danh mục",
-                    categoryPaged.getFromIndex(), categoryPaged.getToIndex(), categoryPaged.getTotalCount()));
+            categoryPaginationLabel.setText(I18n.t("categories.pagination", categoryPaged.getFromIndex(), categoryPaged.getToIndex(), categoryPaged.getTotalCount()));
         }
     }
 
     @FXML
     public void handleSearchAction() {
         applyCategoryFilter();
+    }
+
+    @FXML
+    public void handleMoveCategoryUp() {
+        moveSelectedCategory(-1);
+    }
+
+    @FXML
+    public void handleMoveCategoryDown() {
+        moveSelectedCategory(1);
+    }
+
+    /** The arrows change the order of the tabs on the sales screen (TODO 5.31); they need a selected row and the stored order shown. */
+    private void moveSelectedCategory(int delta) {
+        Category selected = categoryTable.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            AlertUtil.info(I18n.t("sort.title"), I18n.t("sort.select.category"));
+            return;
+        }
+        if (!categoryTable.getSortOrder().isEmpty()) { // sorted by a column: the arrows would seem to do nothing
+            AlertUtil.info(I18n.t("sort.title"), I18n.t("sort.clear"));
+            return;
+        }
+        int id = selected.getId();
+        Async.run(
+                () -> categoryDAO.move(id, delta),
+                moved -> reloadCategories(id),
+                error -> AlertUtil.error(I18n.t("common.error.title"), error.getMessage()));
     }
 
     @FXML
@@ -161,14 +202,12 @@ public class CategoryController extends AdminScreen {
                 () -> categoryService.productCount(category.getId()),
                 productCount -> {
                     if (productCount > 0) {
-                        AlertUtil.warning("Không thể xóa",
-                                "Danh mục \"" + category.getName() + "\" đang có " + productCount +
-                                        " sản phẩm. Hãy chuyển các sản phẩm sang danh mục khác trước, " +
-                                        "hoặc ẩn danh mục thay vì xóa.");
+                        AlertUtil.warning(I18n.t("common.delete.fail"),
+                                I18n.t("categories.delete.inuse", category.getName(), productCount));
                         return;
                     }
-                    boolean confirmed = AlertUtil.confirm("Xác nhận xóa",
-                            "Xóa danh mục \"" + category.getName() + "\"? Hành động này không thể hoàn tác.");
+                    boolean confirmed = AlertUtil.confirm(I18n.t("common.delete.confirm.title"),
+                            I18n.t("categories.delete.confirm", category.getName()));
                     if (!confirmed) {
                         return;
                     }
@@ -176,14 +215,16 @@ public class CategoryController extends AdminScreen {
                             () -> categoryService.delete(category.getId()),
                             deleted -> {
                                 if (!deleted) {
-                                    AlertUtil.warning("Không thể xóa",
-                                            "Danh mục vừa được gán cho một sản phẩm nên chưa bị xóa.");
+                                    AlertUtil.warning(I18n.t("common.delete.fail"),
+                                            I18n.t("category.delete.race"));
                                 }
                                 reloadCategories();
                             },
-                            error -> AlertUtil.error("Không thể xóa danh mục", error.getMessage()));
+                            error -> AlertUtil.error(I18n.t("common.delete.fail"), error.getMessage()),
+                            categoryTable);
                 },
-                error -> AlertUtil.error("Lỗi", error.getMessage()));
+                error -> AlertUtil.error(I18n.t("common.error.title"), error.getMessage()),
+                categoryTable); // the table holds the delete buttons: no second click while this runs (TODO 2.75)
     }
 
     @FXML

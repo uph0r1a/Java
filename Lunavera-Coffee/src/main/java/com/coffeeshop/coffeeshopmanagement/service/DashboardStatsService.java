@@ -1,5 +1,6 @@
 package com.coffeeshop.coffeeshopmanagement.service;
 
+import com.coffeeshop.coffeeshopmanagement.util.I18n;
 import com.coffeeshop.coffeeshopmanagement.dao.CustomerDAO;
 import com.coffeeshop.coffeeshopmanagement.dao.EmployeeDAO;
 import com.coffeeshop.coffeeshopmanagement.dao.OrderDAO;
@@ -86,15 +87,14 @@ public class DashboardStatsService {
     public static String heldTablesWarning(List<Integer> held) {
         if (held == null || held.isEmpty()) return null;
         StringBuilder names = new StringBuilder();
-        for (int number : held) names.append(names.length() == 0 ? "" : ", ").append("bàn ").append(number);
-        return "⚠ " + names + " đang được đánh dấu \"Đang sử dụng\" nhưng không có đơn. Nếu khách đã về, hãy trả bàn.";
+        for (int number : held) names.append(names.length() == 0 ? "" : ", ").append(I18n.t("stats.table.lower") + " ").append(number);
+        return I18n.t("stats.warn.occupied", names);
     }
 
     /** Customers who share a phone number (TODO 3.41), or null when none do. */
     public static String sharedPhonesWarning(int sharedPhones) {
         if (sharedPhones <= 0) return null;
-        return "⚠ " + sharedPhones + " số điện thoại đang trùng giữa nhiều khách hàng, nên quy tắc \"một khách một số\" chưa được áp dụng. "
-                + "Mở màn hình Khách hàng và sửa số điện thoại bị trùng.";
+        return I18n.t("stats.warn.sharedphones", sharedPhones);
     }
 
     /** The dashboard warnings as one text, or null when there is nothing to warn about. */
@@ -117,9 +117,8 @@ public class DashboardStatsService {
         if (stale == null || stale.isEmpty()) return null;
         java.util.LinkedHashSet<String> tables = new java.util.LinkedHashSet<>();
         for (Order order : stale) {
-            tables.add(order.getTableNumber() == null ? "mang đi" : "bàn " + order.getTableNumber());
+            tables.add(order.getTableNumber() == null ? I18n.t("stats.takeaway.lower") : I18n.t("stats.table.lower.n", order.getTableNumber()));
         }
-        return "⚠ " + stale.size() + " đơn mở quá " + STALE_OPEN_AFTER.toHours() + " giờ (" + String.join(", ", tables)
-                + "). Mở đơn để thanh toán, hoặc trả bàn nếu đơn bị bỏ quên.";
+        return I18n.t("stats.warn.stale", stale.size(), STALE_OPEN_AFTER.toHours(), String.join(", ", tables));
     }
 }

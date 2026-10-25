@@ -48,24 +48,24 @@
             <Separator styleClass="sidebar-separator"/>
 
             <VBox spacing="6.0" VBox.vgrow="NEVER">
-                <Button text="⌂   Trang chủ"
+                <Button text="%nav.home"
                         prefHeight="48.0"
                         maxWidth="1.7976931348623157E308"
                         styleClass="menu-button,menu-button-active"/>
 
-                <Button text="▣   Quản lý sản phẩm"
+                <Button text="%nav.products"
                         prefHeight="48.0"
                         maxWidth="1.7976931348623157E308"
                         styleClass="menu-button"
                         onAction="#openProductManagement"/>
 
-                <Button text="▤   Quản lý đơn hàng"
+                <Button text="%nav.orders"
                         prefHeight="48.0"
                         maxWidth="1.7976931348623157E308"
                         styleClass="menu-button"
                         onAction="#openOrderManagement"/>
 
-                <Button text="♙   Quản lý khách hàng"
+                <Button text="%nav.customers"
                         prefHeight="48.0"
                         maxWidth="1.7976931348623157E308"
                         styleClass="menu-button"
@@ -75,13 +75,13 @@
             <Separator styleClass="sidebar-separator"/>
 
             <VBox spacing="6.0">
-                <Button text="▦   Quản lý danh mục"
+                <Button text="%nav.categories"
                         prefHeight="48.0"
                         maxWidth="1.7976931348623157E308"
                         styleClass="menu-button"
                         onAction="#openCategoryManagement"/>
 
-                <Button text="♙   Quản lý tài khoản"
+                <Button text="%nav.accounts"
                         prefHeight="48.0"
                         maxWidth="1.7976931348623157E308"
                         styleClass="menu-button"
@@ -94,13 +94,13 @@
                 <padding>
                     <Insets top="20.0" right="20.0" bottom="20.0" left="20.0"/>
                 </padding>
-                <Button text="←   Đăng xuất"
+                <Button text="%nav.logout"
                         prefHeight="42.0"
                         maxWidth="1.7976931348623157E308"
                         styleClass="logout-button"
                         onAction="#logout"/>
 
-                <Label text="Cà phê ngon&#10;Ngày thêm tốt đẹp"
+                <Label text="%nav.tagline"
                        styleClass="sidebar-footer"/>
             </VBox>
         </VBox>
@@ -110,32 +110,41 @@
     <center>
         <VBox spacing="20.0" styleClass="content">
 
+            <!-- DATABASE HEALTH LINE (TODO 4.24): filled by code for an administrator -->
+            <VBox fx:id="databaseHealthBox" spacing="6.0" visible="false" managed="false">
+                <Label fx:id="databaseHealthLabel" wrapText="true" styleClass="db-health-line"/>
+                <Label fx:id="databaseHealthWarningLabel" wrapText="true" visible="false" managed="false"
+                       styleClass="stale-order-warning"/>
+                <!-- the second place for the backups (TODO 4.35) -->
+                <Label fx:id="secondBackupLabel" wrapText="true" styleClass="db-health-line"/>
+            </VBox>
+
             <!-- HEADER -->
             <HBox alignment="CENTER_LEFT" prefHeight="70.0">
                 <VBox spacing="4.0">
-                    <Label fx:id="dashboardGreetingLabel" text="Chào mừng, Admin!" styleClass="page-title"/>
-                    <Label text="Chúc bạn có một ngày làm việc hiệu quả!"
+                    <Label fx:id="dashboardGreetingLabel" text="%dashboard.greeting.default" styleClass="page-title"/>
+                    <Label text="%dashboard.subtitle"
                            styleClass="page-subtitle"/>
                 </VBox>
 
                 <Region HBox.hgrow="ALWAYS"/>
 
                 <Button fx:id="backupButton"
-                        text="⤓  Sao lưu dữ liệu"
+                        text="%admin.backup"
                         prefHeight="42.0"
                         styleClass="secondary-button"
                         onAction="#handleBackupData"/>
                 <Region prefWidth="10.0"/>
 
                 <Button fx:id="restoreButton"
-                        text="⤒  Khôi phục dữ liệu"
+                        text="%admin.restore"
                         prefHeight="42.0"
                         styleClass="secondary-button"
                         onAction="#handleRestoreData"/>
                 <Region prefWidth="10.0"/>
 
                 <Button fx:id="transferQrButton"
-                        text="▦  Mã QR chuyển khoản"
+                        text="%admin.qr"
                         prefHeight="42.0"
                         styleClass="secondary-button"
                         onAction="#handleSetTransferQr"/>
@@ -144,7 +153,7 @@
                 <!-- Shown only when the shop's database is MariaDB/MySQL (set in AdminDashboardController.initialize). -->
                 <HBox fx:id="phpMyAdminBox" visible="false" managed="false" alignment="CENTER_LEFT">
                     <Button fx:id="phpMyAdminButton"
-                            text="⛁  Mở phpMyAdmin"
+                            text="%admin.phpmyadmin"
                             prefHeight="42.0"
                             styleClass="secondary-button"
                             onAction="#handleOpenPhpMyAdmin"/>
@@ -152,7 +161,7 @@
                 </HBox>
 
                 <Button fx:id="reportButton"
-                        text="▤  Báo cáo doanh thu"
+                        text="%admin.report"
                         prefHeight="42.0"
                         styleClass="primary-button"
                         onAction="#handleShowReports"/>
@@ -160,11 +169,32 @@
 
                 <VBox alignment="CENTER_RIGHT" spacing="3.0">
                     <Label fx:id="dashboardAccountNameLabel" text="Admin" styleClass="account-name"/>
-                    <Label text="Quản trị viên" styleClass="account-role"/>
+                    <Label text="%role.admin" styleClass="account-role"/>
                 </VBox>
             </HBox>
 
+            <!-- TOOLS FOR THE ADMINISTRATOR: security log (TODO 4.44) and unused pictures (TODO 4.27) -->
+            <HBox alignment="CENTER_RIGHT" spacing="10.0">
+                <Button text="%admin.seclog"
+                        prefHeight="36.0"
+                        styleClass="secondary-button"
+                        onAction="#handleShowSecurityLog"/>
+                <Button text="%admin.pics"
+                        prefHeight="36.0"
+                        styleClass="secondary-button"
+                        onAction="#handleCleanUnusedPictures"/>
+                <Button text="%admin.tables"
+                        prefHeight="36.0"
+                        styleClass="secondary-button"
+                        onAction="#handleManageTables"/>
+                <Button text="%backup2.button"
+                        prefHeight="36.0"
+                        styleClass="secondary-button"
+                        onAction="#handleSecondBackupFolder"/>
+            </HBox>
+
             <!-- STATISTICS -->
+
             <GridPane hgap="16.0" vgap="16.0">
                 <columnConstraints>
                     <ColumnConstraints percentWidth="25.0"/>
@@ -176,45 +206,45 @@
                 <VBox GridPane.columnIndex="0"
                       prefHeight="145.0"
                       styleClass="stat-card">
-                    <Label text="SẢN PHẨM" styleClass="stat-title"/>
+                    <Label text="%stats.products.title" styleClass="stat-title"/>
                     <Label fx:id="dashboardProductCountLabel"
                            text="0"
                            styleClass="stat-value"/>
                     <Label fx:id="dashboardLowStockNoteLabel"
-                           text="Đang tải..."
+                           text="%common.loading"
                            styleClass="stat-description"/>
                 </VBox>
 
                 <VBox GridPane.columnIndex="1"
                       prefHeight="145.0"
                       styleClass="stat-card">
-                    <Label text="ĐƠN HÀNG HÔM NAY" styleClass="stat-title"/>
+                    <Label text="%stats.orders.title" styleClass="stat-title"/>
                     <Label fx:id="todayOrderLabel"
                            text="0"
                            styleClass="stat-value"/>
-                    <Label text="Đơn hàng phát sinh hôm nay"
+                    <Label text="%stats.orders.caption"
                            styleClass="stat-description"/>
                 </VBox>
 
                 <VBox GridPane.columnIndex="2"
                       prefHeight="145.0"
                       styleClass="stat-card">
-                    <Label text="DOANH THU HÔM NAY" styleClass="stat-title"/>
+                    <Label text="%stats.revenue.title" styleClass="stat-title"/>
                     <Label fx:id="todayRevenueLabel"
-                           text="0đ"
+                           text="%money.zero"
                            styleClass="stat-value"/>
-                    <Label text="Tổng doanh thu trong ngày"
+                    <Label text="%stats.revenue.caption"
                            styleClass="stat-description"/>
                 </VBox>
 
                 <VBox GridPane.columnIndex="3"
                       prefHeight="145.0"
                       styleClass="stat-card">
-                    <Label text="KHÁCH HÀNG HÔM NAY" styleClass="stat-title"/>
+                    <Label text="%stats.customers.title" styleClass="stat-title"/>
                     <Label fx:id="todayCustomerLabel"
                            text="0"
                            styleClass="stat-value"/>
-                    <Label text="Số khách hàng đã phục vụ"
+                    <Label text="%stats.customers.caption"
                            styleClass="stat-description"/>
                 </VBox>
             </GridPane>
@@ -231,12 +261,12 @@
                           styleClass="content-card">
 
                         <HBox alignment="CENTER_LEFT">
-                            <Label text="Doanh thu 7 ngày gần đây"
+                            <Label text="%chart.revenue.title"
                                    styleClass="section-title"/>
 
                             <Region HBox.hgrow="ALWAYS"/>
 
-                            <Label text="7 ngày qua"
+                            <Label text="%chart.revenue.range"
                                    styleClass="filter-label"/>
                         </HBox>
 
@@ -250,12 +280,12 @@
 
                             <xAxis>
                                 <CategoryAxis fx:id="revenueXAxis"
-                                              label="Ngày"/>
+                                              label="%chart.axis.date"/>
                             </xAxis>
 
                             <yAxis>
                                 <NumberAxis fx:id="revenueYAxis"
-                                            label="Doanh thu"/>
+                                            label="%report.col.revenue"/>
                             </yAxis>
                         </LineChart>
                     </VBox>
@@ -267,9 +297,9 @@
 
                         <HBox alignment="CENTER_LEFT" spacing="12.0">
                             <VBox spacing="3.0">
-                                <Label text="Sơ đồ bàn phục vụ"
+                                <Label text="%tables.map.title"
                                        styleClass="section-title"/>
-                                <Label text="Chọn bàn để tạo hoặc xem đơn"
+                                <Label text="%tables.map.subtitle"
                                        styleClass="section-subtitle"/>
                             </VBox>
 
@@ -279,33 +309,29 @@
                             <HBox spacing="14.0" alignment="CENTER">
                                 <HBox spacing="6.0" alignment="CENTER">
                                     <Label text="●" styleClass="status-dot-occupied"/>
-                                    <Label text="Đang sử dụng" styleClass="status-legend-text"/>
+                                    <Label text="%tables.status.occupied" styleClass="status-legend-text"/>
                                 </HBox>
 
                                 <HBox spacing="6.0" alignment="CENTER">
                                     <Label text="●" styleClass="status-dot-empty"/>
-                                    <Label text="Không hoạt động" styleClass="status-legend-text"/>
+                                    <Label text="%tables.status.free" styleClass="status-legend-text"/>
                                 </HBox>
                             </HBox>
                         </HBox>
 
-                        <!-- GRID BÀN (3x4 = 12 BÀN) -->
-                        <GridPane fx:id="homeTableGrid"
-                                  hgap="12.0"
-                                  vgap="12.0"
-                                  VBox.vgrow="ALWAYS">
-                            <columnConstraints>
-                                <ColumnConstraints percentWidth="33.333" hgrow="ALWAYS"/>
-                                <ColumnConstraints percentWidth="33.333" hgrow="ALWAYS"/>
-                                <ColumnConstraints percentWidth="33.333" hgrow="ALWAYS"/>
-                            </columnConstraints>
-                            <rowConstraints>
-                                <RowConstraints minHeight="78.0" prefHeight="88.0" vgrow="ALWAYS"/>
-                                <RowConstraints minHeight="78.0" prefHeight="88.0" vgrow="ALWAYS"/>
-                                <RowConstraints minHeight="78.0" prefHeight="88.0" vgrow="ALWAYS"/>
-                                <RowConstraints minHeight="78.0" prefHeight="88.0" vgrow="ALWAYS"/>
-                            </rowConstraints>
-                        </GridPane>
+                        <!-- TABLE MAP: 3 columns, as many rows as there are tables; scrolls (TODO 3.48) -->
+                        <ScrollPane fitToWidth="true" hbarPolicy="NEVER" style="-fx-background-color: transparent;"
+                                    VBox.vgrow="ALWAYS">
+                            <GridPane fx:id="homeTableGrid"
+                                      hgap="12.0"
+                                      vgap="12.0">
+                                <columnConstraints>
+                                    <ColumnConstraints percentWidth="33.333" hgrow="ALWAYS"/>
+                                    <ColumnConstraints percentWidth="33.333" hgrow="ALWAYS"/>
+                                    <ColumnConstraints percentWidth="33.333" hgrow="ALWAYS"/>
+                                </columnConstraints>
+                            </GridPane>
+                        </ScrollPane>
                     </VBox>
                 </VBox>
 
@@ -317,13 +343,13 @@
                       styleClass="content-card"
                       VBox.vgrow="ALWAYS">
 
-                    <Label text="Thống kê đơn hàng hôm nay"
+                    <Label text="%orders.today.title"
                            styleClass="section-title"/>
 
                     <!-- 3 TRẠNG THÁI ĐƠN -->
                     <VBox spacing="10.0" styleClass="order-summary-box">
                         <HBox alignment="CENTER_LEFT">
-                            <Label text="Đã thanh toán"
+                            <Label text="%orders.status.paid"
                                    styleClass="order-status-label"/>
                             <Region HBox.hgrow="ALWAYS"/>
                             <Label fx:id="paidOrderLabel"
@@ -332,7 +358,7 @@
                         </HBox>
 
                         <HBox alignment="CENTER_LEFT">
-                            <Label text="Đang mở"
+                            <Label text="%orders.status.open"
                                    styleClass="order-status-label"/>
                             <Region HBox.hgrow="ALWAYS"/>
                             <Label fx:id="openOrderLabel"
@@ -341,7 +367,7 @@
                         </HBox>
 
                         <HBox alignment="CENTER_LEFT">
-                            <Label text="Đã hủy"
+                            <Label text="%orders.status.cancelled"
                                    styleClass="order-status-label"/>
                             <Region HBox.hgrow="ALWAYS"/>
                             <Label fx:id="cancelledOrderLabel"
@@ -359,7 +385,7 @@
 
                     <!-- TIÊU ĐỀ PHẦN ĐƠN HÀNG GẦN ĐÂY / TRONG NGÀY -->
                     <HBox alignment="CENTER_LEFT">
-                        <Label text="Đơn hàng gần đây"
+                        <Label text="%orders.recent.title"
                                styleClass="section-subtitle"
                                style="-fx-font-weight: bold; -fx-text-fill: #274917;"/>
                     </HBox>
@@ -375,7 +401,7 @@
                               styleClass="today-orders-container"/>
                     </ScrollPane>
 
-                    <Button text="Xem tất cả đơn hàng →"
+                    <Button text="%orders.viewall"
                             maxWidth="1.7976931348623157E308"
                             prefHeight="42.0"
                             styleClass="secondary-button"

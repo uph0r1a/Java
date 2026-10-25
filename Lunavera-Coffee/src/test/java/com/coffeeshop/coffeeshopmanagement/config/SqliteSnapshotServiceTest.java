@@ -50,7 +50,7 @@ public class SqliteSnapshotServiceTest {
     public void everyTableIsCopiedWithTheSameNumberOfRowsAndTheSameValues() throws Exception {
         Customer customer = new Customer();
         customer.setFullName("Nguyễn Văn Ánh " + UUID.randomUUID());
-        customer.setPhone("09" + String.format("%08d", Math.abs(UUID.randomUUID().getMostSignificantBits()) % 100_000_000));
+        customer.setPhone("09" + String.format(java.util.Locale.ROOT, "%08d", Math.abs(UUID.randomUUID().getMostSignificantBits()) % 100_000_000));
         customer.setLoyaltyPoints(0);
         new CustomerDAO().insert(customer);
         Path dir = Files.createTempDirectory("lunavera-snapshot-test");

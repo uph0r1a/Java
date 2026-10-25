@@ -1,7 +1,14 @@
 package com.coffeeshop.coffeeshopmanagement.model;
 
+import java.util.Locale;
+
+/**
+ * The words for a table, in one place (TODO 2.68): a free table is "Trống" (empty); it used to say "Không hoạt động"
+ * (not active), which a new cashier reads as "out of service". The screens read the words from the language files
+ * (<code>tables.status.free</code>, <code>tables.status.occupied</code>); the names below are only a plain fallback.
+ */
 public enum TableStatus {
-    EMPTY("Không hoạt động"),
+    EMPTY("Trống"),
     OCCUPIED("Đang sử dụng");
 
     private final String displayName;
@@ -17,7 +24,7 @@ public enum TableStatus {
     public static TableStatus fromDb(String value) {
         if (value == null) return EMPTY;
         try {
-            return TableStatus.valueOf(value.trim().toUpperCase());
+            return TableStatus.valueOf(value.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             return EMPTY;
         }

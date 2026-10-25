@@ -112,6 +112,16 @@ final class SqliteSchema {
                     current_order_id INTEGER,
                     FOREIGN KEY (current_order_id) REFERENCES orders(id)
                 )
+            """,
+            """
+                CREATE TABLE IF NOT EXISTS login_attempts (
+                    scope TEXT NOT NULL,
+                    name_key TEXT NOT NULL,
+                    failures INTEGER NOT NULL DEFAULT 0,
+                    last_failure INTEGER NOT NULL DEFAULT 0,
+                    blocked_until INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY (scope, name_key)
+                )
             """
     );
 
@@ -120,7 +130,19 @@ final class SqliteSchema {
             new String[]{"orders", "table_number", "INTEGER"},
             new String[]{"orders", "discount_reason", "TEXT"},
             new String[]{"orders", "paid_by", "INTEGER"}, // who took the money (TODO 2.47)
-            new String[]{"users", "must_change_password", "INTEGER NOT NULL DEFAULT 0"}); // set when an admin made or reset the password (TODO 2A.18)
+            new String[]{"order_items", "unit_cost", "INTEGER"}, // the product's cost when the line was paid; null = not known then (TODO 3.53)
+            new String[]{"products", "reorder_level", "INTEGER"}, // the product's own low-stock level; null = the shop default (TODO 4.19)
+            new String[]{"users", "must_change_password", "INTEGER NOT NULL DEFAULT 0"}, // set when an admin made or reset the password (TODO 2A.18)
+            // Shown order of the tabs and cards on the sales screen; equal numbers (every old row has 0) keep the order of creation (TODO 5.31).
+            new String[]{"categories", "sort_order", "INTEGER NOT NULL DEFAULT 0"},
+            new String[]{"products", "sort_order", "INTEGER NOT NULL DEFAULT 0"},
+            // The loyalty points this order gave; null = not recorded (an order paid before this column existed) (TODO 3.25).
+            new String[]{"orders", "points_earned", "INTEGER"},
+            // What the customer handed over and what went back, for a cash payment; null otherwise (TODO 3.17).
+            new String[]{"orders", "cash_received", "BIGINT"},
+            new String[]{"orders", "change_given", "BIGINT"},
+            // The bank's reference of a transfer, typed by the cashier, optional (TODO 4.31). Who confirmed and when are paid_by and paid_at.
+            new String[]{"orders", "transfer_ref", "VARCHAR(64)"});
 
     private SqliteSchema() {
     }

@@ -268,6 +268,13 @@
     -fx-effect: dropshadow(gaussian, rgba(46, 125, 50, 0.15), 5, 0, 0, 1);
 }
 
+/* An order open for two hours or more (TODO 5.11): amber, so a forgotten one is easy to spot. */
+.table-button-occupied.table-button-long {
+    -fx-background-color: #fff3e0;
+    -fx-text-fill: #8a4b00;
+    -fx-border-color: #f57c00;
+}
+
 .table-button-occupied:hover {
     -fx-background-color: #c8e6c9;
     -fx-border-color: #2e7d32;

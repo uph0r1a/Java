@@ -3,6 +3,7 @@ package com.coffeeshop.coffeeshopmanagement.dao;
 import com.coffeeshop.coffeeshopmanagement.model.AccountStatus;
 import com.coffeeshop.coffeeshopmanagement.model.Role;
 import com.coffeeshop.coffeeshopmanagement.model.User;
+import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
@@ -18,6 +19,7 @@ public class UserDAOTest {
     @BeforeClass
     public static void setUpDatabase() {
         TestDatabaseSupport.ensureReady();
+        com.coffeeshop.coffeeshopmanagement.util.TestSession.admin(); // changing an account's status or role is for administrators (TODO 2A.3)
     }
 
     private User newUser(Role role, AccountStatus status) {
@@ -80,6 +82,27 @@ public class UserDAOTest {
     }
 
     @Test
+    public void aSilentRehashKeepsTheMustChangeMarkButAChosenPasswordClearsIt() {
+        // TODO 2.72
+        User user = new User();
+        user.setUsername("test-user-" + UUID.randomUUID());
+        user.setPasswordHash("old-hash");
+        user.setRole(Role.EMPLOYEE);
+        user.setStatus(AccountStatus.ACTIVE);
+        user.setMustChangePassword(true);
+        user = userDAO.insert(user);
+        assertTrue(userDAO.findById(user.getId()).orElseThrow().isMustChangePassword());
+
+        userDAO.rehashPassword(user.getId(), "same-password-newer-hash");
+        User after = userDAO.findById(user.getId()).orElseThrow();
+        assertEquals("same-password-newer-hash", after.getPasswordHash());
+        assertTrue("the person must still choose their own password", after.isMustChangePassword());
+
+        userDAO.updatePasswordHash(user.getId(), "chosen-hash");
+        assertFalse(userDAO.findById(user.getId()).orElseThrow().isMustChangePassword());
+    }
+
+    @Test
     public void countActiveAdminsReflectsOnlyActiveAdmins() {
         int before = userDAO.countActiveAdmins();
         User admin = newUser(Role.ADMIN, AccountStatus.ACTIVE);
@@ -97,5 +120,10 @@ public class UserDAOTest {
         newUser(Role.ADMIN, AccountStatus.ACTIVE);
 
         assertEquals(activeBefore + 1, userDAO.countByStatus(AccountStatus.ACTIVE));
+    }
+
+    @AfterClass
+    public static void signOut() {
+        com.coffeeshop.coffeeshopmanagement.util.TestSession.clear();
     }
 }

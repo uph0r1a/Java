@@ -5,6 +5,8 @@ public class Category {
     private String name;
     private String description;
     private boolean active;
+    /** Position among the categories on the sales screen, smallest first; equal numbers keep the order of creation (TODO 5.31). */
+    private int sortOrder;
 
     public Category() {
     }
@@ -27,6 +29,9 @@ public class Category {
 
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
+
+    public int getSortOrder() { return sortOrder; }
+    public void setSortOrder(int sortOrder) { this.sortOrder = sortOrder; }
 
     @Override
     public String toString() {

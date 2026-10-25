@@ -17,9 +17,28 @@ public class Order {
     private Integer tableNumber;
     /** Why a discount was given; null when there was none (TODO 2.3). */
     private String discountReason;
+    /** The loyalty points this order gave its customer; null when it was paid before that was recorded (TODO 3.25). */
+    private Integer pointsEarned;
+    /** What the customer handed over and what went back (cash payments only; null otherwise, and for old orders) (TODO 3.17). */
+    private BigDecimal cashReceived;
+    private BigDecimal changeGiven;
+    /** The bank's reference of a transfer, as the cashier typed it; null when none was typed (TODO 4.31). */
+    private String transferRef;
 
     public Order() {
     }
+
+    public Integer getPointsEarned() { return pointsEarned; }
+    public void setPointsEarned(Integer pointsEarned) { this.pointsEarned = pointsEarned; }
+
+    public BigDecimal getCashReceived() { return cashReceived; }
+    public void setCashReceived(BigDecimal cashReceived) { this.cashReceived = cashReceived; }
+
+    public BigDecimal getChangeGiven() { return changeGiven; }
+    public void setChangeGiven(BigDecimal changeGiven) { this.changeGiven = changeGiven; }
+
+    public String getTransferRef() { return transferRef; }
+    public void setTransferRef(String transferRef) { this.transferRef = transferRef; }
 
     public String getDiscountReason() { return discountReason; }
     public void setDiscountReason(String discountReason) { this.discountReason = discountReason; }

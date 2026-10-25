@@ -126,6 +126,33 @@ public class MoneyMigrationTest {
         }
     }
 
+    /**
+     * The migration rebuilds products and orders with a fixed column list, which drops any column added earlier in the same start
+     * (it always lost order_items.unit_cost, and would lose the later columns of TODO 3.17, 3.21, 3.25, 4.31 and 5.31). The start-up
+     * code therefore adds the later columns once more after it; this is that second pass, on a database that really needs the migration.
+     */
+    @Test
+    public void theLaterColumnsAreBackAfterTheMigrationHasRebuiltTheTables() throws Exception {
+        Path file = Files.createTempFile("lunavera-old-db-later-columns", ".db");
+        try (Connection c = DriverManager.getConnection("jdbc:sqlite:" + file.toAbsolutePath())) {
+            buildOldDatabase(c);
+            DatabaseConfig.addLaterColumns(c);   // the first pass of start-up, before the migration
+            assertEquals(1, one(c, "SELECT COUNT(*) FROM pragma_table_info('orders') WHERE name = 'cash_received'"));
+
+            MoneyMigration.runIfNeeded(c, 1);
+            assertEquals("the rebuild drops them again: this is why a second pass is needed", 0,
+                    one(c, "SELECT COUNT(*) FROM pragma_table_info('orders') WHERE name = 'cash_received'"));
+
+            DatabaseConfig.addLaterColumns(c);   // the second pass
+            for (String[] column : SqliteSchema.LATER_COLUMNS) {
+                assertEquals(column[0] + "." + column[1], 1,
+                        one(c, "SELECT COUNT(*) FROM pragma_table_info('" + column[0] + "') WHERE name = '" + column[1] + "'"));
+            }
+            assertEquals("the data survived", 45000, one(c, "SELECT total FROM orders WHERE id = 1"));
+            assertEquals("a product keeps its old order (0 for every row)", 0, one(c, "SELECT sort_order FROM products WHERE id = 1"));
+        }
+    }
+
     @Test
     public void anOldDatabaseThatNeverHadThoseColumnsGetsThemEmpty() throws Exception {
         Path file = Files.createTempFile("lunavera-old-db-no-late-columns", ".db");

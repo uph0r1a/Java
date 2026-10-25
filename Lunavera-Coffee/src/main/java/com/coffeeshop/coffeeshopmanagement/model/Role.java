@@ -1,5 +1,8 @@
 package com.coffeeshop.coffeeshopmanagement.model;
 
+import java.util.Locale;
+import com.coffeeshop.coffeeshopmanagement.util.I18n;
+
 /**
  * System roles. ADMIN has full access (referred to as "Owner" / "Quản trị viên" in the UI),
  * EMPLOYEE can operate the POS and day-to-day screens, CUSTOMER is a legacy value for
@@ -14,7 +17,7 @@ public enum Role {
     public static Role fromDb(String value) {
         if (value == null) return EMPLOYEE;
         try {
-            return Role.valueOf(value.trim().toUpperCase());
+            return Role.valueOf(value.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             return EMPLOYEE;
         }

@@ -98,6 +98,39 @@ public class Section4ReportsTest {
         assertEquals(0, BigDecimal.valueOf(54_000).compareTo(daily.profit()));
     }
 
+    /** TODO 3.54: the streaming read gives the same rows, in the same order, as the paged query, and is for admins only. */
+    @Test
+    public void theStreamingOrderExportGivesTheSameRowsAsThePagedQuery() {
+        Product p = product("1000");
+        LocalDate day = LocalDate.of(2003, 8, 8);
+        for (int i = 0; i < 4; i++) sellOn(day, p, 1, PaymentMethod.CASH, null);
+        OrderDAO.HistoryFilter filter = new OrderDAO.HistoryFilter(null, null, day, day);
+        List<Integer> streamed = new java.util.ArrayList<>();
+        int count = orderDAO.exportOrders(filter, null, row -> streamed.add(row.order().getId()));
+        List<Integer> paged = orderDAO.findHistoryPage(filter, 50, 0).stream().map(r -> r.order().getId()).toList();
+        assertEquals(4, count);
+        assertEquals(paged, streamed);
+        TestSession.clear();
+        try {
+            orderDAO.exportOrders(filter, null, row -> fail("an employee must not read rows for an export"));
+            fail("an employee must not export");
+        } catch (RuntimeException expected) {
+            // refused
+        } finally {
+            TestSession.admin();
+        }
+    }
+
+    /** TODO 5.34: the report's CSV lists every product that sold, not only the 20 best sellers shown on screen. */
+    @Test
+    public void allProductsListsMoreThanTheTopTwenty() {
+        LocalDate day = LocalDate.of(2003, 9, 9);
+        for (int i = 0; i < 23; i++) sellOn(day, product("1000"), 1, PaymentMethod.CASH, null);
+        assertEquals(20, reports.topProducts(day, day, 20).size());
+        List<ReportDAO.ProductSales> all = reports.allProducts(day, day);
+        assertEquals(23, all.size());
+    }
+
     @Test
     public void aCustomersHistoryHoldsOnlyTheirOrders() {
         Customer mine = new Customer();
@@ -153,10 +186,26 @@ public class Section4ReportsTest {
     }
 
     @Test
+    public void customerPurchaseFiguresCountPaidOrdersOnly() {
+        Customer c = new Customer();
+        c.setFullName("S4 stats " + System.nanoTime());
+        c = customerDAO.insert(c);
+        Product p = product("1000");
+        sellOn(LocalDate.of(2003, 9, 9), p, 2, PaymentMethod.CASH, c.getId());
+        sellOn(LocalDate.of(2003, 9, 10), p, 1, PaymentMethod.CASH, c.getId());
+        final int id = c.getId();
+        var figures = com.coffeeshop.coffeeshopmanagement.service.CustomerStats.aggregate(customerDAO.paidOrderRows());
+        var mine = com.coffeeshop.coffeeshopmanagement.service.CustomerStats.of(figures, id);
+        assertEquals(2, mine.visits());
+        assertEquals(0, new java.math.BigDecimal(3000).compareTo(mine.spent()));
+        assertEquals(LocalDate.of(2003, 9, 10), mine.lastVisit().toLocalDate());
+    }
+
+    @Test
     public void historySearchFindsACustomerByPhoneInAnyWayOfWritingIt() {
         Customer c = new Customer();
         c.setFullName("S5 phone " + System.nanoTime());
-        c.setPhone("09" + String.format("%08d", System.nanoTime() % 100_000_000L));
+        c.setPhone("09" + String.format(java.util.Locale.ROOT, "%08d", System.nanoTime() % 100_000_000L));
         c = customerDAO.insert(c);
         Product p = product("1000");
         sellOn(LocalDate.of(2003, 8, 8), p, 1, PaymentMethod.CASH, c.getId());
@@ -169,4 +218,96 @@ public class Section4ReportsTest {
         assertEquals("three digits are still an order number search", 0,
                 orderDAO.countHistory(new OrderDAO.HistoryFilter(phone.substring(1, 4) + "999999999", null, null, null)));
     }
+
+    // ---- TODO 3.53: profit uses the cost recorded at the sale and the order's discount ----
+
+    private Order sellTwoLines(LocalDate day, Product a, Product b, long discount) {
+        OrderItem first = lineOf(a, 1);
+        OrderItem second = lineOf(b, 1);
+        Order o = new Order();
+        o.setOrderDate(day.atTime(10, 0));
+        o.setPaidAt(day.atTime(10, 5));
+        o.setStatus(OrderStatus.PAID);
+        o.setSubtotal(BigDecimal.valueOf(60_000));
+        o.setDiscount(BigDecimal.valueOf(discount));
+        o.setTotal(BigDecimal.valueOf(60_000 - discount));
+        o.setPaymentMethod(PaymentMethod.CASH);
+        return orderDAO.insert(o, List.of(first, second));
+    }
+
+    private OrderItem lineOf(Product p, int qty) {
+        OrderItem item = new OrderItem();
+        item.setProductId(p.getId());
+        item.setProductName(p.getName());
+        item.setQuantity(qty);
+        item.setUnitPrice(BigDecimal.valueOf(30_000));
+        item.setLineTotal(BigDecimal.valueOf(30_000L * qty));
+        return item;
+    }
+
+    @Test
+    public void aDiscountedOrdersProfitIsItsRevenueMinusItsCosts() {
+        LocalDate day = LocalDate.of(2003, 7, 7);
+        Product p = product("12000");
+        OrderItem item = lineOf(p, 3); // 90,000 at cost 3 x 12,000 = 36,000
+        Order o = new Order();
+        o.setOrderDate(day.atTime(10, 0));
+        o.setPaidAt(day.atTime(10, 5));
+        o.setStatus(OrderStatus.PAID);
+        o.setSubtotal(item.getLineTotal());
+        o.setDiscount(BigDecimal.valueOf(9_000)); // 10 % off
+        o.setTotal(BigDecimal.valueOf(81_000));
+        o.setPaymentMethod(PaymentMethod.CASH);
+        orderDAO.insert(o, List.of(item));
+
+        BigDecimal revenue = reports.summary(day, day).revenue();
+        assertEquals(0, BigDecimal.valueOf(81_000).compareTo(revenue));
+        assertEquals("revenue 81,000 minus costs 36,000, not 90,000 minus 36,000",
+                0, BigDecimal.valueOf(45_000).compareTo(reports.profit(day, day).grossProfit()));
+        assertEquals(0, BigDecimal.valueOf(45_000).compareTo(reports.dailySales(day, day).get(0).profit()));
+    }
+
+    @Test
+    public void theDiscountIsSpreadOverTheLinesInProportionToTheirValue() {
+        LocalDate day = LocalDate.of(2003, 7, 8);
+        Product costed = product("12000");
+        Product uncosted = product(null);
+        sellTwoLines(day, costed, uncosted, 6_000); // each line carries 3,000 of the discount
+        ReportDAO.Profit profit = reports.profit(day, day);
+        assertEquals("30,000 - 12,000 - 3,000", 0, BigDecimal.valueOf(15_000).compareTo(profit.grossProfit()));
+        assertEquals(1, profit.linesWithCost());
+        assertEquals(1, profit.linesWithoutCost());
+    }
+
+    @Test
+    public void aCostEditedLaterDoesNotMoveAnEarlierDay() {
+        LocalDate day = LocalDate.of(2003, 7, 9);
+        Product p = product("12000");
+        sellOn(day, p, 3, PaymentMethod.CASH, null); // 90,000 - 36,000 = 54,000
+        assertEquals(0, BigDecimal.valueOf(54_000).compareTo(reports.profit(day, day).grossProfit()));
+
+        p.setCost(BigDecimal.valueOf(50_000)); // the supplier raised the price today
+        productDAO.update(p);
+
+        assertEquals("the sale keeps the cost it had", 0, BigDecimal.valueOf(54_000).compareTo(reports.profit(day, day).grossProfit()));
+        LocalDate tomorrow = day.plusDays(1);
+        sellOn(tomorrow, p, 1, PaymentMethod.CASH, null); // 30,000 - 50,000
+        assertEquals("a later sale uses the new cost", 0, BigDecimal.valueOf(-20_000).compareTo(reports.profit(tomorrow, tomorrow).grossProfit()));
+    }
+
+    @Test
+    public void aLineSoldWithoutACostStaysUnknownEvenIfACostIsEnteredLater() {
+        LocalDate day = LocalDate.of(2003, 7, 10);
+        Product p = product(null);
+        sellOn(day, p, 1, PaymentMethod.CASH, null);
+        assertEquals(1, reports.profit(day, day).linesWithoutCost());
+
+        p.setCost(BigDecimal.valueOf(10_000));
+        productDAO.update(p);
+
+        ReportDAO.Profit after = reports.profit(day, day);
+        assertEquals("nobody knows what it cost then", 1, after.linesWithoutCost());
+        assertEquals(0, after.linesWithCost());
+    }
 }
+

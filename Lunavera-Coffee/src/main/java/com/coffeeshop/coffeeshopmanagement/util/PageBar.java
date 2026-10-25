@@ -14,7 +14,10 @@ import javafx.scene.layout.HBox;
  */
 public class PageBar extends HBox {
 
-    public static final String ALL_LABEL = "Tất cả";
+    /** The "All" entry of the page-size list, in the language in use (compared with the same text, so a method, not a constant). */
+    public static String allLabel() {
+        return I18n.t("pos.category.all");
+    }
     private static final int ALL = Integer.MAX_VALUE;
 
     private final ComboBox<String> sizeBox = new ComboBox<>();
@@ -32,7 +35,7 @@ public class PageBar extends HBox {
         for (int size : sizes) {
             sizeBox.getItems().add(String.valueOf(size));
         }
-        sizeBox.getItems().add(ALL_LABEL);
+        sizeBox.getItems().add(allLabel());
         sizeBox.setValue(String.valueOf(defaultSize));
         sizeBox.getStyleClass().add("filter-combo");
         pageSize = defaultSize;
@@ -44,7 +47,7 @@ public class PageBar extends HBox {
             rebuild();
             onChange.run();
         });
-        Label rowsLabel = new Label("Số dòng:");
+        Label rowsLabel = new Label(I18n.t("pagebar.rows"));
         rowsLabel.getStyleClass().add("table-footer");
         pagesBox.setAlignment(Pos.CENTER_RIGHT);
         getChildren().addAll(rowsLabel, sizeBox, pagesBox);
@@ -52,7 +55,7 @@ public class PageBar extends HBox {
     }
 
     private static int parse(String value) {
-        if (value == null || ALL_LABEL.equals(value)) return ALL;
+        if (value == null || allLabel().equals(value)) return ALL;
         try {
             return Math.max(1, Integer.parseInt(value));
         } catch (NumberFormatException e) {

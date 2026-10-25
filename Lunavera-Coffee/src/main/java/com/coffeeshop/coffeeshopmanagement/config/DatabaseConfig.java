@@ -1,5 +1,6 @@
 package com.coffeeshop.coffeeshopmanagement.config;
 
+import com.coffeeshop.coffeeshopmanagement.util.I18n;
 import com.coffeeshop.coffeeshopmanagement.util.AppClock;
 import com.coffeeshop.coffeeshopmanagement.model.Role;
 import com.coffeeshop.coffeeshopmanagement.service.PasswordUtil;
@@ -32,7 +33,7 @@ public final class DatabaseConfig {
 
     private static final Logger LOGGER = Logger.getLogger(DatabaseConfig.class.getName());
     private static final String DB_FILE_NAME = DataPaths.DATABASE_FILE_NAME;
-    /** Only used by tests now, and recognised at login so an old install that still has it is forced to change it (PasswordChangeDialog). */
+    /** The old built-in password: no code creates that account any more (TODO 2A.33), but it is recognised at login so an old install that still has it is forced to change it (PasswordChangeDialog). */
     public static final String DEFAULT_ADMIN_PASSWORD = "Admin@123";
     /** v1: money columns are INTEGER dong instead of REAL (see MoneyMigration). */
     static final int CURRENT_SCHEMA_VERSION = 1;
@@ -51,7 +52,7 @@ public final class DatabaseConfig {
             // Refuse to start rather than quietly open an empty database somewhere else: the shop would see no
             // products and a fresh admin login and think its data was lost (TODO 2.26). The start-up dialog shows this.
             LOGGER.severe("Could not create the data directory " + dir);
-            throw new IllegalStateException("Không tạo được thư mục dữ liệu: " + dir.toAbsolutePath());
+            throw new IllegalStateException(I18n.t("db.datadir.fail", dir.toAbsolutePath()));
         }
         return dir.resolve(DB_FILE_NAME);
     }
@@ -79,6 +80,10 @@ public final class DatabaseConfig {
         synchronized (DatabaseConfig.class) {
             if (resolved == null) {
                 DatabaseSettings settings = DatabaseSettings.load();
+                String warning = settings.insecureRemoteWarning();
+                if (warning != null) {
+                    LOGGER.warning(warning); // TODO 2A.26: a database on another computer without TLS
+                }
                 Path file = settings.isMariaDb() ? null : resolveDbFile();
                 String url = settings.isMariaDb() ? settings.mariaDbUrl() : "jdbc:sqlite:" + file;
                 resolved = new Resolved(settings, file, url); // only after everything above worked
@@ -129,11 +134,6 @@ public final class DatabaseConfig {
         return settings().phpMyAdminUrl();
     }
 
-    /** Where the app connects, for messages and logs (never includes the password). */
-    public static String describeConnection() {
-        return settings().isMariaDb() ? settings().describe() : "SQLite " + dbFile();
-    }
-
     /**
      * Opens a new short-lived connection; callers should use try-with-resources. SQLite is file-based and handles many
      * short connections from a single-user desktop app well. For MariaDB/MySQL each call connects to the server;
@@ -144,21 +144,37 @@ public final class DatabaseConfig {
         if (r.settings().isMariaDb()) {
             return DriverManager.getConnection(r.url(), r.settings().user(), r.settings().password());
         }
-        Connection connection = DriverManager.getConnection(r.url());
-        try (Statement pragma = connection.createStatement()) {
-            pragma.execute("PRAGMA foreign_keys = ON");
-            // Without this, two connections writing at once (e.g. the 30s SessionGuard background
-            // check landing mid-payment) get an immediate "database is locked" SQLException instead of
-            // one of them just waiting briefly - SQLite's default busy behavior is to not wait at all.
-            pragma.execute("PRAGMA busy_timeout = 5000");
-            if (walActive) {
-                // Only safe together with WAL (TODO 6.16): a commit then waits for the log, not for the disk, and a power cut
-                // still cannot damage the file. In the old rollback-journal mode it would be a durability risk, so it stays off.
-                pragma.execute("PRAGMA synchronous = NORMAL");
+        return configureSqlite(DriverManager.getConnection(r.url()));
+    }
+
+    /**
+     * The per-connection set-up of a SQLite connection. If any step fails the connection is closed before the exception goes
+     * on, so a long fault (a locked or damaged file, retried every 30 s) does not pile up open file handles (TODO 2.71).
+     */
+    static Connection configureSqlite(Connection connection) throws SQLException {
+        try {
+            try (Statement pragma = connection.createStatement()) {
+                pragma.execute("PRAGMA foreign_keys = ON");
+                // Without this, two connections writing at once (e.g. the 30s SessionGuard background
+                // check landing mid-payment) get an immediate "database is locked" SQLException instead of
+                // one of them just waiting briefly - SQLite's default busy behavior is to not wait at all.
+                pragma.execute("PRAGMA busy_timeout = 5000");
+                if (walActive) {
+                    // Only safe together with WAL (TODO 6.16): a commit then waits for the log, not for the disk, and a power cut
+                    // still cannot damage the file. In the old rollback-journal mode it would be a durability risk, so it stays off.
+                    pragma.execute("PRAGMA synchronous = NORMAL");
+                }
             }
+            registerSearchKeyFunction(connection);
+            return connection;
+        } catch (SQLException | RuntimeException e) {
+            try {
+                connection.close();
+            } catch (SQLException suppressed) {
+                e.addSuppressed(suppressed);
+            }
+            throw e;
         }
-        registerSearchKeyFunction(connection);
-        return connection;
     }
 
     /** The SQL function that {@link #searchKeySql} calls on SQLite (TODO 3.31). */
@@ -199,9 +215,12 @@ public final class DatabaseConfig {
 
     static String locationSummary(DatabaseSettings settings, java.nio.file.Path dataDir, int schemaVersion) {
         String where = settings.isMariaDb()
-                ? "máy chủ " + settings.host() + ":" + settings.port() + "/" + settings.database()
+                ? I18n.t("db.location.server", settings.host(), settings.port(), settings.database())
                 : dataDir.toAbsolutePath().normalize().toString();
-        return "Dữ liệu: " + where + "  ·  cấu trúc v" + schemaVersion;
+        String security = settings.connectionSecurityNote();
+        return security == null
+                ? I18n.t("db.location.summary", where, schemaVersion)
+                : I18n.t("db.location.summary.secure", where, security, schemaVersion);
     }
 
     /** The file extension a backup of the current database should have. */
@@ -224,8 +243,7 @@ public final class DatabaseConfig {
             return;
         }
         if (isLiveDatabase(target)) {
-            throw new java.io.IOException("Không thể ghi bản sao lưu đè lên chính cơ sở dữ liệu đang dùng ("
-                    + dbFile() + "). Hãy chọn một tên tệp khác, tốt nhất ở thư mục ngoài thư mục dữ liệu.");
+            throw new java.io.IOException(I18n.t("db.backup.onlive", dbFile()));
         }
         // Write beside the target and move it into place only when it is complete (TODO 6.25): if the copy fails half way
         // (disk full, the folder vanished) an older file at the target is still there, instead of having been deleted first.
@@ -252,11 +270,11 @@ public final class DatabaseConfig {
     }
 
     /**
-     * Creates all tables if they do not already exist, seeds one default admin account the
-     * very first time the application runs against an empty database, and seeds the starter
+     * Creates all tables if they do not already exist, seeds the dining tables and the starter
      * menu exactly once (see {@link MenuSeeder} - gated by its own persistent flag, not by
-     * current table contents, so deleting starter items never brings them back). Safe to call
-     * every time the application starts.
+     * current table contents, so deleting starter items never brings them back). No administrator is
+     * created here: on an empty database the first-run window asks the owner to create one (TODO 2A.5,
+     * 6.52). Safe to call every time the application starts.
      */
     public static synchronized void initialize() {
         if (initialized) {
@@ -272,97 +290,115 @@ public final class DatabaseConfig {
             }
         }
         try (Connection connection = getConnection()) {
-            // Must check this *before* creating any table below: it's the only way to tell a
-            // brand-new database (no migration needed - CREATE TABLE already uses the current
-            // schema) apart from one that existed before schema versioning was added (PRAGMA
-            // user_version defaults to 0 for both, so the version number alone can't tell them
-            // apart - only "did any of our tables already exist" can).
-            boolean preexisting = tableExists(connection, "users");
             SqlDialect dialect = SqlDialect.of(connection);
-
-            try (Statement statement = connection.createStatement()) {
-                for (String ddl : dialect == SqlDialect.SQLITE ? SqliteSchema.TABLES : MariaDbSchema.TABLES) {
-                    statement.execute(ddl);
+            // Two tills started together after an upgrade must not both create tables and run the same migration step: one waits
+            // here until the other has finished, and then finds the work done (TODO 3.50). The lock is released in the finally below.
+            boolean migrationLocked = false;
+            if (dialect != SqlDialect.SQLITE) {
+                migrationLocked = ServerLock.acquire(connection, MIGRATION_LOCK, MIGRATION_LOCK_WAIT_SECONDS);
+                if (!migrationLocked) {
+                    throw new IllegalStateException(I18n.t("db.migration.busy", MIGRATION_LOCK_WAIT_SECONDS));
                 }
             }
-            // Columns added after the first release: a new MariaDB database already has them (nothing happens);
-            // an older SQLite file gets them here. Checked first, so the table-rebuilding migration below keeps them.
-            for (String[] column : SqliteSchema.LATER_COLUMNS) {
-                addColumnIfMissing(connection, column[0], column[1], column[2]);
-            }
-
-            if (dialect == SqlDialect.SQLITE) {
-                if (preexisting) {
-                    MoneyMigration.runIfNeeded(connection, CURRENT_SCHEMA_VERSION);
-                } else {
-                    setUserVersion(connection, CURRENT_SCHEMA_VERSION);
+            try {
+                createAndMigrate(connection, dialect);
+                initialized = true;
+            } finally {
+                if (migrationLocked) {
+                    ServerLock.release(connection, MIGRATION_LOCK);
                 }
-            } else if (readSchemaVersion(connection) == 0) {
-                writeSchemaVersion(connection, SchemaMigrations.LATEST_VERSION); // a new MariaDB database: already the latest tables
-            } else {
-                MariaDbMigrations.upgrade(connection); // an existing one: apply any numbered steps it is missing
             }
-            // Version 2 (indexes) and the unique rules; see SchemaMigrations (SQLite only: a new MariaDB database is
-            // created with them).
-            SchemaMigrations.upgrade(connection);
-
-            // Before the default admin is seeded: an empty MariaDB database may be filled from the old SQLite file.
-            SqliteToMariaDbImporter.importIfRequested(connection, settings());
-
-            seedDefaultAdmin(connection);
-            seedDiningTables(connection);
-            MenuSeeder.seedIfNeeded(connection);
-            mergeLegacyCategoryOnce(connection);
-            if (dialect == SqlDialect.SQLITE) {
-                enableWriteAheadLog(); // last, so the pre-migration backup above was taken in the old mode
-            }
-            initialized = true;
         } catch (SQLException e) {
             LOGGER.log(Level.SEVERE, "Database initialization failed", e);
             throw new IllegalStateException("Could not initialize the database", e);
         }
     }
 
-    /** The flag that records the one-time merge below has run (TODO 6.7, 6.22). */
-    static final String LEGACY_CATEGORY_MERGE_FLAG = "merge_ca_phe_v1";
+    /** Creates the tables and brings an older database up to date; runs under the migration lock on a server database (TODO 3.50). */
+    private static void createAndMigrate(Connection connection, SqlDialect dialect) throws SQLException {
+        // Must check this *before* creating any table below: it's the only way to tell a
+        // brand-new database (no migration needed - CREATE TABLE already uses the current
+        // schema) apart from one that existed before schema versioning was added (PRAGMA
+        // user_version defaults to 0 for both, so the version number alone can't tell them
+        // apart - only "did any of our tables already exist" can).
+        boolean preexisting = tableExists(connection, "users");
+
+        try (Statement statement = connection.createStatement()) {
+            for (String ddl : dialect == SqlDialect.SQLITE ? SqliteSchema.TABLES : MariaDbSchema.TABLES) {
+                statement.execute(ddl);
+            }
+        }
+        // Columns added after the first release: a new MariaDB database already has them (nothing happens);
+        // an older SQLite file gets them here. Checked first, so the table-rebuilding migration below keeps them.
+        addLaterColumns(connection);
+
+        if (dialect == SqlDialect.SQLITE) {
+            if (preexisting) {
+                MoneyMigration.runIfNeeded(connection, CURRENT_SCHEMA_VERSION);
+                // That migration rebuilds some tables with a fixed column list, which drops the later columns again for a database
+                // old enough to need it (it already lost order_items.unit_cost): add them once more. A no-op when nothing was rebuilt.
+                addLaterColumns(connection);
+            } else {
+                setUserVersion(connection, CURRENT_SCHEMA_VERSION);
+            }
+        } else if (readSchemaVersion(connection) == 0) {
+            writeSchemaVersion(connection, SchemaMigrations.LATEST_VERSION); // a new MariaDB database: already the latest tables
+        } else {
+            MariaDbMigrations.upgrade(connection); // an existing one: apply any numbered steps it is missing
+        }
+        // Version 2 (indexes) and the unique rules; see SchemaMigrations (SQLite only: a new MariaDB database is
+        // created with them).
+        SchemaMigrations.upgrade(connection);
+
+        // Before the first-run window can ask for an administrator: an empty MariaDB database may be filled from the old SQLite file.
+        SqliteToMariaDbImporter.importIfRequested(connection, settings());
+        backfillUnitCostOnce(connection); // after the import, so imported lines get their cost too (TODO 3.53)
+
+        seedDiningTables(connection);
+        MenuSeeder.seedIfNeeded(connection);
+        if (dialect == SqlDialect.SQLITE) {
+            enableWriteAheadLog(); // last, so the pre-migration backup above was taken in the old mode
+        }
+    }
+
+    /** Adds every column listed in {@link SqliteSchema#LATER_COLUMNS} that the table does not have yet (both databases). */
+    static void addLaterColumns(Connection connection) throws SQLException {
+        for (String[] column : SqliteSchema.LATER_COLUMNS) {
+            addColumnIfMissing(connection, column[0], column[1], column[2]);
+        }
+    }
+
+    /** The server-side lock that makes one till at a time create and migrate the tables (TODO 3.50). */
+    static final String MIGRATION_LOCK = "lunavera-migrate";
+    static final int MIGRATION_LOCK_WAIT_SECONDS = 60;
+
+    /** The flag that records the one-time cost backfill below has run (TODO 3.53). */
+    static final String UNIT_COST_BACKFILL_FLAG = "order_items_unit_cost_v1";
 
     /**
-     * One-time clean-up: an early version created a category named {@code Ca Phe} (no accents) next to {@code Cà phê}.
-     * Moves its products to {@code Cà phê} and deletes it. It used to run at every start; now it runs once and records
-     * that in {@code app_flags}, so a shop that adds its own category with that name later is never touched again.
-     * Once every shop has started a version with this flag, the whole method can be deleted.
+     * One-time: gives the lines of orders that were paid (or refunded) before {@code order_items.unit_cost} existed the cost
+     * their product has <em>now</em>, the best figure there is, so the profit report does not go blank for the whole history.
+     * It runs once and records that in {@code app_flags}: a line sold later without a known cost must stay "not known", not be
+     * filled in by a later start.
      */
-    static void mergeLegacyCategoryOnce(Connection connection) throws SQLException {
+    static void backfillUnitCostOnce(Connection connection) throws SQLException {
         ensureFlagsTable(connection);
         try (var check = connection.prepareStatement("SELECT 1 FROM app_flags WHERE name = ?")) {
-            check.setString(1, LEGACY_CATEGORY_MERGE_FLAG);
+            check.setString(1, UNIT_COST_BACKFILL_FLAG);
             try (var rs = check.executeQuery()) {
                 if (rs.next()) {
-                    return; // already done once
+                    return;
                 }
             }
         }
         try (Statement statement = connection.createStatement()) {
-            Integer caPheWithAccentId = null;
-            Integer caPheNoAccentId = null;
-            try (ResultSet rs = statement.executeQuery("SELECT id, name FROM categories WHERE name = 'Cà phê' OR name = 'Ca Phe'")) {
-                while (rs.next()) {
-                    if ("Cà phê".equals(rs.getString("name"))) {
-                        caPheWithAccentId = rs.getInt("id");
-                    } else if ("Ca Phe".equals(rs.getString("name"))) {
-                        caPheNoAccentId = rs.getInt("id");
-                    }
-                }
-            }
-            if (caPheWithAccentId != null && caPheNoAccentId != null && !caPheWithAccentId.equals(caPheNoAccentId)) {
-                statement.executeUpdate("UPDATE products SET category_id = " + caPheWithAccentId + " WHERE category_id = " + caPheNoAccentId);
-                statement.executeUpdate("DELETE FROM categories WHERE id = " + caPheNoAccentId);
-            }
+            statement.executeUpdate("UPDATE order_items SET unit_cost = (SELECT p.cost FROM products p WHERE p.id = order_items.product_id) "
+                    + "WHERE unit_cost IS NULL AND product_id IS NOT NULL AND order_id IN (SELECT id FROM orders WHERE status IN ("
+                    + SqlStatus.PAID + ", " + SqlStatus.CANCELLED + "))");
         }
-        // Recorded even when there was nothing to merge: the job is for databases that already had both names at this start.
         try (var insertFlag = connection.prepareStatement(
                 SqlDialect.of(connection).insertIgnoreInto("app_flags") + " (name) VALUES (?)")) {
-            insertFlag.setString(1, LEGACY_CATEGORY_MERGE_FLAG);
+            insertFlag.setString(1, UNIT_COST_BACKFILL_FLAG);
             insertFlag.executeUpdate();
         }
     }
@@ -413,9 +449,6 @@ public final class DatabaseConfig {
             statement.execute("PRAGMA user_version = " + version);
         }
     }
-
-    /** System property that makes {@code initialize()} seed {@code admin} / {@link #DEFAULT_ADMIN_PASSWORD}; for tests only. */
-    public static final String SEED_DEFAULT_ADMIN_PROPERTY = "lunavera.seedDefaultAdmin";
 
     /** True when there is no account at all, i.e. the owner must create the first administrator (TODO 2A.5). */
     public static boolean needsFirstRunSetup() {
@@ -478,51 +511,6 @@ public final class DatabaseConfig {
             statement.setInt(1, version);
             statement.executeUpdate();
         }
-    }
-
-    private static void seedDefaultAdmin(Connection connection) throws SQLException {
-        try (Statement check = connection.createStatement()) {
-            var rs = check.executeQuery("SELECT COUNT(*) FROM users");
-            rs.next();
-            if (rs.getInt(1) > 0) {
-                return; // already has data, never overwrite
-            }
-        }
-        // No built-in administrator any more (TODO 2A.5): the first start asks the owner to create one (FirstRunDialog).
-        // Tests turn the old behaviour on with this property so they keep a known login.
-        if (!Boolean.getBoolean(SEED_DEFAULT_ADMIN_PROPERTY)) {
-            LOGGER.info("No accounts yet: the first-run screen will ask the owner to create the administrator.");
-            return;
-        }
-
-        int employeeId;
-        try (var insertEmployee = connection.prepareStatement(
-                "INSERT INTO employees (full_name, phone, email, address, position, salary, hire_date, active) " +
-                        "VALUES (?, NULL, NULL, NULL, ?, NULL, ?, 1)",
-                Statement.RETURN_GENERATED_KEYS)) {
-            insertEmployee.setString(1, "Quản trị viên hệ thống");
-            insertEmployee.setString(2, "Owner");
-            insertEmployee.setString(3, AppClock.now().toLocalDate().toString());
-            insertEmployee.executeUpdate();
-            var keys = insertEmployee.getGeneratedKeys();
-            keys.next();
-            employeeId = keys.getInt(1);
-        }
-
-        try (var insertUser = connection.prepareStatement(
-                "INSERT INTO users (username, password_hash, role, status, employee_id, created_at) " +
-                        "VALUES (?, ?, ?, " + SqlStatus.ACTIVE + ", ?, ?)")) {
-            insertUser.setString(1, "admin");
-            insertUser.setString(2, PasswordUtil.hash(DEFAULT_ADMIN_PASSWORD));
-            insertUser.setString(3, Role.ADMIN.name());
-            insertUser.setInt(4, employeeId);
-            insertUser.setString(5, DbTime.format(AppClock.now(), SqlDialect.of(connection)));
-            insertUser.executeUpdate();
-        }
-
-        // The password itself is deliberately not logged (the log is a file now).
-        LOGGER.info("Seeded default admin account (username: admin) with the default password. " +
-                "Change this password after first login.");
     }
 
     private static void seedDiningTables(Connection connection) throws SQLException {

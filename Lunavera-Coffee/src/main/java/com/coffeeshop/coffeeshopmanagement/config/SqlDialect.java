@@ -1,5 +1,7 @@
 package com.coffeeshop.coffeeshopmanagement.config;
 
+import com.coffeeshop.coffeeshopmanagement.util.I18n;
+
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Locale;
@@ -26,7 +28,7 @@ public enum SqlDialect {
             case "sqlite" -> SQLITE;
             case "", "mariadb", "mysql" -> MARIADB;
             default -> throw new IllegalArgumentException(
-                    "Giá trị db.type không hợp lệ: \"" + type + "\" (chỉ chấp nhận sqlite, mariadb hoặc mysql).");
+                    I18n.t("db.type.invalid", type));
         };
     }
 

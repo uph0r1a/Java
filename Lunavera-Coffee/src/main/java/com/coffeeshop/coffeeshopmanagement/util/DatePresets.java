@@ -10,16 +10,17 @@ import java.time.LocalDate;
 public final class DatePresets {
 
     public enum Preset {
-        TODAY("Hôm nay"), THIS_WEEK("Tuần này"), THIS_MONTH("Tháng này");
+        TODAY("date.today"), THIS_WEEK("date.thisweek"), THIS_MONTH("date.thismonth");
 
-        private final String label;
+        private final String labelKey;
 
-        Preset(String label) {
-            this.label = label;
+        Preset(String labelKey) {
+            this.labelKey = labelKey;
         }
 
+        /** The button text, in the language in use. */
         public String label() {
-            return label;
+            return I18n.t(labelKey);
         }
 
         /** {from, to} for this preset, both inclusive; "to" is always the given day. */
@@ -42,7 +43,7 @@ public final class DatePresets {
             Preset preset = presets[i];
             Button b = new Button(preset.label());
             b.setOnAction(e -> {
-                LocalDate[] range = preset.range(LocalDate.now());
+                LocalDate[] range = preset.range(AppClock.today());
                 from.setValue(range[0]);
                 to.setValue(range[1]);
                 afterChange.run();

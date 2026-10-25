@@ -1,5 +1,6 @@
 package com.coffeeshop.coffeeshopmanagement.dao;
 
+import com.coffeeshop.coffeeshopmanagement.util.I18n;
 import com.coffeeshop.coffeeshopmanagement.config.SqlStatus;
 import com.coffeeshop.coffeeshopmanagement.util.AppClock;
 import com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig;
@@ -35,18 +36,74 @@ import java.util.Optional;
  */
 public class OrderDAO {
 
+    /**
+     * Records each line's product cost at the moment of payment (TODO 3.53): the report then computes profit from what the
+     * product cost <em>then</em>, so editing a cost later never rewrites an earlier day. A product with no cost entered (or a
+     * line of a deleted product) leaves {@code unit_cost} null, which the report shows as "not known". Runs inside the payment's
+     * own transaction.
+     */
+    static void stampUnitCosts(Connection connection, int orderId) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "UPDATE order_items SET unit_cost = (SELECT p.cost FROM products p WHERE p.id = order_items.product_id) "
+                        + "WHERE order_id = ?")) {
+            statement.setInt(1, orderId);
+            statement.executeUpdate();
+        }
+    }
+
+    /**
+     * What a payment leaves besides the amount (TODO 3.17, 4.31): for cash, what the customer handed over (never less than the total,
+     * so the change is never negative) and the change that went back; for a transfer, the bank's reference as cleaned by
+     * {@link com.coffeeshop.coffeeshopmanagement.service.PaymentDetails#cleanReference}. Anything that does not belong to the
+     * method is dropped, so a card sale never keeps a cash figure. Returns {cashReceived, changeGiven} (nulls when not cash); the
+     * cleaned reference is returned through {@code referenceOut[0]}.
+     */
+    static BigDecimal[] paymentDetails(PaymentMethod method, BigDecimal total, BigDecimal cashReceived, String transferRef,
+                                       String[] referenceOut) {
+        referenceOut[0] = method == PaymentMethod.TRANSFER
+                ? com.coffeeshop.coffeeshopmanagement.service.PaymentDetails.cleanReference(transferRef) : null;
+        if (method != PaymentMethod.CASH || cashReceived == null) {
+            return new BigDecimal[]{null, null};
+        }
+        BigDecimal change = com.coffeeshop.coffeeshopmanagement.service.PaymentDetails.changeFor(cashReceived, total);
+        if (change == null) {
+            throw new DataAccessException(I18n.t("order.cash.short"));
+        }
+        return new BigDecimal[]{cashReceived, change};
+    }
+
+    private static void setNullableMoney(PreparedStatement statement, int index, BigDecimal value) throws SQLException {
+        if (value == null) {
+            statement.setNull(index, java.sql.Types.BIGINT);
+        } else {
+            statement.setLong(index, Money.toDong(value));
+        }
+    }
+
     public Order insert(Order order, List<OrderItem> items) {
         if (order.getStatus() == OrderStatus.PAID) {
             // A sale that is saved as paid must add up (TODO 2.25); open orders are autosaved as they are typed.
             order.setSubtotal(checkTotals(order.getDiscount(), order.getTotal(), items));
         }
+        // The points this sale gives, worked out once and saved with the order, so a later refund takes back exactly these (TODO 3.25).
+        final boolean paid = order.getStatus() == OrderStatus.PAID;
+        final int earnedPoints = paid && order.getCustomerId() != null ? LoyaltyPolicy.pointsFor(order.getTotal()) : 0;
+        String[] referenceOut = new String[1];
+        BigDecimal[] cash = paid ? paymentDetails(order.getPaymentMethod(), order.getTotal(), order.getCashReceived(),
+                order.getTransferRef(), referenceOut) : new BigDecimal[]{null, null};
+        order.setCashReceived(cash[0]);
+        order.setChangeGiven(cash[1]);
+        order.setTransferRef(paid ? referenceOut[0] : null);
+        order.setPointsEarned(paid ? earnedPoints : null);
         String orderSql = "INSERT INTO orders (order_date, employee_id, customer_id, status, subtotal, discount, " +
-                "total, payment_method, paid_at, table_number, discount_reason, paid_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                "total, payment_method, paid_at, table_number, discount_reason, paid_by, points_earned, cash_received, change_given, " +
+                "transfer_ref) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         String itemSql = "INSERT INTO order_items (order_id, product_id, product_name, quantity, unit_price, line_total) " +
                 "VALUES (?, ?, ?, ?, ?, ?)";
         try (Connection connection = DatabaseConfig.getConnection()) {
             connection.setAutoCommit(false);
             if (order.getStatus() == OrderStatus.OPEN && order.getTableNumber() != null) {
+                rejectIfTableIsGone(connection, order.getTableNumber()); // TODO 4.18: removed on another till
                 rejectIfTableHasOpenOrder(connection, order.getTableNumber()); // TODO 3.22
             }
             int orderId;
@@ -64,6 +121,10 @@ public class OrderDAO {
                 statement.setString(11, order.getDiscountReason());
                 // The one who creates a paid order is also the one who took the money.
                 setNullableInt(statement, 12, order.getStatus() == OrderStatus.PAID ? order.getEmployeeId() : null);
+                setNullableInt(statement, 13, order.getPointsEarned());
+                setNullableMoney(statement, 14, order.getCashReceived());
+                setNullableMoney(statement, 15, order.getChangeGiven());
+                statement.setString(16, order.getTransferRef());
                 statement.executeUpdate();
                 try (ResultSet keys = statement.getGeneratedKeys()) {
                     keys.next();
@@ -82,6 +143,9 @@ public class OrderDAO {
                 }
                 statement.executeBatch();
             }
+            if (order.getStatus() == OrderStatus.PAID) {
+                stampUnitCosts(connection, orderId); // TODO 3.53: the cost is recorded with the sale
+            }
             // Stock is taken inside the same transaction, and only if enough is left: a sale that
             // would drive stock below zero fails as a whole (nothing saved) instead of going negative.
             if (order.getStatus() == OrderStatus.PAID) {
@@ -96,11 +160,9 @@ public class OrderDAO {
                             boolean off = isSwitchedOff(connection, item.getProductId());
                             connection.rollback();
                             if (off) {
-                                throw new DataAccessException("\"" + item.getProductName()
-                                        + "\" đã ngừng bán nên không thể thanh toán. Hãy xóa món này khỏi đơn.");
+                                throw new DataAccessException(I18n.t("order.item.stopped", item.getProductName()));
                             }
-                            throw new DataAccessException("\"" + item.getProductName()
-                                    + "\" không đủ tồn kho để hoàn tất đơn. Vui lòng kiểm tra lại số lượng.");
+                            throw new DataAccessException(I18n.t("order.item.nostock", item.getProductName()));
                         }
                     }
                 }
@@ -108,7 +170,7 @@ public class OrderDAO {
             // Loyalty points are awarded inside the same transaction as the order itself, so a
             // failed save can never leave points granted for an order that doesn't exist.
             if (order.getCustomerId() != null && order.getStatus() == OrderStatus.PAID) {
-                int points = LoyaltyPolicy.pointsFor(order.getTotal());
+                int points = earnedPoints;
                 if (points > 0) {
                     try (PreparedStatement statement = connection.prepareStatement(
                             "UPDATE customers SET loyalty_points = loyalty_points + ? WHERE id = ?")) {
@@ -132,8 +194,7 @@ public class OrderDAO {
             if (order.getStatus() == OrderStatus.OPEN && order.getTableNumber() != null
                     && UniqueViolation.isUnique(e)) {
                 // Two tills saved the same table at the same moment and the database's one-open-order rule (TODO 3.22) caught it.
-                throw new DataAccessException("Bàn " + order.getTableNumber()
-                        + " vừa có đơn chưa thanh toán từ máy khác. Hãy mở lại đơn đó thay vì tạo đơn mới.", e);
+                throw new DataAccessException(I18n.t("order.table.collision", order.getTableNumber()), e);
             }
             throw new DataAccessException("Failed to save order", e);
         }
@@ -145,6 +206,22 @@ public class OrderDAO {
      * free table at the very same moment on a shared MariaDB server could still both pass; a database-level unique rule
      * (partial index on SQLite, generated column on MariaDB) is left for a run that can test both.
      */
+    /**
+     * A new open order needs a table that exists (TODO 4.18). With two or more tills, one can still show a table that the
+     * owner has just removed on another; its order would belong to no table on any map and nobody would find it.
+     */
+    private static void rejectIfTableIsGone(Connection connection, int tableNumber) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("SELECT 1 FROM dining_tables WHERE table_number = ?")) {
+            statement.setInt(1, tableNumber);
+            try (ResultSet rs = statement.executeQuery()) {
+                if (!rs.next()) {
+                    connection.rollback();
+                    throw new DataAccessException(I18n.t("order.table.gone", tableNumber));
+                }
+            }
+        }
+    }
+
     private static void rejectIfTableHasOpenOrder(Connection connection, int tableNumber) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
                 "SELECT id FROM orders WHERE table_number = ? AND status = " + SqlStatus.OPEN + " ORDER BY id DESC LIMIT 1")) {
@@ -153,8 +230,7 @@ public class OrderDAO {
                 if (rs.next()) {
                     int existing = rs.getInt(1);
                     connection.rollback();
-                    throw new DataAccessException("Bàn " + tableNumber + " đang có đơn chưa thanh toán (#" + existing
-                            + "). Hãy mở lại đơn đó thay vì tạo đơn mới.");
+                    throw new DataAccessException(I18n.t("order.table.hasopen", tableNumber, existing));
                 }
             }
         }
@@ -281,16 +357,25 @@ public class OrderDAO {
         return payExistingOrder(orderId, customerId, method, discount, discountReason, total, items, null);
     }
 
+    public Order payExistingOrder(int orderId, Integer customerId, PaymentMethod method, BigDecimal discount,
+                                  String discountReason, BigDecimal total, List<OrderItem> items, Integer paidByEmployeeId) {
+        return payExistingOrder(orderId, customerId, method, discount, discountReason, total, items, paidByEmployeeId, null, null);
+    }
+
     /**
      * Checks that the figures it was given add up before anything is written (TODO 2.25): at least one line, every
      * line positive and equal to price x quantity, a discount between 0 and the subtotal, and a total equal to
      * subtotal - discount. The subtotal is saved too, and {@code paidByEmployeeId} records who took the money (TODO 2.47).
      */
     public Order payExistingOrder(int orderId, Integer customerId, PaymentMethod method, BigDecimal discount,
-                                  String discountReason, BigDecimal total, List<OrderItem> items, Integer paidByEmployeeId) {
+                                  String discountReason, BigDecimal total, List<OrderItem> items, Integer paidByEmployeeId,
+                                  BigDecimal cashReceived, String transferRef) {
         BigDecimal subtotal = checkTotals(discount, total, items);
+        String[] referenceOut = new String[1];
+        BigDecimal[] cash = paymentDetails(method, total, cashReceived, transferRef, referenceOut); // TODO 3.17, 4.31
         String orderSql = "UPDATE orders SET status = " + SqlStatus.PAID + ", paid_at = ?, payment_method = ?, discount = ?, total = ?, "
-                + "customer_id = COALESCE(?, customer_id), discount_reason = ?, subtotal = ?, paid_by = ? "
+                + "customer_id = COALESCE(?, customer_id), discount_reason = ?, subtotal = ?, paid_by = ?, "
+                + "cash_received = ?, change_given = ?, transfer_ref = ? "
                 + "WHERE id = ? AND status = " + SqlStatus.OPEN;
         String deleteItemsSql = "DELETE FROM order_items WHERE order_id = ?";
         String itemSql = "INSERT INTO order_items (order_id, product_id, product_name, quantity, unit_price, line_total) VALUES (?, ?, ?, ?, ?, ?)";
@@ -305,11 +390,13 @@ public class OrderDAO {
                 statement.setString(6, discountReason);
                 statement.setLong(7, Money.toDong(subtotal));
                 setNullableInt(statement, 8, paidByEmployeeId);
-                statement.setInt(9, orderId);
+                setNullableMoney(statement, 9, cash[0]);
+                setNullableMoney(statement, 10, cash[1]);
+                statement.setString(11, referenceOut[0]);
+                statement.setInt(12, orderId);
                 if (statement.executeUpdate() == 0) {
                     connection.rollback();
-                    throw new DataAccessException("Đơn #" + orderId
-                            + " không còn ở trạng thái đang mở (đã thanh toán hoặc đã hủy), không thể thanh toán lại.");
+                    throw new DataAccessException(I18n.t("order.notopen", orderId));
                 }
             }
             Integer finalCustomerId = null;
@@ -342,6 +429,7 @@ public class OrderDAO {
                 }
                 statement.executeBatch();
             }
+            stampUnitCosts(connection, orderId); // TODO 3.53: the cost is recorded with the sale
             try (PreparedStatement statement = connection.prepareStatement(
                     "UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ? AND active = 1")) {
                 for (OrderItem item : items) {
@@ -353,23 +441,25 @@ public class OrderDAO {
                         boolean off = isSwitchedOff(connection, item.getProductId());
                         connection.rollback();
                         if (off) {
-                            throw new DataAccessException("\"" + item.getProductName()
-                                    + "\" đã ngừng bán nên không thể thanh toán. Hãy xóa món này khỏi đơn.");
+                            throw new DataAccessException(I18n.t("order.item.stopped", item.getProductName()));
                         }
-                        throw new DataAccessException("\"" + item.getProductName()
-                                + "\" không đủ tồn kho để hoàn tất đơn. Vui lòng kiểm tra lại số lượng.");
+                        throw new DataAccessException(I18n.t("order.item.nostock", item.getProductName()));
                     }
                 }
             }
-            if (finalCustomerId != null) {
-                int points = LoyaltyPolicy.pointsFor(total);
-                if (points > 0) {
-                    try (PreparedStatement statement = connection.prepareStatement(
-                            "UPDATE customers SET loyalty_points = loyalty_points + ? WHERE id = ?")) {
-                        statement.setInt(1, points);
-                        statement.setInt(2, finalCustomerId);
-                        statement.executeUpdate();
-                    }
+            // The points this sale gives are saved with the order (0 without a customer), so a refund takes back exactly these (TODO 3.25).
+            int points = finalCustomerId != null ? LoyaltyPolicy.pointsFor(total) : 0;
+            try (PreparedStatement statement = connection.prepareStatement("UPDATE orders SET points_earned = ? WHERE id = ?")) {
+                statement.setInt(1, points);
+                statement.setInt(2, orderId);
+                statement.executeUpdate();
+            }
+            if (finalCustomerId != null && points > 0) {
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "UPDATE customers SET loyalty_points = loyalty_points + ? WHERE id = ?")) {
+                    statement.setInt(1, points);
+                    statement.setInt(2, finalCustomerId);
+                    statement.executeUpdate();
                 }
             }
             if (tableNumber != null) {
@@ -389,27 +479,27 @@ public class OrderDAO {
     /** Validates the lines and totals of a sale and returns the subtotal (sum of the lines). */
     static BigDecimal checkTotals(BigDecimal discount, BigDecimal total, List<OrderItem> items) {
         if (items == null || items.isEmpty()) {
-            throw new DataAccessException("Đơn hàng không có sản phẩm nào, không thể thanh toán.");
+            throw new DataAccessException(I18n.t("order.empty"));
         }
         BigDecimal subtotal = BigDecimal.ZERO;
         for (OrderItem item : items) {
             if (item.getQuantity() <= 0) {
-                throw new DataAccessException("Số lượng của \"" + item.getProductName() + "\" không hợp lệ.");
+                throw new DataAccessException(I18n.t("order.qty.invalid", item.getProductName()));
             }
             if (item.getUnitPrice() == null || item.getUnitPrice().signum() < 0) {
-                throw new DataAccessException("Đơn giá của \"" + item.getProductName() + "\" không hợp lệ.");
+                throw new DataAccessException(I18n.t("order.price.invalid", item.getProductName()));
             }
             BigDecimal expected = item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
             if (item.getLineTotal() == null || item.getLineTotal().compareTo(expected) != 0) {
-                throw new DataAccessException("Thành tiền của \"" + item.getProductName() + "\" không khớp đơn giá x số lượng.");
+                throw new DataAccessException(I18n.t("order.line.mismatch", item.getProductName()));
             }
             subtotal = subtotal.add(expected);
         }
         if (discount == null || discount.signum() < 0 || discount.compareTo(subtotal) > 0) {
-            throw new DataAccessException("Giảm giá phải từ 0 đến tổng tiền hàng.");
+            throw new DataAccessException(I18n.t("order.discount.range"));
         }
         if (total == null || total.compareTo(subtotal.subtract(discount)) != 0) {
-            throw new DataAccessException("Tổng tiền không khớp với các dòng hàng và giảm giá.");
+            throw new DataAccessException(I18n.t("order.total.mismatch"));
         }
         return subtotal;
     }
@@ -501,6 +591,11 @@ public class OrderDAO {
             this(keyword, status, from, to, null);
         }
 
+        /** Both dates are set and "from" is after "to": no order can match (TODO 3.58). The screens warn instead of showing an empty list. */
+        public boolean hasReversedDates() {
+            return from != null && to != null && from.isAfter(to);
+        }
+
         /** Same filter limited to one customer's orders (TODO 4.4). */
         public HistoryFilter forCustomer(int id) {
             return new HistoryFilter(keyword, status, from, to, id);
@@ -539,17 +634,23 @@ public class OrderDAO {
                 boolean phoneSearch = phone != null && phone.length() >= 4 && phone.chars().allMatch(Character::isDigit);
                 // Digits alone are an order number and match it exactly: "#12" finds order 12, not 112, 120 or 312 (TODO 3.35).
                 // A number with a leading zero or more than 9 digits is no order number here (it can still be a phone).
-                boolean orderNumber = looksLikeOrderNumber(typed);
+                // "DH000012" (the note on a bank transfer), "000012" and "# 12" find order 12 as well (TODO 3.56).
+                Integer reference = com.coffeeshop.coffeeshopmanagement.util.OrderNumber.parseReference(filter.keyword());
+                boolean orderNumber = reference != null;
+                // A bank reference (TODO 4.31): from 5 characters on, so that a short number still means an order; ASCII letters, as banks print them.
+                boolean referenceSearch = typed.length() >= 5;
                 conditions.add("(" + (orderNumber ? "o.id = ? OR " : "")
                         + DatabaseConfig.searchKeySql("COALESCE(pe.full_name, e.full_name)") + " LIKE ? ESCAPE '!' OR "
                         + DatabaseConfig.searchKeySql("c.full_name") + " LIKE ? ESCAPE '!'"
-                        + (phoneSearch ? " OR c.phone LIKE ? ESCAPE '!'" : "") + ")");
+                        + (phoneSearch ? " OR c.phone LIKE ? ESCAPE '!'" : "")
+                        + (referenceSearch ? " OR UPPER(o.transfer_ref) LIKE ? ESCAPE '!'" : "") + ")");
                 // Names are compared folded on both sides (TODO 3.31): "nguyen" and "NGUYỄN" both find "Nguyễn", "dao" finds "Đào".
                 String like = "%" + escapeLike(com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.searchKey(typed)) + "%";
-                if (orderNumber) params.add(typed);
+                if (orderNumber) params.add(String.valueOf(reference));
                 params.add(like);
                 params.add(like);
                 if (phoneSearch) params.add("%" + escapeLike(phone) + "%");
+                if (referenceSearch) params.add("%" + escapeLike(typed.toUpperCase(java.util.Locale.ROOT)) + "%");
             }
             whereClause = conditions.isEmpty() ? "" : " WHERE " + String.join(" AND ", conditions);
         }
@@ -579,7 +680,7 @@ public class OrderDAO {
     /** Sortable columns of the history screen. Whitelisted here (never built from UI text) so
      *  the ORDER BY can't be used for SQL injection. */
     public enum HistorySortKey {
-        ID("o.id", false), DATE("o.order_date", false), EMPLOYEE("COALESCE(pe.full_name, e.full_name)", true),
+        ID("o.id", false), DATE("COALESCE(o.paid_at, o.order_date)", false), EMPLOYEE("COALESCE(pe.full_name, e.full_name)", true),
         CUSTOMER("c.full_name", true), PAYMENT("o.payment_method", false),
         TOTAL("o.total", false), STATUS("o.status", false);
 
@@ -602,13 +703,18 @@ public class OrderDAO {
         public static final HistorySort NEWEST_FIRST = new HistorySort(HistorySortKey.ID, true);
     }
 
+    /** The history query with its filter and sort, before any LIMIT: shared by the paged screen and the streaming export. */
+    private static String historySelect(FilterSql filterSql, HistorySort effective) {
+        return "SELECT o.*, COALESCE(pe.full_name, e.full_name) AS employee_name, c.full_name AS customer_name"
+                + HISTORY_FROM + filterSql.whereClause
+                + " ORDER BY " + effective.key().sql() + (effective.descending() ? " DESC" : " ASC")
+                + ", o.id DESC";
+    }
+
     public List<OrderSummary> findHistoryPage(HistoryFilter filter, HistorySort sort, int pageSize, int offset) {
         FilterSql filterSql = new FilterSql(filter);
         HistorySort effective = sort != null ? sort : HistorySort.NEWEST_FIRST;
-        String sql = "SELECT o.*, COALESCE(pe.full_name, e.full_name) AS employee_name, c.full_name AS customer_name"
-                + HISTORY_FROM + filterSql.whereClause
-                + " ORDER BY " + effective.key().sql() + (effective.descending() ? " DESC" : " ASC")
-                + ", o.id DESC LIMIT ? OFFSET ?";
+        String sql = historySelect(filterSql, effective) + " LIMIT ? OFFSET ?";
         List<OrderSummary> result = new ArrayList<>();
         try (Connection connection = DatabaseConfig.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
@@ -626,13 +732,40 @@ public class OrderDAO {
         return result;
     }
 
-    /** Most rows one export will write; a shop would need decades of orders to reach it. */
-    public static final int EXPORT_LIMIT = 200_000;
-
-    /** Every order matching {@code filter} in {@code sort} order (up to {@link #EXPORT_LIMIT}) for a CSV export (TODO 4.21). */
-    public List<OrderSummary> findAllForExport(HistoryFilter filter, HistorySort sort) {
+    /**
+     * Hands every order matching {@code filter}, in {@code sort} order, to {@code sink} one row at a time while the result is read,
+     * and returns how many there were (TODO 3.54). Nothing is collected in a list and nothing is cut off: the export used to read
+     * at most 200,000 rows into memory and write a file that ended there without a word. On MariaDB the driver is told to stream
+     * (it would otherwise load the whole result before the first row); SQLite reads row by row anyway. Admin only.
+     */
+    public int exportOrders(HistoryFilter filter, HistorySort sort, java.util.function.Consumer<OrderSummary> sink) {
         Permissions.requireAdmin("export orders");
-        return findHistoryPage(filter, sort, EXPORT_LIMIT, 0);
+        FilterSql filterSql = new FilterSql(filter);
+        HistorySort effective = sort != null ? sort : HistorySort.NEWEST_FIRST;
+        int count = 0;
+        try (Connection connection = DatabaseConfig.getConnection();
+             PreparedStatement statement = connection.prepareStatement(historySelect(filterSql, effective))) {
+            if (DatabaseConfig.dialect() == com.coffeeshop.coffeeshopmanagement.config.SqlDialect.MARIADB) {
+                statement.setFetchSize(Integer.MIN_VALUE); // MariaDB Connector/J: one row at a time
+            }
+            filterSql.bind(statement);
+            try (ResultSet rs = statement.executeQuery()) {
+                while (rs.next()) {
+                    sink.accept(new OrderSummary(map(rs), rs.getString("employee_name"), rs.getString("customer_name")));
+                    count++;
+                }
+            }
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to export orders", e);
+        }
+        return count;
+    }
+
+    /** Every order matching {@code filter} in {@code sort} order, as a list: for small results only. Use {@link #exportOrders} for files. */
+    public List<OrderSummary> findAllForExport(HistoryFilter filter, HistorySort sort) {
+        List<OrderSummary> rows = new ArrayList<>();
+        exportOrders(filter, sort, rows::add);
+        return rows;
     }
 
     /** Total rows matching {@code filter}, ignoring paging - for the page-count/"N đơn" label. */
@@ -658,28 +791,40 @@ public class OrderDAO {
      * step fails. The order row and its items are kept, so the history stays intact.
      */
     public void cancelPaidOrder(int orderId) {
+        cancelPaidOrder(orderId, true);
+    }
+
+    /**
+     * Refunds a paid order. {@code returnToStock} says whether the goods go back on the shelf: yes for packaged goods that
+     * were not opened, no for a drink that was already made and thrown away, which would otherwise raise the stock by cups
+     * that do not exist (TODO 2.66). The loyalty points are taken back either way.
+     */
+    public void cancelPaidOrder(int orderId, boolean returnToStock) {
         com.coffeeshop.coffeeshopmanagement.util.Permissions.requireAdmin("refund a paid order");
         try (Connection connection = DatabaseConfig.getConnection()) {
             connection.setAutoCommit(false);
             try {
                 Integer customerId;
                 BigDecimal total;
+                Integer recordedPoints; // what the order gave when it was paid; null for an order paid before that was recorded (TODO 3.25)
                 try (PreparedStatement statement = connection.prepareStatement(
-                        "SELECT status, customer_id, total FROM orders WHERE id = ?")) {
+                        "SELECT status, customer_id, total, points_earned FROM orders WHERE id = ?")) {
                     statement.setInt(1, orderId);
                     try (ResultSet rs = statement.executeQuery()) {
                         if (!rs.next()) {
-                            throw new DataAccessException("Không tìm thấy đơn hàng #" + orderId);
+                            throw new DataAccessException(I18n.t("order.notfound", orderId));
                         }
                         if (OrderStatus.fromDb(rs.getString("status")) != OrderStatus.PAID) {
-                            throw new DataAccessException("Chỉ có thể hủy đơn hàng đã thanh toán.");
+                            throw new DataAccessException(I18n.t("order.cancel.onlypaid"));
                         }
                         int cid = rs.getInt("customer_id");
                         customerId = rs.wasNull() ? null : cid;
                         total = Money.fromDong(rs.getLong("total"));
+                        int recorded = rs.getInt("points_earned");
+                        recordedPoints = rs.wasNull() ? null : recorded;
                     }
                 }
-                try (PreparedStatement items = connection.prepareStatement(
+                if (returnToStock) try (PreparedStatement items = connection.prepareStatement(
                         "SELECT product_id, quantity FROM order_items WHERE order_id = ? AND product_id IS NOT NULL");
                      PreparedStatement restock = connection.prepareStatement(
                              "UPDATE products SET stock = stock + ? WHERE id = ?")) {
@@ -694,7 +839,8 @@ public class OrderDAO {
                     restock.executeBatch();
                 }
                 if (customerId != null) {
-                    int points = LoyaltyPolicy.pointsFor(total);
+                    // Exactly what this order gave; only an old order with no record falls back to today's rule (TODO 3.25).
+                    int points = recordedPoints != null ? recordedPoints : LoyaltyPolicy.pointsFor(total);
                     if (points > 0) {
                         try (PreparedStatement statement = connection.prepareStatement(
                                 "UPDATE customers SET loyalty_points = CASE WHEN loyalty_points > ? THEN loyalty_points - ? ELSE 0 END "
@@ -711,10 +857,13 @@ public class OrderDAO {
                     statement.setInt(1, orderId);
                     if (statement.executeUpdate() == 0) {
                         // Somebody else cancelled it between the read and this write: undo the restock/points above.
-                        throw new DataAccessException("Đơn hàng #" + orderId + " vừa được hủy ở nơi khác.");
+                        throw new DataAccessException(I18n.t("order.cancel.already", orderId));
                     }
                 }
                 connection.commit();
+                com.coffeeshop.coffeeshopmanagement.util.SecurityLog.event(
+                        com.coffeeshop.coffeeshopmanagement.util.SecurityLog.actor() + " refunded order #" + orderId
+                                + (returnToStock ? ", goods returned to stock" : ", goods NOT returned to stock"));
             } catch (SQLException | RuntimeException e) {
                 connection.rollback();
                 throw e;
@@ -846,15 +995,20 @@ public class OrderDAO {
             byDate.put(today.minusDays(i), BigDecimal.ZERO);
         }
         String sql = "SELECT " + EFFECTIVE_DAY + " AS d, SUM(total) AS revenue FROM orders " +
-                "WHERE status = " + SqlStatus.PAID + " AND " + EFFECTIVE_DAY + " >= ? " +
+                "WHERE status = " + SqlStatus.PAID + " AND " + EFFECTIVE_DAY + " >= ? AND " + EFFECTIVE_DAY + " <= ? " +
                 "GROUP BY " + EFFECTIVE_DAY;
         try (Connection connection = DatabaseConfig.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, today.minusDays(6).toString());
+            // Not after today either (TODO 3.42): an order paid on a day in the future, left by a till clock that was set too
+            // far ahead, must not add an 8th bar to the chart.
+            statement.setString(2, today.toString());
             try (ResultSet rs = statement.executeQuery()) {
                 while (rs.next()) {
                     LocalDate date = LocalDate.parse(rs.getString("d"));
-                    byDate.put(date, Money.fromDong(rs.getLong("revenue")));
+                    if (byDate.containsKey(date)) { // belt and braces: only the 7 days asked for
+                        byDate.put(date, Money.fromDong(rs.getLong("revenue")));
+                    }
                 }
             }
         } catch (SQLException e) {
@@ -911,6 +1065,13 @@ public class OrderDAO {
         } catch (SQLException ignored) {
             // a query that does not select this column
         }
+        int points = rs.getInt("points_earned");
+        order.setPointsEarned(rs.wasNull() ? null : points);
+        long cashReceived = rs.getLong("cash_received");
+        order.setCashReceived(Money.fromDongOrNull(cashReceived, rs.wasNull()));
+        long changeGiven = rs.getLong("change_given");
+        order.setChangeGiven(Money.fromDongOrNull(changeGiven, rs.wasNull()));
+        order.setTransferRef(rs.getString("transfer_ref"));
         return order;
     }
 

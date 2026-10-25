@@ -23,6 +23,7 @@ public class SqliteToMariaDbImporterTest {
         Set<String> copied = new HashSet<>(SqliteToMariaDbImporter.tableNames());
         Set<String> inMaria = new HashSet<>(SchemaColumns.byTable(MariaDbSchema.TABLES).keySet());
         inMaria.remove("schema_version"); // written by the app itself
+        inMaria.remove("login_attempts"); // wrong-password counters of the last quarter of an hour, not data worth carrying over (TODO 2A.19)
         assertEquals(inMaria, copied);
     }
 

@@ -6,8 +6,10 @@ package com.coffeeshop.coffeeshopmanagement.service;
  */
 public final class TablePolicy {
 
-    public static final String REFUSED_MESSAGE =
-            "Đơn này do nhân viên khác mở. Chỉ nhân viên đã mở đơn hoặc quản trị viên mới được hủy đơn đang phục vụ.";
+    /** Why emptying the table was refused, in the language in use. */
+    public static String refusedMessage() {
+        return com.coffeeshop.coffeeshopmanagement.util.I18n.t("table.refused");
+    }
 
     private TablePolicy() {}
 

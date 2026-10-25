@@ -21,8 +21,9 @@ public final class Permissions {
 
     public static void requireAdmin(String what) {
         if (!Session.isAdmin()) {
-            SecurityLog.warn(SecurityLog.actor() + " tried to " + what + " without permission");
-            throw new PermissionDeniedException("Chức năng này chỉ dành cho Quản trị viên.");
+            SecurityLog.warnLimited("permission:" + SecurityLog.actor() + ":" + what,
+                    SecurityLog.actor() + " tried to " + what + " without permission");
+            throw new PermissionDeniedException(I18n.t("admin.only.message"));
         }
     }
 }
