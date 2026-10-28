@@ -154,7 +154,7 @@ public class AccountService {
                     // unless the admin changed their own.
                     boolean own = Session.getCurrentUser() != null && Session.getCurrentUser().getId() == existing.getId();
                     try (PreparedStatement st = connection.prepareStatement(
-                            "UPDATE users SET password_hash = ?, must_change_password = ? WHERE id = ?")) {
+                            "UPDATE users SET password_hash = ?, must_change_password = ?, pin_hash = NULL, pin_failures = 0 WHERE id = ?")) {
                         st.setString(1, newHash);
                         st.setInt(2, own ? 0 : 1);
                         st.setInt(3, existing.getId());
@@ -184,6 +184,9 @@ public class AccountService {
         try (Connection connection = DatabaseConfig.getConnection()) {
             connection.setAutoCommit(false);
             try {
+                if (!lock && target.getEmployeeId() != null && isAnonymised(connection, target.getEmployeeId())) {
+                    throw new DataAccessException(I18n.t("staff.anon.nounlock")); // TODO 4.29: their details are gone for good
+                }
                 changeRoleAndStatus(connection, target.getId(), target.getRole(),
                         lock ? AccountStatus.LOCKED : AccountStatus.ACTIVE);
                 if (target.getEmployeeId() != null) {
@@ -206,6 +209,127 @@ public class AccountService {
     }
 
     /**
+     * Deletes a person who never took part in a sale (TODO 4.29): their login (when they have one) and their staff record, in one
+     * transaction. Refused for your own account, for the last active administrator (the same one-statement guard as locking), and for
+     * anyone who appears in an order, the stock log or a closed shift, who can only be made anonymous ({@link #anonymiseStaff}).
+     */
+    public void removeStaff(com.coffeeshop.coffeeshopmanagement.model.StaffRow row) {
+        Permissions.requireAdmin("remove a staff member");
+        if (row == null) {
+            throw new DataAccessException(I18n.t("staff.gone"));
+        }
+        User me = Session.getCurrentUser();
+        if (row.hasAccount() && me != null && me.getId() == row.userId()) {
+            throw new DataAccessException(I18n.t("staff.remove.self"));
+        }
+        int employeeId = row.employee().getId();
+        try (Connection connection = DatabaseConfig.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                if (row.hasAccount()) {
+                    String sql = "DELETE FROM users WHERE id = ? AND (NOT (role = " + SqlStatus.ROLE_ADMIN + " AND status = " + SqlStatus.ACTIVE
+                            + ") OR (SELECT COUNT(*) FROM users WHERE role = " + SqlStatus.ROLE_ADMIN + " AND status = " + SqlStatus.ACTIVE
+                            + " AND id <> ?) >= 1)";
+                    try (PreparedStatement st = connection.prepareStatement(sql)) {
+                        st.setInt(1, row.userId());
+                        st.setInt(2, row.userId());
+                        if (st.executeUpdate() == 0) {
+                            throw new DataAccessException(lastAdminMessage()); // or the account is already gone: the list is reloaded either way
+                        }
+                    }
+                }
+                if (EmployeeDAO.hasHistory(connection, employeeId)) {
+                    throw new DataAccessException(I18n.t("staff.remove.history"));
+                }
+                try (PreparedStatement st = connection.prepareStatement("DELETE FROM employees WHERE id = ?")) {
+                    st.setInt(1, employeeId);
+                    st.executeUpdate();
+                }
+                connection.commit();
+                SecurityLog.event(SecurityLog.actor() + " removed staff record " + employeeId
+                        + (row.hasAccount() ? " and its account (id " + row.userId() + ")" : ""));
+            } catch (SQLException | RuntimeException e) {
+                connection.rollback();
+                throw e;
+            }
+        } catch (SQLException e) {
+            // an order saved at another till between the check and the delete is stopped by the orders' foreign key
+            throw new DataAccessException(I18n.t("staff.remove.history"), e);
+        }
+    }
+
+    /**
+     * Removes the personal details of a person who has left and appears in the shop's records (TODO 4.29): the name becomes
+     * "Former staff #12", the phone, email, address and salary are cleared, the login name is replaced and the password made
+     * unusable, and the names copied into the stock log and the closed shifts are rewritten too, so nothing of them is left. The
+     * orders keep pointing at the same record, so the sales stay in the reports. Only for someone who is no longer working, and
+     * only once: it cannot be undone.
+     */
+    public void anonymiseStaff(com.coffeeshop.coffeeshopmanagement.model.StaffRow row) {
+        Permissions.requireAdmin("make a former staff member anonymous");
+        if (row == null) {
+            throw new DataAccessException(I18n.t("staff.gone"));
+        }
+        if (row.employee().isAnonymised()) {
+            throw new DataAccessException(I18n.t("staff.anon.already"));
+        }
+        if (row.isWorking()) {
+            throw new DataAccessException(I18n.t("staff.anon.working"));
+        }
+        int employeeId = row.employee().getId();
+        String newName = I18n.t("staff.former.name", employeeId);
+        try (Connection connection = DatabaseConfig.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                try (PreparedStatement st = connection.prepareStatement(
+                        "UPDATE employees SET full_name = ?, phone = NULL, email = NULL, address = NULL, salary = NULL, active = ?, "
+                                + "anonymised_at = ? WHERE id = ? AND anonymised_at IS NULL")) {
+                    st.setString(1, newName);
+                    st.setBoolean(2, false);
+                    st.setString(3, com.coffeeshop.coffeeshopmanagement.util.DbTime.write(AppClock.now()));
+                    st.setInt(4, employeeId);
+                    if (st.executeUpdate() == 0) {
+                        throw new DataAccessException(I18n.t("staff.anon.already"));
+                    }
+                }
+                if (row.hasAccount()) {
+                    String loginName = "former-" + employeeId;
+                    if (usernameTaken(connection, loginName)) {
+                        loginName = loginName + "-" + row.userId();
+                    }
+                    // only a locked account: a person who can still sign in is not a former member of staff
+                    try (PreparedStatement st = connection.prepareStatement(
+                            "UPDATE users SET username = ?, password_hash = ?, must_change_password = 0, pin_hash = NULL, pin_failures = 0 WHERE id = ? AND status = " + SqlStatus.LOCKED)) {
+                        st.setString(1, loginName);
+                        st.setString(2, PasswordUtil.hash(java.util.UUID.randomUUID().toString()));
+                        st.setInt(3, row.userId());
+                        if (st.executeUpdate() == 0) {
+                            throw new DataAccessException(I18n.t("staff.anon.working"));
+                        }
+                    }
+                }
+                try (PreparedStatement st = connection.prepareStatement("UPDATE stock_log SET employee_name = ? WHERE employee_id = ?")) {
+                    st.setString(1, newName);
+                    st.setInt(2, employeeId);
+                    st.executeUpdate();
+                }
+                try (PreparedStatement st = connection.prepareStatement("UPDATE shift_closes SET closed_by_name = ? WHERE closed_by = ?")) {
+                    st.setString(1, newName);
+                    st.setInt(2, employeeId);
+                    st.executeUpdate();
+                }
+                connection.commit();
+                SecurityLog.event(SecurityLog.actor() + " made staff record " + employeeId + " anonymous");
+            } catch (SQLException | RuntimeException e) {
+                connection.rollback();
+                throw e;
+            }
+        } catch (SQLException e) {
+            throw translate(I18n.t("staff.anon.fail"), e);
+        }
+    }
+
+    /**
      * One UPDATE that refuses to run when it would remove the last active admin: the guard is evaluated by the
      * database in the same statement, not by a count read earlier.
      */
@@ -223,6 +347,15 @@ public class AccountService {
             st.setInt(5, userId);
             if (st.executeUpdate() == 0) {
                 throw new DataAccessException(lastAdminMessage());
+            }
+        }
+    }
+
+    private static boolean isAnonymised(Connection connection, int employeeId) throws SQLException {
+        try (PreparedStatement st = connection.prepareStatement("SELECT 1 FROM employees WHERE id = ? AND anonymised_at IS NOT NULL")) {
+            st.setInt(1, employeeId);
+            try (ResultSet rs = st.executeQuery()) {
+                return rs.next();
             }
         }
     }

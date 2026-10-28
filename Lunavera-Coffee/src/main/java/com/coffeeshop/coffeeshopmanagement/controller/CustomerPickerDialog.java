@@ -41,13 +41,22 @@ public final class CustomerPickerDialog {
     }
 
     static Optional<Customer> choose(Customer current, CustomerService service) {
+        return choose(current, service, I18n.t("pos.attach.title"), I18n.t("pos.attach.content"));
+    }
+
+    /** The same box with its own title and sentence, for choosing the customer to keep on the customer screen (TODO 4.8). */
+    public static Optional<Customer> choose(String title, String intro) {
+        return choose(null, new CustomerService(), title, intro);
+    }
+
+    private static Optional<Customer> choose(Customer current, CustomerService service, String title, String introText) {
         Dialog<Customer> dialog = new Dialog<>();
-        dialog.setTitle(I18n.t("pos.attach.title"));
+        dialog.setTitle(title);
         dialog.setHeaderText(null);
         AlertUtil.configure(dialog);
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
 
-        Label intro = new Label(I18n.t("pos.attach.content"));
+        Label intro = new Label(introText);
         intro.setWrapText(true);
         intro.setMaxWidth(420);
         TextField search = new TextField();

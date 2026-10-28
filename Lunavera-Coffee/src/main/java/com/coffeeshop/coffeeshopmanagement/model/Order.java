@@ -19,17 +19,34 @@ public class Order {
     private String discountReason;
     /** The loyalty points this order gave its customer; null when it was paid before that was recorded (TODO 3.25). */
     private Integer pointsEarned;
+    /** Points the customer spent on this order and what they were worth (TODO 4.16); null when none were spent. Their value is part of {@link #discount}. */
+    private Integer pointsRedeemed;
+    private BigDecimal pointsValue;
     /** What the customer handed over and what went back (cash payments only; null otherwise, and for old orders) (TODO 3.17). */
     private BigDecimal cashReceived;
     private BigDecimal changeGiven;
     /** The bank's reference of a transfer, as the cashier typed it; null when none was typed (TODO 4.31). */
     private String transferRef;
 
+    /**
+     * The part of the total paid in cash when the order was paid with two methods (TODO 4.32), else null. The rest was paid with
+     * {@link #getPaymentMethod()}, which is never cash for such an order. Read from {@code order_payments}, not stored in this row.
+     */
+    private BigDecimal cashPart;
+
     public Order() {
     }
 
+    public BigDecimal getCashPart() { return cashPart; }
+    public void setCashPart(BigDecimal cashPart) { this.cashPart = cashPart; }
+    public boolean isSplitPayment() { return cashPart != null; }
+
     public Integer getPointsEarned() { return pointsEarned; }
     public void setPointsEarned(Integer pointsEarned) { this.pointsEarned = pointsEarned; }
+    public Integer getPointsRedeemed() { return pointsRedeemed; }
+    public void setPointsRedeemed(Integer pointsRedeemed) { this.pointsRedeemed = pointsRedeemed; }
+    public BigDecimal getPointsValue() { return pointsValue; }
+    public void setPointsValue(BigDecimal pointsValue) { this.pointsValue = pointsValue; }
 
     public BigDecimal getCashReceived() { return cashReceived; }
     public void setCashReceived(BigDecimal cashReceived) { this.cashReceived = cashReceived; }

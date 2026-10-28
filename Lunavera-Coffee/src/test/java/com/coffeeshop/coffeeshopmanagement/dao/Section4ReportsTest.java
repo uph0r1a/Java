@@ -309,5 +309,25 @@ public class Section4ReportsTest {
         assertEquals("nobody knows what it cost then", 1, after.linesWithoutCost());
         assertEquals(0, after.linesWithCost());
     }
-}
 
+    @Test
+    public void walletsAreSeparateLinesFromTheBankTransferInThePaymentSplit() { // TODO 4.34
+        Product p = product("10000");
+        LocalDate day = LocalDate.of(2003, 4, 5);
+        sellOn(day, p, 1, PaymentMethod.TRANSFER, null);
+        sellOn(day, p, 2, PaymentMethod.MOMO, null);
+        sellOn(day, p, 3, PaymentMethod.MOMO, null);
+        sellOn(day, p, 1, PaymentMethod.ZALOPAY, null);
+        sellOn(day, p, 1, PaymentMethod.VNPAY, null);
+        List<ReportDAO.PaymentSplit> split = reports.paymentSplit(day, day);
+        assertEquals(4, split.size());
+        ReportDAO.PaymentSplit momo = split.stream().filter(s -> s.method() == PaymentMethod.MOMO).findFirst().orElseThrow();
+        assertEquals(2, momo.orders());
+        assertEquals(0, BigDecimal.valueOf(150_000).compareTo(momo.revenue()));
+        ReportDAO.PaymentSplit bank = split.stream().filter(s -> s.method() == PaymentMethod.TRANSFER).findFirst().orElseThrow();
+        assertEquals(1, bank.orders());
+        assertEquals(0, BigDecimal.valueOf(30_000).compareTo(bank.revenue()));
+        BigDecimal sum = split.stream().map(ReportDAO.PaymentSplit::revenue).reduce(BigDecimal.ZERO, BigDecimal::add);
+        assertEquals(0, reports.summary(day, day).revenue().compareTo(sum));
+    }
+}

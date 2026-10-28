@@ -52,13 +52,14 @@ The SQLite restore code is covered by `BackupServiceTest`; this step proves it o
 
 ## 4. Release
 
-- `./mvnw -B clean test` passes on Windows and Linux (the CI runs both). The project holds 1156 `@Test` methods in 173 classes; the
+- `./mvnw -B clean test` passes on Windows and Linux (the CI runs both). The project holds 1460 `@Test` methods in 213 classes; the
   SQLite-only tests are skipped on MariaDB, so the number Maven prints can be lower. Write the number you see in the
   "Release status" block of `progress.md`.
   Known until TODO 3.42 is fixed: `DashboardStatsServiceTest.theLastSevenDaysIncludeTodayAndNoNegativeRevenue` can fail
   when it runs after `EdgeCasesTest` in the same JVM (a test order that Maven may or may not use); that is a code gap in
   the 7-day chart, not a broken build. Fix it before tagging.
 - Walk through section 0 of `TODO.md`: every check that touches this release is done or consciously skipped.
+- Fill in `CHANGELOG.md` first: rename its *Unreleased* section to the version and the date (the file says how), and say there if the version upgrades the database.
 - Tag the commit, for example `git tag v0.9`.
 - Keep the previous version's zip until the new one has run for a week.
 

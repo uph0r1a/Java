@@ -72,4 +72,70 @@ public class TextNormalizerTest {
         // renaming a category to its own name is fine
         dao.update(first);
     }
+
+    // ---- TODO 3.55: the same rule on SQLite and MariaDB ----
+
+    @Test
+    public void collationKeyIsMariaDbsRuleCaseAccentsAndTrailingSpacesDoNotCount() {
+        assertEquals(TextNormalizer.collationKey("Trà"), TextNormalizer.collationKey("tra"));
+        assertEquals(TextNormalizer.collationKey("Cà phê"), TextNormalizer.collationKey("CA PHE"));
+        assertEquals("the accent written as letter + mark counts the same", TextNormalizer.collationKey("Cà phê"),
+                TextNormalizer.collationKey("Ca\u0300 phe\u0302"));
+        assertEquals("trailing spaces are ignored by the server's collation", TextNormalizer.collationKey("Cafe"),
+                TextNormalizer.collationKey("cafe   "));
+        assertEquals("", TextNormalizer.collationKey(null));
+    }
+
+    @Test
+    public void collationKeyKeepsWhatTheServerKeepsApart() {
+        assertNotEquals("d with a stroke is its own letter on MariaDB", TextNormalizer.collationKey("Đỗ"), TextNormalizer.collationKey("Do"));
+        assertNotEquals("a space inside a name counts", TextNormalizer.collationKey("Cà  phê"), TextNormalizer.collationKey("Cà phê"));
+        assertNotEquals("a space in front counts", TextNormalizer.collationKey(" cafe"), TextNormalizer.collationKey("cafe"));
+        assertNotEquals(TextNormalizer.collationKey("Trà"), TextNormalizer.collationKey("Trà đá"));
+    }
+
+    @Test
+    public void uniqueKeyIsTheAppsRuleAndALittleStricterThanTheServers() {
+        assertEquals(TextNormalizer.uniqueKey("Trà"), TextNormalizer.uniqueKey("tra"));
+        assertEquals("extra spaces never make another name (3.18)", TextNormalizer.uniqueKey("Cà  phê "), TextNormalizer.uniqueKey("ca phe"));
+        assertNotEquals(TextNormalizer.uniqueKey("Đỗ"), TextNormalizer.uniqueKey("Do"));
+        assertEquals("", TextNormalizer.uniqueKey(null));
+    }
+
+    @Test
+    public void aCategoryThatDiffersOnlyInAccentsIsRefusedWithTheSamePlainMessageOnBothDatabases() {
+        CategoryDAO dao = new CategoryDAO();
+        String tag = " " + System.nanoTime();
+        Category first = new Category();
+        first.setName("Trà sữa" + tag);
+        first.setActive(true);
+        dao.insert(first);
+
+        for (String clash : new String[] {"Tra sua" + tag, "TRA SỮA" + tag, "tra sua" + tag + "  "}) {
+            Category other = new Category();
+            other.setName(clash);
+            other.setActive(true);
+            DataAccessException refused = assertThrows("'" + clash + "' is the same name", DataAccessException.class, () -> dao.insert(other));
+            assertEquals(I18n.t("category.exists"), refused.getMessage());
+        }
+
+        Category stroke = new Category(); // a different letter on both databases: allowed on both
+        stroke.setName("Đá" + tag);
+        stroke.setActive(true);
+        dao.insert(stroke);
+        Category plain = new Category();
+        plain.setName("Da" + tag);
+        plain.setActive(true);
+        dao.insert(plain);
+
+        // renaming a category so that it only differs from another one in accents is refused too
+        Category renamed = new Category();
+        renamed.setName("Cà phê" + tag);
+        renamed.setActive(true);
+        dao.insert(renamed);
+        renamed.setName("TRA SUA" + tag);
+        DataAccessException refused = assertThrows(DataAccessException.class, () -> dao.update(renamed));
+        assertEquals(I18n.t("category.exists"), refused.getMessage());
+    }
 }
+

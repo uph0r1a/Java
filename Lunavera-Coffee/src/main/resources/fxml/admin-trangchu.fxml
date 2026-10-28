@@ -86,6 +86,12 @@
                         maxWidth="1.7976931348623157E308"
                         styleClass="menu-button"
                         onAction="#openAccountManagement"/>
+
+                <Button text="%nav.staff"
+                        prefHeight="48.0"
+                        maxWidth="1.7976931348623157E308"
+                        styleClass="menu-button"
+                        onAction="#openStaffManagement"/>
             </VBox>
 
             <Region VBox.vgrow="ALWAYS"/>
@@ -187,6 +193,10 @@
                         prefHeight="36.0"
                         styleClass="secondary-button"
                         onAction="#handleManageTables"/>
+                <Button text="%admin.settings"
+                        prefHeight="36.0"
+                        styleClass="secondary-button"
+                        onAction="#handleOpenSettings"/>
                 <Button text="%backup2.button"
                         prefHeight="36.0"
                         styleClass="secondary-button"

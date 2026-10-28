@@ -34,7 +34,9 @@ public class LaterColumnsExistTest {
         java.util.Set<String> names = new java.util.HashSet<>();
         for (String[] column : SqliteSchema.LATER_COLUMNS) names.add(column[0] + "." + column[1]);
         for (String wanted : new String[]{"categories.sort_order", "products.sort_order", "products.reorder_level",
-                "orders.points_earned", "orders.cash_received", "orders.change_given", "orders.transfer_ref"}) {
+                "orders.points_earned", "orders.cash_received", "orders.change_given", "orders.transfer_ref",
+                "products.code", "order_items.note", "employees.anonymised_at", "orders.points_redeemed", "orders.points_value",
+                "customers.anonymised_at", "shift_closes.cash_out", "orders.cancelled_at", "users.pin_hash", "users.pin_failures"}) {
             assertEquals(wanted, true, names.contains(wanted));
         }
     }

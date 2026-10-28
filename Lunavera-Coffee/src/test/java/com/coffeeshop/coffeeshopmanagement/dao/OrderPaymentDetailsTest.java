@@ -84,9 +84,17 @@ public class OrderPaymentDetailsTest {
     }
 
     private Order openOrder() {
+        // OrderDAO refuses an order on a table that does not exist (TODO 4.18), so the test makes its own table first.
+        int tableNumber = ThreadLocalRandom.current().nextInt(1000, 9000); // a table nobody else uses in this run
+        try {
+            sql("INSERT INTO dining_tables (table_number, name, status, capacity) VALUES (?, ?, "
+                    + com.coffeeshop.coffeeshopmanagement.config.SqlStatus.EMPTY + ", 4)", tableNumber, "test-pay-table-" + tableNumber);
+        } catch (Exception e) {
+            throw new AssertionError(e);
+        }
         Order order = new Order();
         order.setOrderDate(AppClock.now());
-        order.setTableNumber(ThreadLocalRandom.current().nextInt(1000, 9000)); // a table nobody else uses in this run
+        order.setTableNumber(tableNumber);
         order.setStatus(OrderStatus.OPEN);
         order.setSubtotal(BigDecimal.ZERO);
         order.setDiscount(BigDecimal.ZERO);
@@ -269,5 +277,31 @@ public class OrderPaymentDetailsTest {
         orderDAO.cancelPaidOrder(saved.getId());
 
         assertEquals(500 - LoyaltyPolicy.pointsFor(new BigDecimal("100000")), pointsOf(customer));
+    }
+
+    // ------------------------------------------------------------------ e-wallets (4.34)
+
+    @Test
+    public void eachWalletIsSavedAndReadBackAsItselfWithItsCleanedCode() {
+        Product product = newProduct(10, "40000");
+        for (PaymentMethod wallet : PaymentMethod.eWallets()) {
+            Order sale = paidOrder("40000", null, wallet);
+            sale.setTransferRef("  " + wallet.name() + "   77 ");
+            sale.setCashReceived(new BigDecimal("100000")); // never kept for a wallet
+            Order read = orderDAO.findById(orderDAO.insert(sale, List.of(lineFor(product, 1))).getId()).orElseThrow();
+            assertEquals(wallet, read.getPaymentMethod());
+            assertEquals(wallet.name() + " 77", read.getTransferRef());
+            assertNull(read.getCashReceived());
+            assertNull(read.getChangeGiven());
+        }
+    }
+
+    @Test
+    public void anOpenOrderPaidWithAWalletKeepsTheMethodAndTheCode() {
+        Product product = newProduct(10, "40000");
+        Order paid = orderDAO.payExistingOrder(openOrder().getId(), null, PaymentMethod.ZALOPAY, BigDecimal.ZERO,
+                null, new BigDecimal("40000"), List.of(lineFor(product, 1)), null, null, "ZP-1");
+        assertEquals(PaymentMethod.ZALOPAY, orderDAO.findById(paid.getId()).orElseThrow().getPaymentMethod());
+        assertEquals("ZP-1", paid.getTransferRef());
     }
 }

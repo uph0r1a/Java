@@ -12,7 +12,7 @@ A desktop coffee-shop point of sale (JavaFX 21; MariaDB/MySQL with phpMyAdmin by
 
 `mvnw` is the Maven wrapper: it downloads the Maven version the project needs on the first run, so a separate Maven install is not required (JDK 21 is). If you do have Maven, `mvn` works the same way.
 
-Needs JDK 21. First start: when the old SQLite data is carried over (`db.import.sqlite`, see below) you sign in with your **old** admin account. On a completely new database the app asks the owner to create the first account (name, username, password); there is no built-in password. Old installs that still have the old default password are made to change it at login. Anyone can change their own later with the "Đổi mật khẩu" button at the bottom of the sidebar.
+Needs JDK 21. First start: when the old SQLite data is carried over (`db.import.sqlite`, see below) you sign in with your **old** admin account. On a completely new database the app asks the owner to create the first account (name, username, password); there is no built-in password. When that administrator first signs in, a short setup window asks for the shop name and the number of tables and reminds the owner to check the starter menu; it can be skipped with "Để sau" and is not shown again. Old installs that still have the old default password are made to change it at login. Anyone can change their own later with the "Đổi mật khẩu" button at the bottom of the sidebar.
 
 Every push to GitHub also runs `./mvnw -B clean verify` (the tests and the coverage report) on Linux and Windows (`.github/workflows/ci.yml`); the Linux run keeps the coverage report as a download.
 
@@ -38,7 +38,7 @@ Vietnamese text typed straight into a Java string or an FXML attribute fails `Un
 
 | Path | What is in it |
 | --- | --- |
-| `src/main/java/com/coffeeshop/coffeeshopmanagement/controller/` | the screens' controllers (JavaFX); one controller per admin screen (`AdminDashboardController`, `CategoryController`, `ProductController`, `AccountController`) on a shared `AdminScreen` base, `OrderController` the sales screen |
+| `src/main/java/com/coffeeshop/coffeeshopmanagement/controller/` | the screens' controllers (JavaFX); one controller per admin screen (`AdminDashboardController`, `CategoryController`, `ProductController`, `AccountController`, `StaffController`) on a shared `AdminScreen` base, `OrderController` the sales screen |
 | `src/main/java/com/coffeeshop/coffeeshopmanagement/` | `LunaveraApplication` (start-up) and `Launcher`, then: `model/` (plain data classes), `dao/` (all SQL), `service/` (rules: login, accounts, backup, reports), `config/` (database set-up, schema, migrations, starter menu), `util/` (small helpers) |
 | `src/main/resources/fxml/` | the screen layouts |
 | `src/main/resources/` | `css/` (look), `fonts/`, `images/` (icons, logo), `seed-menu/` (the starter menu pictures) |

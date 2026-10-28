@@ -25,6 +25,9 @@ import java.util.stream.Stream;
  *   <li><b>version 2</b> (TODO 2.6): indexes on the columns the screens and reports filter and join by. Before this the
  *       only indexes were the automatic ones for PRIMARY KEY and UNIQUE, so every history, report and "orders of this
  *       table / customer" query read the whole orders table.</li>
+ *   <li><b>version 3</b> (TODO 3.36): an index on {@code orders.paid_at}. The date filters (history, reports, dashboard) are
+ *       ranges on {@code paid_at} and {@code order_date} now, and the paid time had no index on SQLite. MariaDB's tables are
+ *       created with it, so its step only covers a database made before that.</li>
  * </ul>
  * Plus one rule that is re-checked at every start because it can fail on old data (TODO 2.7): at most one customer per
  * phone number, enforced by a unique index as soon as no duplicates exist.
@@ -34,7 +37,7 @@ public final class SchemaMigrations {
 
     private static final Logger LOGGER = Logger.getLogger(SchemaMigrations.class.getName());
 
-    public static final int LATEST_VERSION = 2;
+    public static final int LATEST_VERSION = 3;
     static final String UNIQUE_PHONE_INDEX = "ux_customers_phone";
 
     /**
@@ -48,6 +51,7 @@ public final class SchemaMigrations {
 
     static {
         SQLITE_STEPS.put(2, SchemaMigrations::createPerformanceIndexes); // TODO 2.6
+        SQLITE_STEPS.put(3, SchemaMigrations::createPaidAtIndex);        // TODO 3.36
     }
 
     private SchemaMigrations() {
@@ -57,6 +61,7 @@ public final class SchemaMigrations {
         if (SqlDialect.of(connection) != SqlDialect.SQLITE) {
             ensureMariaEmployeePhoneKey(connection); // MariaDB/MySQL: MariaDbSchema creates everything else; this key came later
             ensureMariaLoginNameKey(connection);      // so did this one (TODO 1.9)
+            ensureMariaProductCodeKey(connection);    // and the product code (TODO 4.42)
             ensureMariaDataRules(connection);
             return;
         }
@@ -68,11 +73,17 @@ public final class SchemaMigrations {
         // The missing steps in order, the version written after each one, so a failure half way resumes from the right place.
         for (int step : MariaDbMigrations.plan(version, LATEST_VERSION, SQLITE_STEPS.keySet())) {
             LOGGER.info("Upgrading the SQLite database to version " + step + " ...");
-            SQLITE_STEPS.get(step).apply(connection);
-            DatabaseConfig.setUserVersion(connection, step);
+            // The step and the version number together (TODO 3.37): killed in between, the file is at the old version with none of
+            // the step applied, not at the old version with half of it.
+            int target = step;
+            DatabaseConfig.runAtomically(connection, () -> {
+                SQLITE_STEPS.get(target).apply(connection);
+                DatabaseConfig.setUserVersion(connection, target);
+            });
         }
         ensureUniqueCustomerPhone(connection);
         ensureUniqueLoginNames(connection);
+        ensureUniqueProductCode(connection);
         ensureOneOpenOrderPerTable(connection);
         ensureDataRules(connection);
     }
@@ -318,6 +329,72 @@ public final class SchemaMigrations {
             statement.setString(2, index);
             try (ResultSet rs = statement.executeQuery()) {
                 return rs.next();
+            }
+        }
+    }
+
+    static final String PRODUCT_CODE_INDEX = "ux_products_code";
+
+    /**
+     * One product per code (TODO 4.42), SQLite: a partial unique index, so any number of products may have no code. The code is
+     * stored in capitals ({@code ProductCode.clean}), so exact comparison is enough on both databases. Blank codes become NULL
+     * first. If two products already share a code (typed in by hand) the index is skipped with a warning and tried again at the
+     * next start, like the other unique rules.
+     */
+    static void ensureUniqueProductCode(Connection connection) throws SQLException {
+        try (Statement statement = connection.createStatement()) {
+            statement.executeUpdate("UPDATE products SET code = NULL WHERE code IS NOT NULL AND TRIM(code) = ''");
+        }
+        buildUnique(connection, PRODUCT_CODE_INDEX, "products", "code", "code IS NOT NULL",
+                "SELECT code FROM products WHERE code IS NOT NULL GROUP BY code HAVING COUNT(*) > 1");
+    }
+
+    /**
+     * MariaDB/MySQL: the same rule as a unique key (a plain unique key lets NULL repeat). A new database already has it from
+     * {@link MariaDbSchema}; an older one gets it here, unless two products already share a code (a warning, tried again at the
+     * next start).
+     *
+     * @return the codes that block the key (empty when it exists or was just built)
+     */
+    static List<String> ensureMariaProductCodeKey(Connection connection) throws SQLException {
+        try (Statement statement = connection.createStatement()) {
+            statement.executeUpdate("UPDATE products SET code = NULL WHERE code IS NOT NULL AND TRIM(code) = ''");
+        }
+        if (mariaIndexExists(connection, "products", PRODUCT_CODE_INDEX)) {
+            return List.of();
+        }
+        List<String> duplicates = new ArrayList<>();
+        try (Statement statement = connection.createStatement();
+             ResultSet rs = statement.executeQuery(
+                     "SELECT code FROM products WHERE code IS NOT NULL GROUP BY code HAVING COUNT(*) > 1")) {
+            while (rs.next()) duplicates.add(rs.getString(1));
+        }
+        if (!duplicates.isEmpty()) {
+            LOGGER.warning(duplicates.size() + " product code(s) are used by more than one product; the unique rule "
+                    + PRODUCT_CODE_INDEX + " cannot be enforced by the database until they are fixed. List them with: "
+                    + "SELECT code, COUNT(*) FROM products WHERE code IS NOT NULL GROUP BY code HAVING COUNT(*) > 1");
+            return duplicates;
+        }
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("ALTER TABLE products ADD UNIQUE KEY " + PRODUCT_CODE_INDEX + " (code)");
+        }
+        return List.of();
+    }
+
+    static final String PAID_AT_INDEX = "idx_orders_paid_at";
+
+    /** Version 3 on SQLite (TODO 3.36): the date filters look orders up by the time they were paid. */
+    static void createPaidAtIndex(Connection connection) throws SQLException {
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("CREATE INDEX IF NOT EXISTS " + PAID_AT_INDEX + " ON orders(paid_at)");
+        }
+    }
+
+    /** Version 3 on MariaDB: {@link MariaDbSchema} creates this index with the table; a database made before that gets it here. */
+    static void ensureMariaPaidAtIndex(Connection connection) throws SQLException {
+        if (!mariaIndexExists(connection, "orders", PAID_AT_INDEX)) {
+            try (Statement statement = connection.createStatement()) {
+                statement.execute("CREATE INDEX " + PAID_AT_INDEX + " ON orders (paid_at)");
             }
         }
     }

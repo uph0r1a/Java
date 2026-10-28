@@ -39,12 +39,36 @@ final class MoneyMigration {
             return;
         }
         if (version == 0) {
-            migrateV0ToV1(connection);
+            if (alreadyInIntegerDong(connection)) {
+                // Version 0 with the money columns already INTEGER is not an old database: it is a new one whose set-up was cut
+                // short before the version was written (every build before TODO 3.37 could leave that behind), or a file copied
+                // in by hand. Rebuilding its tables would only replace the current definitions with the first release's, so the
+                // version is written and nothing else is touched.
+                LOGGER.info("The money columns are already INTEGER; recording schema version 1 without rebuilding any table.");
+            } else {
+                migrateV0ToV1(connection);
+            }
             version = 1;
         }
         // Future versions would chain further `if (version == N) { migrateNToNPlus1(...); version = N+1; }`
         // steps here, each one small and independently testable, rather than one big jump.
         DatabaseConfig.setUserVersion(connection, version);
+    }
+
+    /**
+     * True when {@code products.price} is declared INTEGER, which is how every table of this app has been created since schema version
+     * 1; the first release declared it REAL, and that is the only database that needs converting.
+     */
+    static boolean alreadyInIntegerDong(Connection connection) throws SQLException {
+        try (Statement statement = connection.createStatement();
+             ResultSet rs = statement.executeQuery("PRAGMA table_info(products)")) {
+            while (rs.next()) {
+                if ("price".equalsIgnoreCase(rs.getString("name"))) {
+                    return "INTEGER".equalsIgnoreCase(rs.getString("type"));
+                }
+            }
+        }
+        return false; // no products table or no price column: not a database this class can judge, keep the old behaviour
     }
 
     private static void migrateV0ToV1(Connection connection) throws SQLException {

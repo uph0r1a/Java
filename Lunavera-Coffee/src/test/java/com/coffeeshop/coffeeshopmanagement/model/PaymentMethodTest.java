@@ -49,4 +49,39 @@ public class PaymentMethodTest {
         assertEquals("-", PaymentMethod.labelOf(null));
         assertEquals("Chuyển khoản", PaymentMethod.labelOf(PaymentMethod.TRANSFER));
     }
+
+    // ---- TODO 4.34: MoMo, ZaloPay and VNPay are methods of their own ----
+
+    @Test
+    public void theThreeWalletsAreMethodsWithTheirBrandNamesInBothLanguages() {
+        assertEquals("MoMo", PaymentMethod.MOMO.label());
+        assertEquals("ZaloPay", PaymentMethod.ZALOPAY.label());
+        assertEquals("VNPay", PaymentMethod.VNPAY.label());
+        assertEquals("MoMo", PaymentMethod.MOMO.label("en"));
+        assertEquals("VNPay", PaymentMethod.VNPAY.label("vi"));
+        assertEquals(java.util.List.of(PaymentMethod.MOMO, PaymentMethod.ZALOPAY, PaymentMethod.VNPAY), PaymentMethod.eWallets());
+    }
+
+    @Test
+    public void walletsAreReadBackFromTheDatabaseTextAndFitTheColumn() {
+        for (PaymentMethod wallet : PaymentMethod.eWallets()) {
+            assertEquals(wallet, PaymentMethod.fromDb(wallet.name()));
+            assertEquals(wallet, PaymentMethod.fromDb(" " + wallet.name().toLowerCase() + " "));
+            assertTrue(wallet + " must fit orders.payment_method VARCHAR(20) on MariaDB", wallet.name().length() <= 20);
+        }
+        for (PaymentMethod method : PaymentMethod.values()) {
+            assertTrue(method.name(), method.name().length() <= 20);
+        }
+    }
+
+    @Test
+    public void onlyATransferAndTheWalletsNeedTheMoneyReceivedTick() {
+        assertTrue(PaymentMethod.TRANSFER.needsReceivedConfirmation());
+        for (PaymentMethod wallet : PaymentMethod.eWallets()) {
+            assertTrue(wallet.isEWallet());
+            assertTrue(wallet.needsReceivedConfirmation());
+        }
+        assertTrue(!PaymentMethod.CASH.needsReceivedConfirmation() && !PaymentMethod.CARD.needsReceivedConfirmation());
+        assertTrue(!PaymentMethod.TRANSFER.isEWallet() && !PaymentMethod.CASH.isEWallet());
+    }
 }

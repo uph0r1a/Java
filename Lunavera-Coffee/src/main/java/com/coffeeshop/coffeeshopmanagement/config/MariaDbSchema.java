@@ -33,6 +33,7 @@ public final class MariaDbSchema {
                 salary BIGINT,
                 hire_date DATE,
                 active TINYINT(1) NOT NULL DEFAULT 1,
+                anonymised_at DATETIME NULL,
                 UNIQUE KEY ux_employees_phone (phone)
             """ + TAIL,
             """
@@ -43,7 +44,20 @@ public final class MariaDbSchema {
                 email VARCHAR(255),
                 loyalty_points INT NOT NULL DEFAULT 0,
                 created_at DATETIME NOT NULL,
+                anonymised_at DATETIME NULL,
                 UNIQUE KEY ux_customers_phone (phone)
+            """ + TAIL,
+            """
+            CREATE TABLE IF NOT EXISTS customer_merges (
+                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                kept_id INT NOT NULL,
+                removed_id INT NOT NULL,
+                removed_name VARCHAR(255) NOT NULL,
+                orders_moved INT NOT NULL DEFAULT 0,
+                points_moved INT NOT NULL DEFAULT 0,
+                merged_by INT NULL,
+                merged_at DATETIME NOT NULL,
+                INDEX idx_customer_merges_kept (kept_id)
             """ + TAIL,
             """
             CREATE TABLE IF NOT EXISTS users (
@@ -57,6 +71,8 @@ public final class MariaDbSchema {
                 customer_id INT,
                 created_at DATETIME NOT NULL,
                 must_change_password TINYINT(1) NOT NULL DEFAULT 0,
+                pin_hash VARCHAR(255) NULL,
+                pin_failures INT NOT NULL DEFAULT 0,
                 UNIQUE KEY ux_users_username_key (username_key),
                 FOREIGN KEY (employee_id) REFERENCES employees(id),
                 FOREIGN KEY (customer_id) REFERENCES customers(id)
@@ -82,6 +98,8 @@ public final class MariaDbSchema {
                 image_path VARCHAR(500),
                 active TINYINT(1) NOT NULL DEFAULT 1,
                 sort_order INT NOT NULL DEFAULT 0,
+                code VARCHAR(64) NULL,
+                UNIQUE KEY ux_products_code (code),
                 FOREIGN KEY (category_id) REFERENCES categories(id)
             """ + TAIL,
             """
@@ -103,6 +121,9 @@ public final class MariaDbSchema {
                 cash_received BIGINT,
                 change_given BIGINT,
                 transfer_ref VARCHAR(64),
+                points_redeemed INT,
+                points_value BIGINT,
+                cancelled_at DATETIME NULL,
                 INDEX idx_orders_status_date (status, order_date),
                 INDEX idx_orders_paid_at (paid_at),
                 INDEX idx_orders_table (table_number),
@@ -119,8 +140,18 @@ public final class MariaDbSchema {
                 unit_price BIGINT NOT NULL,
                 line_total BIGINT NOT NULL,
                 unit_cost BIGINT,
+                note VARCHAR(200),
                 FOREIGN KEY (order_id) REFERENCES orders(id),
                 FOREIGN KEY (product_id) REFERENCES products(id)
+            """ + TAIL,
+            """
+            CREATE TABLE IF NOT EXISTS order_payments (
+                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                order_id INT NOT NULL,
+                method VARCHAR(20) NOT NULL,
+                amount BIGINT NOT NULL,
+                UNIQUE KEY ux_order_payments (order_id, method),
+                FOREIGN KEY (order_id) REFERENCES orders(id)
             """ + TAIL,
             """
             CREATE TABLE IF NOT EXISTS dining_tables (
@@ -146,6 +177,56 @@ public final class MariaDbSchema {
                 PRIMARY KEY (scope, name_key)
             """ + TAIL,
             """
+            CREATE TABLE IF NOT EXISTS stock_log (
+                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                logged_at DATETIME NOT NULL,
+                kind VARCHAR(20) NOT NULL,
+                product_id INT NULL,
+                product_name VARCHAR(255) NOT NULL,
+                quantity INT NOT NULL,
+                stock_before INT NOT NULL,
+                stock_after INT NOT NULL,
+                unit_cost BIGINT NULL,
+                supplier VARCHAR(100) NULL,
+                note VARCHAR(200) NULL,
+                employee_id INT NULL,
+                employee_name VARCHAR(255) NULL,
+                INDEX idx_stock_log_logged_at (logged_at),
+                INDEX idx_stock_log_product (product_id)
+            """ + TAIL,
+            """
+            CREATE TABLE IF NOT EXISTS expenses (
+                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                spent_on DATE NOT NULL,
+                amount BIGINT NOT NULL,
+                category VARCHAR(20) NOT NULL,
+                note VARCHAR(200) NULL,
+                from_drawer TINYINT(1) NOT NULL DEFAULT 0,
+                recorded_by INT NULL,
+                recorded_by_name VARCHAR(255) NOT NULL,
+                created_at DATETIME NOT NULL,
+                INDEX idx_expenses_spent_on (spent_on),
+                INDEX idx_expenses_created_at (created_at)
+            """ + TAIL,
+            """
+            CREATE TABLE IF NOT EXISTS shift_closes (
+                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                period_start DATETIME NOT NULL,
+                period_end DATETIME NOT NULL,
+                closed_by INT NULL,
+                closed_by_name VARCHAR(255) NOT NULL,
+                paid_orders INT NOT NULL,
+                revenue BIGINT NOT NULL,
+                cash_sales BIGINT NOT NULL,
+                opening_cash BIGINT NOT NULL,
+                expected_cash BIGINT NOT NULL,
+                counted_cash BIGINT NOT NULL,
+                difference BIGINT NOT NULL,
+                note VARCHAR(200) NULL,
+                cash_out BIGINT NULL,
+                INDEX idx_shift_closes_period_end (period_end)
+            """ + TAIL,
+            """
             CREATE TABLE IF NOT EXISTS schema_version (
                 id TINYINT NOT NULL PRIMARY KEY,
                 version INT NOT NULL
@@ -153,8 +234,8 @@ public final class MariaDbSchema {
     );
 
     /** Tables to drop (children first) when a throw-away test database is reset. */
-    public static final List<String> DROP_ORDER = List.of("dining_tables", "order_items", "orders", "products",
-            "categories", "users", "customers", "employees", "app_flags", "login_attempts", "schema_version");
+    public static final List<String> DROP_ORDER = List.of("dining_tables", "order_payments", "order_items", "orders", "products",
+            "categories", "users", "customer_merges", "customers", "employees", "app_flags", "login_attempts", "stock_log", "expenses", "shift_closes", "schema_version");
 
     private MariaDbSchema() {
     }

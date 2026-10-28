@@ -94,6 +94,11 @@ public final class FirstRunDialog {
         });
         dialog.showAndWait();
         if (created[0]) {
+            try {
+                com.coffeeshop.coffeeshopmanagement.config.AppFlags.mark(com.coffeeshop.coffeeshopmanagement.config.AppFlags.SETUP_PENDING); // TODO 4.15
+            } catch (RuntimeException e) {
+                // the setup window is a convenience; the owner can still do all of it from the dashboard
+            }
             AlertUtil.info(I18n.t("firstrun.done.title"), I18n.t("firstrun.done.message"));
         }
         return created[0];

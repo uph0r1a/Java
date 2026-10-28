@@ -27,9 +27,7 @@ import com.coffeeshop.coffeeshopmanagement.util.AlertUtil;
 import com.coffeeshop.coffeeshopmanagement.util.I18n;
 import com.coffeeshop.coffeeshopmanagement.util.AppClock;
 import com.coffeeshop.coffeeshopmanagement.util.AutoRefresh;
-import com.coffeeshop.coffeeshopmanagement.util.DataPaths;
 import com.coffeeshop.coffeeshopmanagement.util.TextLengthLimiter;
-import com.coffeeshop.coffeeshopmanagement.util.TransferQr;
 import com.coffeeshop.coffeeshopmanagement.util.Async;
 import com.coffeeshop.coffeeshopmanagement.util.ValidationUtil;
 import com.coffeeshop.coffeeshopmanagement.util.CurrencyUtil;
@@ -37,6 +35,7 @@ import com.coffeeshop.coffeeshopmanagement.util.MoneyParser;
 import com.coffeeshop.coffeeshopmanagement.util.SceneNavigator;
 import com.coffeeshop.coffeeshopmanagement.model.Role;
 import com.coffeeshop.coffeeshopmanagement.service.DiscountPolicy;
+import com.coffeeshop.coffeeshopmanagement.service.LoyaltyPolicy;
 import com.coffeeshop.coffeeshopmanagement.util.Session;
 import com.coffeeshop.coffeeshopmanagement.util.SessionGuard;
 
@@ -141,6 +140,9 @@ public class OrderController {
     private List<Category> allCategories = List.of();
     private Integer selectedCategoryId = null;
     private Integer selectedTableNumber;
+    /** A take-away order (no table) is on screen, or a new one is about to start (TODO 4.25); {@code takeAwayOrderId} is its saved order, once there is one. */
+    private boolean takeAway;
+    private Integer takeAwayOrderId;
     private boolean orderInProgress;
     private static final int REFRESH_SECONDS = 20;
     private Timeline sharedDataRefresh;
@@ -165,7 +167,7 @@ public class OrderController {
 
     /** {@code cashReceived} (cash only) and {@code transferRef} (transfer only) are saved with the order (TODO 3.17, 4.31). */
     private record PaymentResult(PaymentMethod method, BigDecimal discount, String discountReason, BigDecimal total,
-                                 BigDecimal cashReceived, String transferRef) {
+                                 BigDecimal cashReceived, String transferRef, int pointsRedeemed, BigDecimal cashPart) {
     }
 
     // =================================================================== initialize
@@ -211,6 +213,7 @@ public class OrderController {
         detailIndexColumn.setCellValueFactory(data -> new SimpleIntegerProperty(
                 orderDetailTable.getItems().indexOf(data.getValue()) + 1));
         productNameColumn.setCellValueFactory(data -> new SimpleStringProperty(SeedNames.product(data.getValue().getProductName())));
+        productNameColumn.setCellFactory(col -> nameWithNoteCell()); // the note under the name, and a button for it (TODO 4.9)
         quantityColumn.setCellFactory(col -> quantityCell());
         unitPriceColumn.setCellValueFactory(data ->
                 new SimpleStringProperty(CurrencyUtil.format(data.getValue().getUnitPrice())));
@@ -220,6 +223,7 @@ public class OrderController {
         if (productSearchField != null) {
             TextLengthLimiter.limit(productSearchField, TextLengthLimiter.SEARCH_MAX);
             productSearchField.textProperty().addListener((obs, o, n) -> renderProductCatalog());
+            productSearchField.setOnAction(e -> handleSearchEnter()); // a barcode scanner types the code and Enter (TODO 4.42)
         }
 
         setUpBestSellersToggle();
@@ -528,7 +532,8 @@ public class OrderController {
         List<Product> filtered = com.coffeeshop.coffeeshopmanagement.service.SellableMenu.filter(allProducts, allCategories).stream()
                 .filter(p -> selectedCategoryId == null || java.util.Objects.equals(p.getCategoryId(), selectedCategoryId))
                 .filter(p -> keyword.isEmpty() || com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.searchKey(p.getName()).contains(keyword)
-                        || com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.searchKey(SeedNames.product(p.getName())).contains(keyword))
+                        || com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.searchKey(SeedNames.product(p.getName())).contains(keyword)
+                        || (p.getCode() != null && com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.searchKey(p.getCode()).contains(keyword)))
                 .collect(Collectors.toList());
         if (bestSellersToggle != null && bestSellersToggle.isSelected()) {
             // Most sold first; products never sold (or out of stock) keep their usual order after them. The sort is stable.
@@ -571,11 +576,42 @@ public class OrderController {
         }
     }
 
+    /**
+     * Enter in the menu search (TODO 4.42). A USB barcode scanner types the digits and Enter like a keyboard, so this is the whole
+     * scanner support: when the typed text is exactly the code of a product on sale, that product goes into the order at once and the
+     * box is emptied for the next scan. A code that no product has is said so (the cashier would otherwise see an empty menu and not
+     * know whether the scan failed); a code of a product that is stopped says that instead. Text that is only part of a name, which
+     * still shows products, is left alone: that person is searching, not scanning.
+     */
+    private void handleSearchEnter() {
+        if (paymentInFlight || productSearchField == null) return;
+        String typed = productSearchField.getText();
+        if (!com.coffeeshop.coffeeshopmanagement.service.ProductCode.looksLikeCode(typed)) return;
+        String code = com.coffeeshop.coffeeshopmanagement.service.ProductCode.clean(typed);
+        Product onSale = com.coffeeshop.coffeeshopmanagement.service.SellableMenu.filter(allProducts, allCategories).stream()
+                .filter(p -> code.equals(p.getCode())).findFirst().orElse(null);
+        if (onSale != null) {
+            productSearchField.clear();
+            handleQuickAddProduct(onSale);
+            productSearchField.requestFocus();
+            return;
+        }
+        boolean stopped = allProducts.stream().anyMatch(p -> code.equals(p.getCode()));
+        if (stopped) {
+            AlertUtil.warning(I18n.t("pos.code.title"), I18n.t("pos.code.stopped", code));
+        } else if (productCatalogFlow != null && productCatalogFlow.getChildren().isEmpty()) {
+            AlertUtil.warning(I18n.t("pos.code.title"), I18n.t("pos.code.unknown", code));
+        } else {
+            return;
+        }
+        productSearchField.selectAll(); // the next scan replaces it
+    }
+
     private void handleQuickAddProduct(Product product) {
         if (paymentInFlight) {
             return; // a payment is being saved (TODO 2.79)
         }
-        if (selectedTableNumber == null) {
+        if (selectedTableNumber == null && !takeAway) {
             AlertUtil.warning(I18n.t("pos.notable.title"), I18n.t("pos.notable.order"));
             return;
         }
@@ -593,6 +629,67 @@ public class OrderController {
         } catch (DataAccessException e) {
             AlertUtil.error(I18n.t("common.error.title"), I18n.t("pos.load.products", e.getMessage()));
         }
+    }
+
+    /**
+     * The name column of the cart (TODO 4.9): the product name, under it the line's note in a smaller italic when it has one, and a
+     * pencil button that opens the note box ({@link OrderNoteDialog}). The note is part of the line, so it is saved with the order by
+     * the same autosave as the quantity.
+     */
+    private TableCell<OrderItem, String> nameWithNoteCell() {
+        return new TableCell<>() {
+            private final Label nameLabel = new Label();
+            private final Label noteLabel = new Label();
+            private final Button editButton = new Button("\u270E");
+            private final VBox texts = new VBox(1, nameLabel, noteLabel);
+            private final HBox box = new HBox(6, texts, editButton);
+
+            {
+                nameLabel.setWrapText(true);
+                noteLabel.setWrapText(true);
+                noteLabel.setStyle("-fx-text-fill: #8a5a00; -fx-font-size: 11px; -fx-font-style: italic;");
+                texts.setMaxWidth(Double.MAX_VALUE);
+                HBox.setHgrow(texts, Priority.ALWAYS);
+                editButton.setFocusTraversable(false);
+                editButton.setTooltip(new javafx.scene.control.Tooltip(I18n.t("pos.note.tip")));
+                editButton.setOnAction(e -> {
+                    if (getIndex() >= 0 && getIndex() < getTableView().getItems().size()) {
+                        editNote(getTableView().getItems().get(getIndex()));
+                    }
+                });
+                box.setAlignment(Pos.CENTER_LEFT);
+            }
+
+            @Override
+            protected void updateItem(String name, boolean empty) {
+                super.updateItem(name, empty);
+                if (empty || getIndex() < 0 || getIndex() >= getTableView().getItems().size()) {
+                    setText(null);
+                    setGraphic(null);
+                    return;
+                }
+                String note = getTableView().getItems().get(getIndex()).getNote();
+                nameLabel.setText(name);
+                noteLabel.setText(note == null ? "" : "\u21B3 " + note);
+                noteLabel.setVisible(note != null);
+                noteLabel.setManaged(note != null);
+                setText(null);
+                setGraphic(box);
+            }
+        };
+    }
+
+    /** Asks for a new note for one cart line and puts it on the line (TODO 4.9); the cart is saved and drawn again. */
+    private void editNote(OrderItem line) {
+        if (paymentInFlight || line == null) {
+            return; // a payment is being saved (TODO 2.79)
+        }
+        java.util.Optional<String> typed = OrderNoteDialog.show(SeedNames.product(line.getProductName()), line.getNote());
+        if (typed.isEmpty()) {
+            return;
+        }
+        cartRules.setNote(line, typed.get());
+        refreshCart();
     }
 
     /** Renders "[-]  qty  [+]" inline in the quantity column; a click on the number turns it into a small box to type a quantity (TODO 5.27). */
@@ -682,8 +779,9 @@ public class OrderController {
     private void loadTablesFromDb(boolean quiet) {
         if (tableGrid == null) return;
         Async.run(
-                tableDAO::findAll,
-                tables -> {
+                () -> Map.entry(tableDAO.findAll(), orderDAO.findOpenTakeAway()),
+                loaded -> {
+                    List<DiningTable> tables = loaded.getKey();
                     tableGrid.getChildren().clear();
                     tableButtonByNumber.clear();
                     tableDataByNumber.clear();
@@ -698,37 +796,17 @@ public class OrderController {
                         // the place comes from the position in the list, not from the number (TODO 3.48)
                         com.coffeeshop.coffeeshopmanagement.service.TableLayout.Cell cell =
                                 com.coffeeshop.coffeeshopmanagement.service.TableLayout.cellAt(index++);
-
-                        String statusText = I18n.t(table.isOccupied() ? "tables.status.occupied" : "tables.status.free");
-                        // How long the order has been open (TODO 5.11); a long one is highlighted. The map refreshes by itself.
-                        java.time.Duration age = table.isOccupied()
-                                ? com.coffeeshop.coffeeshopmanagement.service.TableAge.since(table.getOpenedAt(),
-                                        com.coffeeshop.coffeeshopmanagement.util.AppClock.now())
-                                : null;
-                        if (age != null) {
-                            statusText += "  ·  " + com.coffeeshop.coffeeshopmanagement.service.TableAge.text(age);
-                        }
-                        Button btn = new Button("☕  " + table.displayName() + "\n" + statusText);
-                        btn.setMaxWidth(Double.MAX_VALUE);
-                        btn.setMaxHeight(Double.MAX_VALUE);
-                        btn.setMinHeight(78.0); // the rows no longer have a fixed share of the height; the list scrolls
-                        btn.getStyleClass().add(table.isOccupied() ? "table-button-occupied" : "table-button-empty");
-                        if (com.coffeeshop.coffeeshopmanagement.service.TableAge.isLong(age)) {
-                            btn.getStyleClass().add("table-button-long");
-                        }
-                        if (selectedTableNumber != null && selectedTableNumber == num) {
-                            btn.getStyleClass().add("table-button-selected");
-                        }
-                        GridPane.setHgrow(btn, Priority.ALWAYS);
-                        GridPane.setVgrow(btn, Priority.ALWAYS);
+                        Button btn = TableMapButtons.forTable(table, selectedTableNumber != null && selectedTableNumber == num);
                         btn.setOnAction(e -> selectTable(num));
                         tableGrid.add(btn, cell.column(), cell.row());
                         tableButtonByNumber.put(num, btn);
                     }
+                    TakeAwayPanel.addButtons(tableGrid, tables.isEmpty() ? com.coffeeshop.coffeeshopmanagement.service.TableLayout.COLUMNS : index, loaded.getValue(), takeAway && takeAwayOrderId == null, takeAwayOrderId,
+                            this::selectTakeAway, () -> selectTakeAway(null)); // "Mang đi" and the open take-away orders (TODO 4.25)
                     if (selectedTableNumber != null && !tableDataByNumber.containsKey(selectedTableNumber)) {
                         selectedTableNumber = null; // the table was removed on another till (TODO 4.18): never keep selling on it
                     }
-                    if (selectedTableNumber == null && !tables.isEmpty()) {
+                    if (selectedTableNumber == null && !takeAway && !tables.isEmpty()) {
                         selectTable(tables.get(0).getTableNumber());
                     } else if (selectedTableNumber != null) {
                         updateSelectedTableInfo(selectedTableNumber);
@@ -752,6 +830,8 @@ public class OrderController {
             return; // a payment is being saved (TODO 2.79)
         }
         selectedTableNumber = number;
+        takeAway = false;
+        takeAwayOrderId = null;
         highlightSelectedTableButton(number);
         updateSelectedTableInfo(number);
         loadTableOrderFromDb(number);
@@ -773,10 +853,13 @@ public class OrderController {
         }
     }
 
-    private void loadTableOrderFromDb(int number) {
+    /** {@code number} null = the take-away order {@link #takeAwayOrderId} (or none yet), TODO 4.25. */
+    private void loadTableOrderFromDb(Integer number) {
+        final Integer wantedTakeAway = takeAwayOrderId;
         Async.run(
                 () -> {
-                    Optional<Order> openOrder = orderDAO.findOpenOrderByTable(number);
+                    Optional<Order> openOrder = number != null ? orderDAO.findOpenOrderByTable(number)
+                            : wantedTakeAway == null ? Optional.<Order>empty() : orderDAO.findOpenTakeAway().stream().filter(o -> o.getId() == wantedTakeAway).findFirst();
                     if (openOrder.isPresent()) {
                         List<OrderItem> items = orderDAO.findItemsByOrderId(openOrder.get().getId());
                         Customer cust = null;
@@ -789,83 +872,39 @@ public class OrderController {
                 },
                 data -> {
                     // An answer for a table that is no longer the selected one must not overwrite the screen (TODO 2.55).
-                    if (!java.util.Objects.equals(selectedTableNumber, number)) return;
+                    if (!java.util.Objects.equals(selectedTableNumber, number) || (number == null && !java.util.Objects.equals(takeAwayOrderId, wantedTakeAway))) return;
                     DiningTable table = tableDataByNumber.get(number);
                     boolean occupied = table != null && table.isOccupied();
-                    if (data.order() != null) {
-                        activeOpenOrder = data.order();
-                        attachedCustomer = data.customer();
-                        cart.setAll(data.items());
-                        orderInProgress = true;
-                        if (orderStatusLabel != null) {
-                            orderStatusLabel.setText(I18n.t("pos.order.serving"));
-                            orderStatusLabel.getStyleClass().setAll("order-status-badge");
-                        }
-                        if (orderIdLabel != null) {
-                            orderIdLabel.setText(com.coffeeshop.coffeeshopmanagement.util.OrderNumber.format(data.order().getId()));
-                        }
-                        if (orderTableLabel != null) {
-                            orderTableLabel.setText(I18n.t("orders.table", number));
-                        }
-                        updateClockDisplay();
-                        if (customerNameField != null) {
-                            customerNameField.setText(data.customer() != null ? data.customer().getFullName() : I18n.t("pos.walkin"));
-                        }
-                        if (customerPhoneField != null) {
-                            customerPhoneField.setText(data.customer() != null && data.customer().getPhone() != null ? data.customer().getPhone() : "");
-                        }
-                        showCustomerInfo(data.customer(), false);
-                        orderDetailTable.getItems().setAll(cart);
-                        totalAmountLabel.setText(CurrencyUtil.format(cartSubtotal()));
-                    } else if (occupied) {
-                        activeOpenOrder = null;
-                        attachedCustomer = null;
-                        cart.clear();
-                        orderInProgress = true;
-                        if (orderStatusLabel != null) {
-                            orderStatusLabel.setText(I18n.t("pos.order.serving"));
-                            orderStatusLabel.getStyleClass().setAll("order-status-badge");
-                        }
-                        if (orderIdLabel != null) {
-                            orderIdLabel.setText(I18n.t("pos.order.serving"));
-                        }
-                        if (orderTableLabel != null) {
-                            orderTableLabel.setText(I18n.t("orders.table", number));
-                        }
-                        updateClockDisplay();
-                        if (customerNameField != null) {
-                            customerNameField.setText(I18n.t("pos.walkin"));
-                        }
-                        if (customerPhoneField != null) {
-                            customerPhoneField.setText("");
-                        }
-                        orderDetailTable.getItems().setAll(cart);
-                        totalAmountLabel.setText(I18n.t("pos.money.zero"));
-                    } else {
-                        activeOpenOrder = null;
-                        attachedCustomer = null;
-                        cart.clear();
-                        orderInProgress = false;
-                        if (orderStatusLabel != null) {
-                            orderStatusLabel.setText(I18n.t("tables.status.free"));
-                            orderStatusLabel.getStyleClass().setAll("order-status-badge-empty");
-                        }
-                        if (orderIdLabel != null) {
-                            orderIdLabel.setText(I18n.t("pos.order.none"));
-                        }
-                        if (orderTableLabel != null) {
-                            orderTableLabel.setText(I18n.t("orders.table", number));
-                        }
-                        updateClockDisplay();
-                        if (customerNameField != null) {
-                            customerNameField.setText("");
-                        }
-                        if (customerPhoneField != null) {
-                            customerPhoneField.setText("");
-                        }
-                        orderDetailTable.getItems().setAll(cart);
-                        totalAmountLabel.setText(I18n.t("pos.money.zero"));
+                    Order order = data.order();
+                    boolean serving = order != null || occupied; // an order, or a table marked taken with no order saved yet
+                    activeOpenOrder = order;
+                    attachedCustomer = data.customer();
+                    cart.setAll(data.items());
+                    orderInProgress = serving;
+                    if (orderStatusLabel != null) {
+                        orderStatusLabel.setText(I18n.t(serving ? "pos.order.serving" : "tables.status.free"));
+                        orderStatusLabel.getStyleClass().setAll(serving ? "order-status-badge" : "order-status-badge-empty");
                     }
+                    if (orderIdLabel != null) {
+                        orderIdLabel.setText(order != null ? com.coffeeshop.coffeeshopmanagement.util.OrderNumber.format(order.getId())
+                                : I18n.t(occupied ? "pos.order.serving" : "pos.order.none"));
+                    }
+                    if (orderTableLabel != null) {
+                        orderTableLabel.setText(TakeAwayPanel.tableLabel(number));
+                    }
+                    updateClockDisplay();
+                    Customer known = data.customer();
+                    if (customerNameField != null) {
+                        customerNameField.setText(known != null ? known.getFullName() : serving ? I18n.t("pos.walkin") : "");
+                    }
+                    if (customerPhoneField != null) {
+                        customerPhoneField.setText(known != null && known.getPhone() != null ? known.getPhone() : "");
+                    }
+                    if (order != null) {
+                        showCustomerInfo(known, false);
+                    }
+                    orderDetailTable.getItems().setAll(cart);
+                    totalAmountLabel.setText(order != null ? CurrencyUtil.format(cartSubtotal()) : I18n.t("pos.money.zero"));
                     if (cartItemCountLabel != null) {
                         long totalQty = cartRules.totalQuantity();
                         cartItemCountLabel.setText(I18n.t("pos.cart.count", cart.size(), totalQty));
@@ -887,12 +926,27 @@ public class OrderController {
         }
     }
 
+    /** The till moves to a take-away order (TODO 4.25): a saved one ({@code orderId}), or a new one that is saved at the first product. */
+    private void selectTakeAway(Integer orderId) {
+        if (paymentInFlight) return;
+        selectedTableNumber = null;
+        takeAway = true;
+        takeAwayOrderId = orderId;
+        TakeAwayPanel.showOn(selectedTableLabel, selectedTableStatusLabel, selectedTableCapacityLabel, orderId != null);
+        loadTableOrderFromDb(null);
+        loadTablesFromDb();
+    }
+
     @FXML
     public void handleToggleTableStatus() {
         if (paymentInFlight) {
             return; // a payment is being saved (TODO 2.79)
         }
         if (selectedTableNumber == null) {
+            if (takeAway && activeOpenOrder != null) { // the take-away way of emptying a table: cancel the unpaid order (TODO 4.25)
+                TakeAwayPanel.cancel(activeOpenOrder, () -> selectTakeAway(null));
+                return;
+            }
             AlertUtil.info(I18n.t("pos.notable.title"), I18n.t("pos.notable.toggle"));
             return;
         }
@@ -954,7 +1008,7 @@ public class OrderController {
         if (paymentInFlight) {
             return; // a payment is being saved (TODO 2.79)
         }
-        if (selectedTableNumber == null) {
+        if (selectedTableNumber == null && !takeAway) {
             AlertUtil.warning(I18n.t("pos.notable.title"), I18n.t("pos.notable.start"));
             return;
         }
@@ -968,7 +1022,7 @@ public class OrderController {
      * typed into the fields, saves the order and marks the table occupied, then updates the screen.
      * {@code afterStart} runs on the FX thread once the order is on screen (may be null).
      */
-    private void startOrderForTable(int tNum, Runnable afterStart) {
+    private void startOrderForTable(Integer tNum, Runnable afterStart) { // null: a take-away order, no table (TODO 4.25)
         if (startingOrder) return;
         startingOrder = true;
         final String name = customerNameField != null && customerNameField.getText() != null ? customerNameField.getText().trim() : "";
@@ -991,6 +1045,7 @@ public class OrderController {
                 started -> {
                     startingOrder = false;
                     activeOpenOrder = started.order();
+                    if (tNum == null) takeAwayOrderId = started.order().getId();
                     attachedCustomer = started.customer();
                     showCustomerInfo(started.customer(), false);
                     orderInProgress = true;
@@ -1003,7 +1058,7 @@ public class OrderController {
                         orderIdLabel.setText(com.coffeeshop.coffeeshopmanagement.util.OrderNumber.format(started.order().getId()));
                     }
                     if (orderTableLabel != null) {
-                        orderTableLabel.setText(I18n.t("orders.table", tNum));
+                        orderTableLabel.setText(TakeAwayPanel.tableLabel(tNum));
                     }
                     updateClockDisplay();
                     orderDetailTable.getItems().setAll(cart);
@@ -1014,7 +1069,7 @@ public class OrderController {
                 error -> {
                     startingOrder = false;
                     LOGGER.log(Level.WARNING, "Could not start order for table " + tNum, error);
-                    AlertUtil.error(I18n.t("common.error.title"), I18n.t("pos.start.fail", tNum, error.getMessage()));
+                    AlertUtil.error(I18n.t("common.error.title"), I18n.t("pos.start.fail", TakeAwayPanel.tableLabel(tNum), error.getMessage()));
                 }
         );
     }
@@ -1060,7 +1115,7 @@ public class OrderController {
                 return;
             }
             Product product = findProductById(line.getProductId());
-            if (Cart.exceedsStock(product, newQty)) {
+            if (cartRules.exceedsStock(product, line, newQty)) { // counts the product's other lines too (TODO 4.9)
                 AlertUtil.warning(I18n.t("pos.stock.short.title"),
                         I18n.t("pos.stock.short.message", SeedNames.product(line.getProductName()), product.getStock()));
                 return;
@@ -1120,7 +1175,7 @@ public class OrderController {
                             // Paid or cancelled elsewhere: say so now, not at the payment (TODO 3.28).
                             AlertUtil.warning(I18n.t("pos.closed.title"), I18n.t("pos.closed.message"));
                             loadTablesFromDb();
-                            if (selectedTableNumber != null) loadTableOrderFromDb(selectedTableNumber);
+                            if (selectedTableNumber != null || takeAway) loadTableOrderFromDb(selectedTableNumber);
                         }
                     },
                     err -> {
@@ -1173,7 +1228,44 @@ public class OrderController {
             SessionGuard.forceLogout();
             return;
         }
-        openPaymentDialog();
+        verifyStockThenOpenPayment();
+    }
+
+    /**
+     * TODO 3.1 (small version): the cart holds no stock, so before the payment box opens the stock of the products in it is read
+     * again. If an item ran out (another table sold the last one, the list on screen was 20 seconds old, or the product was
+     * switched off) the cashier is told which one, with nothing charged, and the product tiles are refreshed. The screen is locked
+     * while the one short query runs, the way it is while a payment is saved, so a second click cannot open two boxes. This is only
+     * a warning: the payment itself still refuses a sale the stock cannot cover. If the re-read fails (database unreachable) the
+     * box opens anyway and the payment will say what is wrong.
+     */
+    private void verifyStockThenOpenPayment() {
+        final List<OrderItem> lines = new ArrayList<>(cart);
+        setPaymentInFlight(true);
+        Async.run(
+                () -> com.coffeeshop.coffeeshopmanagement.service.StockCheck.check(lines, productDAO),
+                shortages -> {
+                    setPaymentInFlight(false);
+                    if (shortages.isEmpty()) {
+                        openPaymentDialog();
+                        return;
+                    }
+                    StringBuilder message = new StringBuilder();
+                    for (com.coffeeshop.coffeeshopmanagement.service.StockCheck.Shortage shortage : shortages) {
+                        String name = SeedNames.product(shortage.name());
+                        message.append(shortage.kind() == com.coffeeshop.coffeeshopmanagement.service.StockCheck.Kind.UNAVAILABLE
+                                ? I18n.t("pos.stock.recheck.off", name)
+                                : I18n.t("pos.stock.recheck.short", name, shortage.wanted(), shortage.available())).append('\n');
+                    }
+                    message.append('\n').append(I18n.t("pos.stock.recheck.footer"));
+                    AlertUtil.warning(I18n.t("pos.stock.short.title"), message.toString());
+                    loadCategoriesAndProducts(true); // the tiles and the "+" limits show the stock that was just found
+                },
+                error -> {
+                    setPaymentInFlight(false);
+                    LOGGER.log(Level.WARNING, "The stock could not be re-read before the payment box", error);
+                    openPaymentDialog();
+                });
     }
 
     private void openPaymentDialog() {
@@ -1194,6 +1286,20 @@ public class OrderController {
         cardRadio.setToggleGroup(methodGroup);
         RadioButton transferRadio = new RadioButton(PaymentMethod.TRANSFER.label());
         transferRadio.setToggleGroup(methodGroup);
+        // The e-wallets (TODO 4.34): one radio each, in a second row, so the report can tell them from a bank transfer.
+        java.util.Map<PaymentMethod, RadioButton> walletRadios = new java.util.LinkedHashMap<>();
+        for (PaymentMethod wallet : PaymentMethod.eWallets()) {
+            RadioButton walletRadio = new RadioButton(wallet.label());
+            walletRadio.setToggleGroup(methodGroup);
+            walletRadios.put(wallet, walletRadio);
+        }
+        // What is chosen now; cash when nothing is (cannot happen: cash starts selected and a toggle group keeps one).
+        java.util.function.Supplier<PaymentMethod> chosenMethod = () -> {
+            for (java.util.Map.Entry<PaymentMethod, RadioButton> entry : walletRadios.entrySet()) {
+                if (entry.getValue().isSelected()) return entry.getKey();
+            }
+            return cashRadio.isSelected() ? PaymentMethod.CASH : transferRadio.isSelected() ? PaymentMethod.TRANSFER : PaymentMethod.CARD;
+        };
 
         TextField discountField = new TextField("0");
         TextField discountReasonField = new TextField();
@@ -1216,6 +1322,39 @@ public class OrderController {
         cashReceivedField.disableProperty().bind(cashRadio.selectedProperty().not()); // only cash has "tiền khách đưa"
         Label totalPreviewLabel = new Label(CurrencyUtil.format(subtotal));
         Label changePreviewLabel = new Label(CurrencyUtil.format(BigDecimal.ZERO));
+        SplitPaymentPanel split = new SplitPaymentPanel(subtotal); // part in cash, the rest with another method (TODO 4.32)
+
+        // Spending loyalty points (TODO 4.16): only for a customer already attached to this sale, and only when they have some. The
+        // balance is read again now (the attached object can be older than the last sale). The database checks it once more at payment.
+        final Customer pointsCustomer = attachedCustomer;
+        final int pointsBalance = pointsCustomer == null ? 0 : currentPoints(pointsCustomer);
+        final boolean canSpendPoints = pointsCustomer != null && pointsBalance > 0;
+        TextField pointsField = new TextField("0");
+        TextLengthLimiter.limit(pointsField, 9);
+        Label pointsHint = new Label();
+        pointsHint.setStyle("-fx-font-size: 11px; -fx-text-fill: #5b7e45;");
+        Button pointsMaxButton = new Button(I18n.t("pos.points.max"));
+        // The points that count in the preview: what is typed when it is allowed, else none (the confirm button says why not).
+        java.util.function.IntSupplier previewPoints = () -> {
+            Integer typed = LoyaltyPolicy.parsePoints(pointsField.getText());
+            BigDecimal discountNow = parseNonNegative(discountField.getText());
+            if (!canSpendPoints || typed == null || discountNow == null || discountNow.compareTo(subtotal) > 0) return 0;
+            return LoyaltyPolicy.redemptionProblem(typed, pointsBalance, subtotal.subtract(discountNow)) == null ? typed : 0;
+        };
+        Runnable refreshPointsHint = () -> {
+            BigDecimal discountNow = parseNonNegative(discountField.getText());
+            BigDecimal after = discountNow == null || discountNow.compareTo(subtotal) > 0 ? subtotal : subtotal.subtract(discountNow);
+            pointsHint.setText(I18n.t("pos.points.hint", pointsBalance, CurrencyUtil.format(LoyaltyPolicy.VND_PER_POINT_SPENT),
+                    LoyaltyPolicy.maxRedeemable(pointsBalance, after)));
+        };
+        refreshPointsHint.run();
+        pointsMaxButton.setOnAction(e -> {
+            BigDecimal discountNow = parseNonNegative(discountField.getText());
+            BigDecimal after = discountNow == null || discountNow.compareTo(subtotal) > 0 ? subtotal : subtotal.subtract(discountNow);
+            pointsField.setText(String.valueOf(LoyaltyPolicy.maxRedeemable(pointsBalance, after)));
+        });
+        pointsField.setDisable(!canSpendPoints);
+        pointsMaxButton.setDisable(!canSpendPoints);
 
         // Quick cash buttons (TODO 5.1): "Đủ tiền" fills the exact total, the others a common note; a note below the total is disabled.
         BigDecimal[] currentTotal = {subtotal};
@@ -1236,8 +1375,9 @@ public class OrderController {
             if (discount == null || discount.compareTo(subtotal) > 0) {
                 discount = BigDecimal.ZERO;
             }
-            BigDecimal total = subtotal.subtract(discount);
+            BigDecimal total = subtotal.subtract(discount).subtract(LoyaltyPolicy.redemptionOf(previewPoints.getAsInt()).value());
             currentTotal[0] = total;
+            split.totalChanged(total);
             noteButtons.forEach((button, value) -> button.setDisable(value.compareTo(total) < 0));
             totalPreviewLabel.setText(CurrencyUtil.format(total));
             BigDecimal received = parseNonNegative(cashReceivedField.getText());
@@ -1245,7 +1385,11 @@ public class OrderController {
             changePreviewLabel.setText(change != null && change.compareTo(BigDecimal.ZERO) >= 0
                     ? CurrencyUtil.format(change) : "-");
         };
-        discountField.textProperty().addListener((obs, o, n) -> updatePreview.run());
+        discountField.textProperty().addListener((obs, o, n) -> {
+            refreshPointsHint.run();
+            updatePreview.run();
+        });
+        pointsField.textProperty().addListener((obs, o, n) -> updatePreview.run());
         cashReceivedField.textProperty().addListener((obs, o, n) -> updatePreview.run());
         cardRadio.selectedProperty().addListener((obs, o, n) -> updatePreview.run());
         transferRadio.selectedProperty().addListener((obs, o, n) -> updatePreview.run());
@@ -1258,10 +1402,18 @@ public class OrderController {
         grid.addRow(0, new Label(I18n.t("pos.pay.subtotal")), new Label(CurrencyUtil.format(subtotal)));
         grid.addRow(1, new Label(I18n.t("pos.pay.discount")), new VBox(2, discountField, discountHint));
         grid.addRow(2, new Label(I18n.t("pos.pay.discount.reason")), discountReasonField);
-        grid.addRow(3, new Label(I18n.t("pos.pay.total")), totalPreviewLabel);
-        grid.addRow(4, new Label(I18n.t("pos.pay.method")), new HBox(14, cashRadio, cardRadio, transferRadio));
-        grid.addRow(5, new Label(I18n.t("pos.pay.cash")), new VBox(6, cashReceivedField, quickCash));
-        grid.addRow(6, new Label(I18n.t("pos.pay.change")), changePreviewLabel);
+        if (canSpendPoints) {
+            grid.addRow(3, new Label(I18n.t("pos.points.label")), new VBox(2, new HBox(8, pointsField, pointsMaxButton), pointsHint));
+        } else if (pointsCustomer != null) {
+            grid.addRow(3, new Label(I18n.t("pos.points.label")), new Label(I18n.t("pos.points.none")));
+        } else {
+            grid.addRow(3, new Label(I18n.t("pos.points.label")), new Label(I18n.t("pos.points.attach")));
+        }
+        grid.addRow(4, new Label(I18n.t("pos.pay.total")), totalPreviewLabel);
+        grid.addRow(5, new Label(I18n.t("pos.pay.method")), new VBox(6, new HBox(14, cashRadio, cardRadio, transferRadio),
+                new HBox(14, walletRadios.values().toArray(new RadioButton[0]))));
+        grid.addRow(6, new Label(I18n.t("pos.pay.cash")), new VBox(6, cashReceivedField, quickCash));
+        grid.addRow(7, new Label(I18n.t("pos.pay.change")), changePreviewLabel);
 
         // Bank transfer: the shop's own QR picture and the amount, shown only for this method.
         // The cashier must tick that the money arrived before the order can be paid.
@@ -1270,16 +1422,29 @@ public class OrderController {
         TextField transferRefField = new TextField();
         transferRefField.setPromptText(I18n.t("pos.pay.transfer.ref.prompt"));
         TextLengthLimiter.limit(transferRefField, com.coffeeshop.coffeeshopmanagement.service.PaymentDetails.REFERENCE_MAX);
-        VBox transferBox = buildTransferBox(totalPreviewLabel, transferReceivedBox, transferRefField);
+        VBox transferBox = PaymentBoxes.transfer(split.dueLabel(), transferReceivedBox, transferRefField, activeOpenOrder);
         transferBox.visibleProperty().bind(transferRadio.selectedProperty());
         transferBox.managedProperty().bind(transferRadio.selectedProperty());
-        grid.add(transferBox, 0, 7, 2, 1);
+        grid.add(split.node(), 0, 8, 2, 1);
+        grid.add(transferBox, 0, 9, 2, 1);
+        // An e-wallet: the amount, the transaction code (optional) and the same "money arrived" tick as a bank transfer (TODO 4.34).
+        CheckBox walletReceivedBox = new CheckBox(I18n.t("pos.pay.wallet.received"));
+        TextField walletRefField = new TextField();
+        walletRefField.setPromptText(I18n.t("pos.pay.wallet.ref.prompt"));
+        TextLengthLimiter.limit(walletRefField, com.coffeeshop.coffeeshopmanagement.service.PaymentDetails.REFERENCE_MAX);
+        VBox walletBox = PaymentBoxes.wallet(split.dueLabel(), walletReceivedBox, walletRefField);
+        javafx.beans.binding.BooleanBinding walletChosen = javafx.beans.binding.Bindings.createBooleanBinding(
+                () -> chosenMethod.get().isEWallet(), methodGroup.selectedToggleProperty());
+        walletBox.visibleProperty().bind(walletChosen);
+        walletBox.managedProperty().bind(walletChosen);
+        grid.add(walletBox, 0, 10, 2, 1);
         dialog.getDialogPane().setContent(grid);
 
         PaymentResult[] pendingResult = {null};
         Button confirmButton = (Button) dialog.getDialogPane().lookupButton(confirmButtonType);
-        transferRadio.selectedProperty().addListener((obs, was, isNow) -> {
-            confirmButton.setText(I18n.t(isNow ? "pos.pay.received" : "pos.pay.confirm"));
+        methodGroup.selectedToggleProperty().addListener((obs, was, isNow) -> {
+            split.methodChanged(chosenMethod.get());
+            confirmButton.setText(I18n.t(chosenMethod.get().needsReceivedConfirmation() ? "pos.pay.received" : "pos.pay.confirm"));
             // The dialog was sized for the short layout; grow or shrink it when the QR appears or goes.
             javafx.application.Platform.runLater(() -> {
                 if (dialog.getDialogPane().getScene() != null && dialog.getDialogPane().getScene().getWindow() != null) {
@@ -1302,11 +1467,31 @@ public class OrderController {
                 event.consume();
                 return;
             }
-            BigDecimal total = subtotal.subtract(discount);
-            PaymentMethod method = cashRadio.isSelected() ? PaymentMethod.CASH
-                    : transferRadio.isSelected() ? PaymentMethod.TRANSFER : PaymentMethod.CARD;
+            // Points spent (TODO 4.16): a typed number that is not allowed stops the payment with the reason in plain words.
+            Integer typedPoints = LoyaltyPolicy.parsePoints(pointsField.getText());
+            String pointsProblem = typedPoints == null ? I18n.t("pos.points.invalid")
+                    : LoyaltyPolicy.redemptionProblem(typedPoints, canSpendPoints ? pointsBalance : (pointsCustomer == null ? null : 0),
+                            subtotal.subtract(discount));
+            if (pointsProblem != null) {
+                AlertUtil.warning(I18n.t("pos.points.label"), pointsProblem);
+                event.consume();
+                return;
+            }
+            final int spentPoints = typedPoints;
+            BigDecimal total = subtotal.subtract(discount).subtract(LoyaltyPolicy.redemptionOf(spentPoints).value());
+            PaymentMethod method = chosenMethod.get();
+            if (split.problem() != null) {
+                AlertUtil.warning(I18n.t("pos.split.title"), split.problem());
+                event.consume();
+                return;
+            }
             if (method == PaymentMethod.TRANSFER && !transferReceivedBox.isSelected()) {
                 AlertUtil.warning(I18n.t("pos.unconfirmed.title"), I18n.t("pos.unconfirmed.message"));
+                event.consume();
+                return;
+            }
+            if (method.isEWallet() && !walletReceivedBox.isSelected()) {
+                AlertUtil.warning(I18n.t("pos.unconfirmed.title"), I18n.t("pos.unconfirmed.wallet", method.label()));
                 event.consume();
                 return;
             }
@@ -1328,7 +1513,10 @@ public class OrderController {
             pendingResult[0] = new PaymentResult(method, discount,
                     DiscountPolicy.reasonToStore(discount, discountReasonField.getText()), total, cashHandedOver,
                     method == PaymentMethod.TRANSFER
-                            ? com.coffeeshop.coffeeshopmanagement.service.PaymentDetails.cleanReference(transferRefField.getText()) : null);
+                            ? com.coffeeshop.coffeeshopmanagement.service.PaymentDetails.cleanReference(transferRefField.getText())
+                            : method.isEWallet()
+                            ? com.coffeeshop.coffeeshopmanagement.service.PaymentDetails.cleanReference(walletRefField.getText()) : null,
+                    spentPoints, split.cashPart());
         });
 
         dialog.showAndWait();
@@ -1337,88 +1525,21 @@ public class OrderController {
         }
     }
 
-    /**
-     * The block shown for "Chuyển khoản": the amount to transfer, the shop's QR picture (or a
-     * clear note when the picture has not been added - never a made-up code), the order code to
-     * use as the transfer note, and the "money received" tick box.
-     */
-    private VBox buildTransferBox(Label totalPreviewLabel, CheckBox transferReceivedBox, TextField transferRefField) {
-        Label title = new Label(I18n.t("pos.qr.amount"));
-        Label amount = new Label();
-        amount.textProperty().bind(totalPreviewLabel.textProperty());
-        amount.setStyle("-fx-font-size: 22px; -fx-font-weight: bold;");
-
-        javafx.scene.Node picture;
-        Optional<String> imageUrl = TransferQr.findImageUrl();
-        javafx.scene.image.Image qrImage = imageUrl.map(u -> new javafx.scene.image.Image(u, 240, 240, true, true)).orElse(null);
-        if (qrImage != null && !qrImage.isError()) {
-            javafx.scene.image.ImageView view = new javafx.scene.image.ImageView(qrImage);
-            view.setFitWidth(240);
-            view.setFitHeight(240);
-            view.setPreserveRatio(true);
-            picture = view;
-        } else {
-            Label missing = new Label(I18n.t(qrImage != null ? "pos.qr.broken" : "pos.qr.none")
-                    + I18n.t("pos.qr.hint", DataPaths.dataDir()));
-            missing.setWrapText(true);
-            missing.setMaxWidth(320);
-            picture = missing;
-        }
-
-        VBox box = new VBox(8, title, amount, picture);
-        // Who the money goes to, and a warning when the picture is not the one an administrator accepted (TODO 2A.17).
-        java.util.Optional<java.nio.file.Path> pictureFile = com.coffeeshop.coffeeshopmanagement.util.TransferQrGuard.dataPicture();
-        if (pictureFile.isPresent() && qrImage != null && !qrImage.isError()) {
-            var state = com.coffeeshop.coffeeshopmanagement.util.TransferQrGuard.inspect(pictureFile.get());
-            String holder = com.coffeeshop.coffeeshopmanagement.util.TransferQrGuard.accountInfo(pictureFile.get());
-            if (!holder.isEmpty()) {
-                Label who = new Label(I18n.t("pos.qr.holder", holder));
-                who.setWrapText(true);
-                who.setMaxWidth(320);
-                box.getChildren().add(who);
-            }
-            if (state.needsAttention()) {
-                boolean unreadable = state == com.coffeeshop.coffeeshopmanagement.util.TransferQrGuard.State.UNVERIFIABLE;
-                Label warn = new Label(I18n.t(unreadable ? "pos.qr.unreadable"
-                        : state == com.coffeeshop.coffeeshopmanagement.util.TransferQrGuard.State.UNCONFIRMED
-                                ? "pos.qr.unconfirmed" : "pos.qr.changed"));
-                warn.setWrapText(true);
-                warn.setMaxWidth(320);
-                warn.setStyle("-fx-text-fill: #b33939; -fx-font-weight: bold;");
-                box.getChildren().add(warn);
-                if (Session.isAdmin() && !unreadable) {
-                    Button accept = new Button(I18n.t("pos.qr.accept"));
-                    accept.setOnAction(e -> {
-                        try {
-                            com.coffeeshop.coffeeshopmanagement.util.TransferQrGuard.accept(pictureFile.get());
-                            box.getChildren().remove(warn);
-                            accept.setVisible(false);
-                            accept.setManaged(false);
-                        } catch (java.io.IOException ex) {
-                            AlertUtil.error(I18n.t("pos.qr.accept.fail.title"), I18n.t("pos.qr.accept.fail.message"));
-                        }
-                    });
-                    box.getChildren().add(accept);
-                }
-            }
-        }
-        if (activeOpenOrder != null && activeOpenOrder.getId() > 0) {
-            Label note = new Label(I18n.t("pos.qr.note", com.coffeeshop.coffeeshopmanagement.util.OrderNumber.transferNote(activeOpenOrder.getId())));
-            note.setStyle("-fx-font-weight: bold;");
-            box.getChildren().add(note);
-        }
-        box.getChildren().addAll(new Label(I18n.t("pos.pay.transfer.ref")), transferRefField, transferReceivedBox);
-        box.setAlignment(Pos.CENTER);
-        box.setPadding(new Insets(6, 0, 0, 0));
-        return box;
-    }
-
     private BigDecimal parseNonNegative(String text) {
         return MoneyParser.parseOptionalDong(text);
     }
 
+    /** The points the customer has now (TODO 4.16): read again from the database, falling back to what the screen holds. */
+    private static int currentPoints(Customer customer) {
+        try {
+            return new CustomerDAO().findById(customer.getId()).map(Customer::getLoyaltyPoints).orElse(customer.getLoyaltyPoints());
+        } catch (RuntimeException e) {
+            return customer.getLoyaltyPoints();
+        }
+    }
+
     private void completeOrder(PaymentResult payment) {
-        final int tNum = selectedTableNumber;
+        final Integer tNum = selectedTableNumber; // null for a take-away order
         final List<OrderItem> items = new ArrayList<>(cart);
         final Customer knownCustomer = attachedCustomer;
         final String name = customerNameField != null && customerNameField.getText() != null ? customerNameField.getText().trim() : "";
@@ -1433,7 +1554,7 @@ public class OrderController {
         Async.runOrdered(
                 () -> checkoutService.pay(tNum, items, subtotal, knownCustomer, name, phone, openOrder,
                         new CheckoutService.Payment(payment.method(), payment.discount(), payment.discountReason(), payment.total(),
-                                payment.cashReceived(), payment.transferRef()),
+                                payment.cashReceived(), payment.transferRef(), payment.pointsRedeemed(), payment.cashPart()),
                         employeeId, actingRole),
                 paid -> {
                     // First thing, so nothing below can leave the screen locked (TODO 2.79).
@@ -1447,8 +1568,9 @@ public class OrderController {
                     // The sale is saved: make the till ready for the next one BEFORE the receipt is opened (TODO 2.65). If the
                     // receipt window fails to open, the paid lines are already gone from the screen and a second click cannot
                     // record the same sale twice. The screen is cleared only when it still shows the table that was paid.
-                    if (selectedTableNumber != null && selectedTableNumber == tNum) {
+                    if (tNum != null ? java.util.Objects.equals(selectedTableNumber, tNum) : takeAway && activeOpenOrder == openOrder) {
                         activeOpenOrder = null;
+                        takeAwayOrderId = null;
                         orderInProgress = false;
                         attachedCustomer = paid.customer();
                         loadProducts();
@@ -1593,6 +1715,16 @@ public class OrderController {
         }
         if (!confirmLeaveOrder()) return;
         SceneNavigator.switchScene(event, "/fxml/quanlytaikhoan.fxml");
+    }
+
+    @FXML
+    public void openStaffManagement(ActionEvent event) {
+        if (!Session.isAdmin()) {
+            AlertUtil.warning(I18n.t("admin.only.title"), I18n.t("admin.only.message"));
+            return;
+        }
+        if (!confirmLeaveOrder()) return;
+        SceneNavigator.switchScene(event, "/fxml/quanlynhanvien.fxml");
     }
 
     @FXML

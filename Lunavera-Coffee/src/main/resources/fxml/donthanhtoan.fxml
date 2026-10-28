@@ -42,8 +42,17 @@
     <VBox alignment="CENTER"
           spacing="4.0">
 
-        <Label text="LUNAVERA COFFEE"
+        <Label fx:id="shopNameLabel"
+               text="Lunavera Coffee"
                styleClass="invoice-shop-name"/>
+
+        <!-- The shop's address and phone from the settings screen (TODO 4.7); hidden until the owner types one. -->
+        <Label fx:id="shopDetailsLabel"
+               visible="false"
+               managed="false"
+               wrapText="true"
+               textAlignment="CENTER"
+               styleClass="invoice-subtitle"/>
 
         <Label text="%receipt.title"
                styleClass="invoice-title"/>
@@ -321,7 +330,8 @@
     <VBox alignment="CENTER"
           spacing="3.0">
 
-        <Label text="LUNAVERA COFFEE"
+        <Label fx:id="footerShopNameLabel"
+               text="Lunavera Coffee"
                styleClass="invoice-footer-shop"/>
 
         <Label text="%receipt.thanks"

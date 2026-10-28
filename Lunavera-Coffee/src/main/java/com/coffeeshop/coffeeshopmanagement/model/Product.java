@@ -21,6 +21,8 @@ public class Product {
     private int sortOrder;
     /** The product's own reorder level (TODO 4.19); null = the shop default, see {@code StockLevel}. */
     private Integer reorderLevel;
+    /** The barcode / product code in capitals (TODO 4.42); null = none. Unique among products. */
+    private String code;
 
     public Product() {
     }
@@ -58,6 +60,9 @@ public class Product {
 
     public String getImagePath() { return imagePath; }
     public void setImagePath(String imagePath) { this.imagePath = imagePath; }
+
+    public String getCode() { return code; }
+    public void setCode(String code) { this.code = code; }
 
     public Integer getReorderLevel() { return reorderLevel; }
     public void setReorderLevel(Integer reorderLevel) { this.reorderLevel = reorderLevel; }

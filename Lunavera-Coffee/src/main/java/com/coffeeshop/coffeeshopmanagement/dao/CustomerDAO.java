@@ -43,7 +43,8 @@ public class CustomerDAO {
 
     public void update(Customer customer) {
         customer.setPhone(blankToNull(ValidationUtil.normalizePhone(customer.getPhone())));
-        String sql = "UPDATE customers SET full_name = ?, phone = ?, email = ? WHERE id = ?";
+        // never on an anonymous customer (TODO 3.4): nothing personal may be written back into it
+        String sql = "UPDATE customers SET full_name = ?, phone = ?, email = ? WHERE id = ? AND anonymised_at IS NULL";
         try (Connection connection = DatabaseConfig.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.nfc(customer.getFullName()));
@@ -58,17 +59,23 @@ public class CustomerDAO {
 
     /** Deletes a customer that has no orders, no points and no login account; returns whether a row was removed (TODO 3.27). */
     public boolean deleteIfUnused(int id) {
+        try (Connection connection = DatabaseConfig.getConnection()) {
+            return deleteIfUnused(connection, id);
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to remove an unused customer", e);
+        }
+    }
+
+    /** Same as {@link #deleteIfUnused(int)} on a connection the caller owns, so it can be part of the caller's transaction. */
+    public boolean deleteIfUnused(Connection connection, int id) throws SQLException {
         String sql = "DELETE FROM customers WHERE id = ? AND loyalty_points = 0 "
                 + "AND NOT EXISTS (SELECT 1 FROM orders WHERE customer_id = ?) "
                 + "AND NOT EXISTS (SELECT 1 FROM users WHERE customer_id = ?)";
-        try (Connection connection = DatabaseConfig.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setInt(1, id);
             statement.setInt(2, id);
             statement.setInt(3, id);
             return statement.executeUpdate() > 0;
-        } catch (SQLException e) {
-            throw new DataAccessException("Failed to remove an unused customer", e);
         }
     }
 
@@ -187,14 +194,15 @@ public class CustomerDAO {
      */
     public List<Customer> search(String typed, int limit) {
         String keyword = com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.searchKey(typed);
-        StringBuilder sql = new StringBuilder("SELECT * FROM customers");
+        // An anonymous customer (TODO 3.4) is never offered: it has no name or phone to find, and nothing may be attached to it again.
+        StringBuilder sql = new StringBuilder("SELECT * FROM customers WHERE anonymised_at IS NULL");
         List<String> params = new ArrayList<>();
         if (!keyword.isEmpty()) {
             String like = "%" + OrderDAO.escapeLike(keyword) + "%";
             String phoneKey = ValidationUtil.normalizePhone(keyword);
-            sql.append(" WHERE ").append(DatabaseConfig.searchKeySql("full_name")).append(" LIKE ? ESCAPE '!'")
+            sql.append(" AND (").append(DatabaseConfig.searchKeySql("full_name")).append(" LIKE ? ESCAPE '!'")
                     .append(" OR phone LIKE ? ESCAPE '!'")
-                    .append(" OR ").append(DatabaseConfig.searchKeySql("COALESCE(email, '')")).append(" LIKE ? ESCAPE '!'");
+                    .append(" OR ").append(DatabaseConfig.searchKeySql("COALESCE(email, '')")).append(" LIKE ? ESCAPE '!')");
             params.add(like);
             params.add("%" + OrderDAO.escapeLike(phoneKey == null ? keyword : phoneKey) + "%");
             params.add(like);
@@ -257,6 +265,7 @@ public class CustomerDAO {
         customer.setLoyaltyPoints(rs.getInt("loyalty_points"));
         String createdAt = rs.getString("created_at");
         customer.setCreatedAt(DbTime.parse(createdAt));
+        customer.setAnonymisedAt(DbTime.parse(rs.getString("anonymised_at")));
         return customer;
     }
 }

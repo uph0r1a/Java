@@ -96,7 +96,8 @@ public class ReportPatternsDaoTest {
 
     @Test
     public void anOrderPaidJustAfterMidnightBelongsToTheNewDayAndHour() {
-        LocalDate day = LocalDate.of(2001, 6, 5);
+        // Its own day, and the day before it is used by no other test in this class (the first test fills 2001-06-04).
+        LocalDate day = LocalDate.of(2001, 6, 11);
         Product p = product(null, 10_000);
         pay(day.atTime(0, 10), OrderStatus.PAID, BigDecimal.ZERO, p, 1);
         assertEquals(1, reports.paidOrders(day, day).size());

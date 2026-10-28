@@ -85,6 +85,14 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
+      # MySQL, and a MariaDB server with this mode, refuse a query that selects a column it does not group by (error 1055); the
+      # default MariaDB mode does not (TODO 6.47). Switching it on for the whole server makes every report query prove itself here.
+      # The tests open their connections after this step, so each one starts in the new mode. The mode is added to the default
+      # list, not put in its place. (mariadb-admin is not on the runner, so the statement goes through the image: docker exec.)
+      - name: Turn ONLY_FULL_GROUP_BY on in the test server
+        run: |
+          container=$(docker ps --filter "ancestor=mariadb:10.11" --format "{{.ID}}" | head -n 1)
+          docker exec "$container" mariadb -uroot -proot-test-password -e "SET GLOBAL sql_mode = CONCAT(@@GLOBAL.sql_mode, ',ONLY_FULL_GROUP_BY'); SELECT @@GLOBAL.sql_mode;"
       - name: Run tests on MariaDB
         run: ./mvnw -B test -Dlunavera.test.db=mariadb -Dlunavera.test.db.password=test-password
       - name: Upload test reports

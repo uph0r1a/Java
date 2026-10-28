@@ -63,7 +63,10 @@ public final class ThermalReceipt {
         root.setPadding(new Insets(2, 0, 8, 0));
         root.setStyle("-fx-background-color: white;");
 
-        root.getChildren().add(centered("LUNAVERA COFFEE", size + 3, true, width));
+        root.getChildren().add(centered(com.coffeeshop.coffeeshopmanagement.config.ShopSettings.cachedName().toUpperCase(java.util.Locale.ROOT), size + 3, true, width));
+        for (String detail : ReceiptText.shopDetailLines()) {
+            root.getChildren().add(centered(detail, size, false, width)); // address, phone, tax code (TODO 4.7, 4.22)
+        }
         root.getChildren().add(centered(ReceiptText.t("receipt.title"), size, true, width));
         if (order.getStatus() == OrderStatus.CANCELLED) {
             root.getChildren().add(centered(ReceiptText.t("receipt.cancelled"), size, true, width));
@@ -79,10 +82,18 @@ public final class ThermalReceipt {
         if (earned != null) {
             root.getChildren().add(line(ReceiptText.points(earned, pointsBalance), size, false, width));
         }
+        String spentLine = ReceiptText.pointsSpent(order); // TODO 4.16
+        if (spentLine != null) {
+            root.getChildren().add(line(spentLine, size, false, width));
+        }
         root.getChildren().add(rule(width));
 
         for (OrderItem item : items) {
             root.getChildren().add(line(ReceiptText.productName(item.getProductName()), size, true, width));
+            String note = com.coffeeshop.coffeeshopmanagement.service.OrderNote.clean(item.getNote()); // TODO 4.9
+            if (note != null) {
+                root.getChildren().add(line("  - " + note, size - 1, false, width));
+            }
             root.getChildren().add(pair(item.getQuantity() + " x " + CurrencyUtil.format(item.getUnitPrice()),
                     CurrencyUtil.format(item.getLineTotal()), size, false, width));
         }
@@ -93,7 +104,7 @@ public final class ThermalReceipt {
             root.getChildren().add(line(ReceiptText.t("receipt.line.reason", order.getDiscountReason()), size - 1, false, width));
         }
         root.getChildren().add(pair(ReceiptText.t("receipt.total"), CurrencyUtil.format(order.getTotal()), size + 2, true, width));
-        root.getChildren().add(line(ReceiptText.t("receipt.line.method", ReceiptText.paymentMethod(order.getPaymentMethod())), size, false, width));
+        root.getChildren().add(line(ReceiptText.t("receipt.line.method", ReceiptText.paymentOf(order)), size, false, width));
         for (String extra : ReceiptText.paymentExtras(order)) { // cash received and change, or the transfer reference (TODO 3.17, 4.31)
             root.getChildren().add(line(extra, size, false, width));
         }

@@ -20,21 +20,30 @@ public class ProductDAO {
 
     public Product insert(Product product) {
         Permissions.requireAdmin("add a product");
-        String sql = "INSERT INTO products (name, category_id, price, cost, stock, description, image_path, active, reorder_level, sort_order) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        try (Connection connection = DatabaseConfig.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
-            bind(statement, product);
-            statement.setInt(10, nextSortOrder(connection, product.getCategoryId())); // a new product goes last in its category (TODO 5.31)
-            statement.executeUpdate();
-            try (ResultSet keys = statement.getGeneratedKeys()) {
-                if (keys.next()) {
-                    product.setId(keys.getInt(1));
+        String sql = "INSERT INTO products (name, category_id, price, cost, stock, description, image_path, active, reorder_level, code, sort_order) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        try (Connection connection = DatabaseConfig.getConnection()) {
+            connection.setAutoCommit(false);
+            try (PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+                bind(statement, product);
+                statement.setInt(11, nextSortOrder(connection, product.getCategoryId())); // a new product goes last in its category (TODO 5.31)
+                statement.executeUpdate();
+                try (ResultSet keys = statement.getGeneratedKeys()) {
+                    if (keys.next()) {
+                        product.setId(keys.getInt(1));
+                    }
                 }
+                if (product.getStock() > 0) { // the opening stock is a typed number too (TODO 4.5)
+                    StockLogDAO.logAdjustment(connection, product.getId(), product.getName(), 0, product.getStock());
+                }
+                connection.commit();
+                return product;
+            } catch (SQLException | RuntimeException e) {
+                connection.rollback();
+                throw e;
             }
-            return product;
         } catch (SQLException e) {
-            throw new DataAccessException("Failed to create product", e);
+            throw codeTakenOr(e, "Failed to create product");
         }
     }
 
@@ -45,8 +54,8 @@ public class ProductDAO {
     public void insertAll(java.util.List<Product> products) {
         com.coffeeshop.coffeeshopmanagement.util.Permissions.requireAdmin("import products");
         if (products == null || products.isEmpty()) return;
-        String sql = "INSERT INTO products (name, category_id, price, cost, stock, description, image_path, active, reorder_level, sort_order) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO products (name, category_id, price, cost, stock, description, image_path, active, reorder_level, code, sort_order) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         try (Connection connection = DatabaseConfig.getConnection()) {
             connection.setAutoCommit(false);
             java.util.Map<Integer, Integer> nextByCategory = new java.util.HashMap<>(); // category id (-1 = none) -> the next number
@@ -56,7 +65,7 @@ public class ProductDAO {
                     int key = product.getCategoryId() == null ? -1 : product.getCategoryId();
                     int sortOrder = nextByCategory.containsKey(key) ? nextByCategory.get(key) : nextSortOrder(connection, product.getCategoryId());
                     nextByCategory.put(key, sortOrder + 1);
-                    statement.setInt(10, sortOrder);
+                    statement.setInt(11, sortOrder);
                     statement.executeUpdate();
                     try (ResultSet keys = statement.getGeneratedKeys()) {
                         if (keys.next()) product.setId(keys.getInt(1));
@@ -68,7 +77,7 @@ public class ProductDAO {
                 throw e;
             }
         } catch (SQLException e) {
-            throw new DataAccessException("Failed to create products", e);
+            throw codeTakenOr(e, "Failed to create products");
         }
     }
 
@@ -115,6 +124,90 @@ public class ProductDAO {
         }
     }
 
+    /**
+     * The product with exactly this code (TODO 4.42), whether or not it is on sale: the caller decides what a stopped product
+     * means. The code is cleaned the same way it is stored, so a scanner's trailing line break or a lower-case typing still finds it.
+     */
+    public java.util.Optional<Product> findByCode(String code) {
+        String wanted = com.coffeeshop.coffeeshopmanagement.service.ProductCode.clean(code);
+        if (wanted == null) return java.util.Optional.empty();
+        try (Connection connection = DatabaseConfig.getConnection();
+             PreparedStatement statement = connection.prepareStatement(SELECT_WITH_CATEGORY + " WHERE p.code = ?")) {
+            statement.setString(1, wanted);
+            try (ResultSet rs = statement.executeQuery()) {
+                return rs.next() ? java.util.Optional.of(map(rs)) : java.util.Optional.empty();
+            }
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to look up a product code", e);
+        }
+    }
+
+    /** The product with this id as the database holds it now, or empty when it is gone. */
+    public java.util.Optional<Product> findById(int id) {
+        try (Connection connection = DatabaseConfig.getConnection();
+             PreparedStatement statement = connection.prepareStatement(SELECT_WITH_CATEGORY + " WHERE p.id = ?")) {
+            statement.setInt(1, id);
+            try (ResultSet rs = statement.executeQuery()) {
+                return rs.next() ? java.util.Optional.of(map(rs)) : java.util.Optional.empty();
+            }
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to read a product", e);
+        }
+    }
+
+    /**
+     * The products with these ids as they are in the database now (a missing id is simply not in the answer). One query, used to
+     * re-read the stock of the few products in a cart just before the payment (TODO 3.1).
+     */
+    public List<Product> findByIds(java.util.Collection<Integer> ids) {
+        List<Product> result = new ArrayList<>();
+        if (ids == null || ids.isEmpty()) {
+            return result;
+        }
+        String marks = String.join(", ", java.util.Collections.nCopies(ids.size(), "?"));
+        try (Connection connection = DatabaseConfig.getConnection();
+             PreparedStatement statement = connection.prepareStatement(SELECT_WITH_CATEGORY + " WHERE p.id IN (" + marks + ")")) {
+            int position = 1;
+            for (int id : ids) {
+                statement.setInt(position++, id);
+            }
+            try (ResultSet rs = statement.executeQuery()) {
+                while (rs.next()) {
+                    result.add(map(rs));
+                }
+            }
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to re-read the stock of the products in a cart", e);
+        }
+        return result;
+    }
+
+    /** True when another product (id != excludeId; pass 0 when adding) already has this code; an empty code is never taken. */
+    public boolean codeTaken(String code, int excludeId) {
+        String wanted = com.coffeeshop.coffeeshopmanagement.service.ProductCode.clean(code);
+        if (wanted == null) return false;
+        try (Connection connection = DatabaseConfig.getConnection();
+             PreparedStatement statement = connection.prepareStatement("SELECT 1 FROM products WHERE code = ? AND id <> ?")) {
+            statement.setString(1, wanted);
+            statement.setInt(2, excludeId);
+            try (ResultSet rs = statement.executeQuery()) {
+                return rs.next();
+            }
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to check the product code", e);
+        }
+    }
+
+    /**
+     * The database's own unique rule on {@code code} (two tills saving the same code at the same moment, or a hand edit) becomes a
+     * sentence fit to show. Safe to name the rule: {@code products} has no other unique column (see {@link UniqueViolation}).
+     */
+    private static DataAccessException codeTakenOr(SQLException e, String fallback) {
+        return UniqueViolation.isUnique(e)
+                ? new DataAccessException(com.coffeeshop.coffeeshopmanagement.util.I18n.t("products.code.taken"), e)
+                : new DataAccessException(fallback, e);
+    }
+
     static String normalizeName(String name) {
         return com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.key(name);
     }
@@ -122,21 +215,42 @@ public class ProductDAO {
     public void update(Product product) {
         Permissions.requireAdmin("change a product");
         String sql = "UPDATE products SET name=?, category_id=?, price=?, cost=?, stock=COALESCE(?, stock), description=?, " +
-                "image_path=?, active=?, reorder_level=? WHERE id=?";
-        try (Connection connection = DatabaseConfig.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
-            bind(statement, product);
-            // Saving a product whose stock number the person did not change must not put the old number back over
-            // sales made since it was read (TODO 3.2): a NULL here keeps the stock the database holds now. A stock
-            // number that was typed in (a stock-take) is still written as given.
-            if (product.isStockUntouchedSinceLoad()) {
-                statement.setNull(5, Types.INTEGER);
+                "image_path=?, active=?, reorder_level=?, code=? WHERE id=?";
+        try (Connection connection = DatabaseConfig.getConnection()) {
+            connection.setAutoCommit(false);
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                bind(statement, product);
+                // Saving a product whose stock number the person did not change must not put the old number back over
+                // sales made since it was read (TODO 3.2): a NULL here keeps the stock the database holds now. A stock
+                // number that was typed in (a stock-take) is still written as given, and now also logged (TODO 4.5).
+                boolean typedStock = !product.isStockUntouchedSinceLoad();
+                int before = typedStock ? currentStock(connection, product.getId()) : 0;
+                if (!typedStock) {
+                    statement.setNull(5, Types.INTEGER);
+                }
+                statement.setInt(11, product.getId());
+                statement.executeUpdate();
+                if (typedStock) {
+                    StockLogDAO.logAdjustment(connection, product.getId(), product.getName(), before, product.getStock());
+                }
+                connection.commit();
+                product.setLoadedStock(product.getStock());
+            } catch (SQLException | RuntimeException e) {
+                connection.rollback();
+                throw e;
             }
-            statement.setInt(10, product.getId());
-            statement.executeUpdate();
-            product.setLoadedStock(product.getStock());
         } catch (SQLException e) {
-            throw new DataAccessException("Failed to update product", e);
+            throw codeTakenOr(e, "Failed to update product");
+        }
+    }
+
+    /** The stock the database holds right now (0 when the product is gone), read on the saving connection. */
+    private static int currentStock(Connection connection, int productId) throws SQLException {
+        try (PreparedStatement read = connection.prepareStatement("SELECT stock FROM products WHERE id = ?")) {
+            read.setInt(1, productId);
+            try (ResultSet rs = read.executeQuery()) {
+                return rs.next() ? rs.getInt(1) : 0;
+            }
         }
     }
 
@@ -328,6 +442,19 @@ public class ProductDAO {
         } else {
             statement.setNull(9, Types.INTEGER);
         }
+        // The last line of defence behind the form and the CSV import (TODO 4.42): stored in capitals, or null.
+        String code = com.coffeeshop.coffeeshopmanagement.service.ProductCode.clean(product.getCode());
+        if (code != null && com.coffeeshop.coffeeshopmanagement.service.ProductCode.problem(code) != null) {
+            throw new DataAccessException(com.coffeeshop.coffeeshopmanagement.util.I18n.t(
+                    com.coffeeshop.coffeeshopmanagement.service.ProductCode.problem(code),
+                    com.coffeeshop.coffeeshopmanagement.service.ProductCode.MAX_LENGTH));
+        }
+        if (code != null) {
+            statement.setString(10, code);
+        } else {
+            statement.setNull(10, Types.VARCHAR);
+        }
+        product.setCode(code);
     }
 
     private Product map(ResultSet rs) throws SQLException {
@@ -348,6 +475,7 @@ public class ProductDAO {
         product.setSortOrder(rs.getInt("sort_order"));
         int reorder = rs.getInt("reorder_level");
         product.setReorderLevel(rs.wasNull() ? null : reorder);
+        product.setCode(rs.getString("code"));
         return product;
     }
 }

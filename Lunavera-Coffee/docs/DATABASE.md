@@ -95,12 +95,20 @@ phpMyAdmin changes the data **without the app's rules**, so be careful:
 
 - Take a backup first (the app's "Sao lưu dữ liệu", or phpMyAdmin **Export**).
 - Values the app expects:
-  - statuses are **UPPER CASE text**: orders `OPEN`, `PAID`, `CANCELLED`; users `ACTIVE`, `LOCKED`; roles `ADMIN`, `EMPLOYEE`; payment `CASH`, `CARD`, `TRANSFER`; tables `EMPTY`, `OCCUPIED`;
+  - statuses are **UPPER CASE text**: orders `OPEN`, `PAID`, `CANCELLED`; users `ACTIVE`, `LOCKED`; roles `ADMIN`, `EMPLOYEE`; payment `CASH`, `CARD`, `TRANSFER`, `MOMO`, `ZALOPAY`, `VNPAY` (the e-wallets, TODO 4.34; the column is `VARCHAR(20)`, no schema change); tables `EMPTY`, `OCCUPIED`;
   - **money is whole dong** (a price of 25.000đ is `25000`);
   - customer phones in the `0...` form (`0912345678`, not `+84...`), and one customer per phone (a blank phone is NULL, not an empty string);
   - never edit `password_hash` by hand (use the app's account screen), and never touch `app_flags` and `schema_version`.
+- Loyalty points can be spent at the till (TODO 4.16, rule D5): `orders.points_redeemed` and `orders.points_value` say how many and what they were worth; the value is also inside `orders.discount`, so `total = subtotal - discount` still holds. A refund gives the spent points back. A file made before these columns simply has none of them (nothing was spent).
 - Do not change a **paid** order's lines or totals: stock and loyalty points were already applied (and the report adds up the saved totals). Cancel it in the app's order history instead.
 - A product that has been sold cannot be deleted (the database refuses); hide it (`active` = 0) instead.
+- A customer is deleted only when nothing points at it (no order, no points, no login). One with orders is made anonymous
+  instead (`customers.anonymised_at` is set, the name, phone and e-mail are removed, the orders stay), and two rows of
+  one person are merged; each merge is written in `customer_merges` (kept id, removed id, the removed name, orders and
+  points moved, who, when). Rule D21; done from the customer screen by an administrator.
+- Expenses (rent, wages, supplies, cash taken out of the drawer) are in the table `expenses`; the cash taken out during a shift
+  is also stored on the closed shift (`shift_closes.cash_out`). Written in the "Chi phí" window by an administrator, or from
+  "Chốt ca" for cash out of the drawer (TODO 4.38, rule D8).
 - Screens show the new values the next time they are loaded.
 
 ## 6. Backups and restore
@@ -164,11 +172,11 @@ To go back to SQLite put `db.type=sqlite` in the file (the app then uses `data/l
 
 ## 9. Differences from SQLite (on purpose)
 
-- Text compares ignoring **accents and capitals**: the categories `Trà` and `tra` count as the same name, and a search for `ca phe` finds `Cà phê`. Login names also ignore capitals in the app (`admin` and `ADMIN` are the same account when signing in or creating one). On SQLite the database enforces it as well; on MariaDB only the app does, so do not add two accounts that differ only in capitals in phpMyAdmin.
+- Text compares ignoring **accents and capitals**: the categories `Trà` and `tra` count as the same name, and a search for `ca phe` finds `Cà phê`. The app now applies the same rule to category names on SQLite too (TODO 3.55), so the two databases accept and refuse the same names; `đ` counts as its own letter in the category rule (`Đá` and `Da` are two categories, as on the server), while the search boxes treat it as `d`. A SQLite file that already holds two categories the server would call equal (`Trà` and `Tra`) cannot be imported until one is renamed; the import says which two. Login names also ignore capitals in the app (`admin` and `ADMIN` are the same account when signing in or creating one). On SQLite the database enforces it as well; on MariaDB only the app does, so do not add two accounts that differ only in capitals in phpMyAdmin.
 - Dates are real `DATETIME` columns; money is `BIGINT` (whole dong), the same numbers as before.
 - Only one connection is opened per action (no connection pool yet).
 - A brand-new *table* (not a new column) needs no numbered step and no version change: add its `CREATE TABLE IF NOT EXISTS` to both `SqliteSchema.TABLES` and `MariaDbSchema.TABLES` (and to `MariaDbSchema.DROP_ORDER`), because that list runs at every start-up; `login_attempts` (TODO 2A.19) was added this way. Say in `SqliteToMariaDbImporterTest` if its rows are not worth copying to a new server.
-- For whoever changes the tables later: a *new* MariaDB database is created at the latest version; an *existing* one is brought up by numbered steps in `MariaDbMigrations` (empty today), driven by the `schema_version` table. An app older than the database refuses to start and says to update.
+- For whoever changes the tables later: a *new* MariaDB database is created at the latest version; an *existing* one is brought up by numbered steps in `MariaDbMigrations` (today one: version 3, the index on `orders.paid_at`, for a database made before `MariaDbSchema` had it), driven by the `schema_version` table. SQLite does the same with `SchemaMigrations.SQLITE_STEPS` and `PRAGMA user_version` (version 2 = the indexes, version 3 = the `paid_at` index). The date filters of the history, the reports and the dashboard are ranges on `paid_at` and `order_date` (`EffectiveDay`), never `DATE(...)` around a column, so these indexes can be used. On SQLite a *new* file is set up in one transaction (every table, the later columns and `user_version` together, `DatabaseConfig.createFreshSqliteSchema`) and each numbered step is run with its version number in one transaction (`DatabaseConfig.runAtomically`), so a start that is killed half way leaves the file as it was; MariaDB commits every `CREATE TABLE` by itself, so its set-up is repeatable instead (everything is `IF NOT EXISTS` and the version is written last). An app older than the database refuses to start and says to update.
 
 ## 10. Running the automated tests on MariaDB (for whoever develops the app)
 

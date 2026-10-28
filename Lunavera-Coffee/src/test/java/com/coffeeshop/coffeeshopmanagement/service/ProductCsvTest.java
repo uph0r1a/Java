@@ -237,4 +237,44 @@ public class ProductCsvTest {
         assertEquals(List.of(), ok.problems());
         assertNull(ok.products().get(0).getReorderLevel());
     }
+
+    // ---------------------------------------------------------------- TODO 4.42: the barcode column
+
+    private static final String HEAD = "T\u00ean,Danh m\u1ee5c,Gi\u00e1 b\u00e1n,M\u00e3 v\u1ea1ch\n";
+
+    @Test
+    public void theBarcodeIsExportedAndImportedInCapitals() {
+        Product p = new Product();
+        p.setName("Latte");
+        p.setCategoryName("Cà phê");
+        p.setPrice(BigDecimal.valueOf(45000));
+        p.setActive(true);
+        p.setCode("CF01");
+        ProductCsv.Result back = parse("\uFEFF" + String.join("\r\n", ProductCsv.export(List.of(p))) + "\r\n");
+        assertEquals(List.of(), back.problems());
+        assertEquals("CF01", back.products().get(0).getCode());
+
+        ProductCsv.Result typed = parse(HEAD + "A,Tr\u00e0,10000, cf-02 \n");
+        assertEquals("CF-02", typed.products().get(0).getCode());
+    }
+
+    @Test
+    public void aBlankBarcodeIsNoCodeAndAFileWithoutTheColumnStillImports() {
+        ProductCsv.Result blank = parse(HEAD + "A,Tr\u00e0,10000,\n");
+        assertEquals(List.of(), blank.problems());
+        assertNull(blank.products().get(0).getCode());
+        ProductCsv.Result without = parse("T\u00ean,Danh m\u1ee5c,Gi\u00e1 b\u00e1n\nA,Tr\u00e0,10000\n");
+        assertNull(without.products().get(0).getCode());
+    }
+
+    @Test
+    public void aBadOrRepeatedOrTakenBarcodeIsAProblemLine() {
+        ProductCsv.Result r = ProductCsv.parse(HEAD
+                + "A,Tr\u00e0,10000,8934\nB,Tr\u00e0,10000,8934\nC,Tr\u00e0,10000,bad code\nD,Tr\u00e0,10000,7777\n",
+                categories, (name, cat) -> false, code -> code.equals("7777"));
+        assertEquals(1, r.products().size());
+        assertEquals("A", r.products().get(0).getName());
+        assertEquals(3, r.problems().size());
+    }
 }
+

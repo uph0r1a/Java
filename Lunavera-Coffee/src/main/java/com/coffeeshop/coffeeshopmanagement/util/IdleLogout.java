@@ -69,7 +69,9 @@ public final class IdleLogout {
         if (TRACKER.isIdle(limit)) {
             TRACKER.touch();
             // later, not inside the animation pulse: ending the session shows a dialog
-            Platform.runLater(() -> SessionGuard.idleLogout(limit));
+            Platform.runLater(() -> {
+                if (!TillLock.lockForIdle()) SessionGuard.idleLogout(limit); // lock first, sign out when it stays idle or cannot lock (TODO 4.36)
+            });
         }
     }
 

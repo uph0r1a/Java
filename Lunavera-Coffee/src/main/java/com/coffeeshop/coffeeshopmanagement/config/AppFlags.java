@@ -14,7 +14,21 @@ public final class AppFlags {
     /** Set when the starter menu is first added; cleared once the owner has been told to review prices and stock (TODO 2.20). */
     public static final String REVIEW_MENU_NOTICE = "review_menu_notice";
 
+    /** Set when the first administrator was created on an empty database; cleared when the setup window has been used or skipped (TODO 4.15). */
+    public static final String SETUP_PENDING = "setup_pending";
+
     private AppFlags() {
+    }
+
+    /** Sets a flag (nothing happens when it is already set). */
+    public static void mark(String name) {
+        try (Connection connection = DatabaseConfig.getConnection();
+             Statement create = connection.createStatement()) {
+            create.execute(SqlDialect.of(connection).createFlagsTable());
+            set(connection, name);
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to set flag " + name, e);
+        }
     }
 
     public static boolean has(String name) {

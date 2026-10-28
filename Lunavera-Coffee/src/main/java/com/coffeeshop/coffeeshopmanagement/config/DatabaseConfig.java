@@ -15,6 +15,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -323,14 +324,21 @@ public final class DatabaseConfig {
         // apart - only "did any of our tables already exist" can).
         boolean preexisting = tableExists(connection, "users");
 
-        try (Statement statement = connection.createStatement()) {
-            for (String ddl : dialect == SqlDialect.SQLITE ? SqliteSchema.TABLES : MariaDbSchema.TABLES) {
-                statement.execute(ddl);
+        if (dialect == SqlDialect.SQLITE && !preexisting) {
+            // A brand-new SQLite file: every table, the later columns and the version number in ONE transaction (TODO 3.37). Made
+            // table by table (each statement committing by itself), a start that was killed after the users table left a file
+            // that the next start took for an OLD database (users exists, version 0) and ran the money migration on.
+            createFreshSqliteSchema(connection, SqliteSchema.TABLES);
+        } else {
+            try (Statement statement = connection.createStatement()) {
+                for (String ddl : dialect == SqlDialect.SQLITE ? SqliteSchema.TABLES : MariaDbSchema.TABLES) {
+                    statement.execute(ddl);
+                }
             }
+            // Columns added after the first release: a new MariaDB database already has them (nothing happens);
+            // an older SQLite file gets them here. Checked first, so the table-rebuilding migration below keeps them.
+            addLaterColumns(connection);
         }
-        // Columns added after the first release: a new MariaDB database already has them (nothing happens);
-        // an older SQLite file gets them here. Checked first, so the table-rebuilding migration below keeps them.
-        addLaterColumns(connection);
 
         if (dialect == SqlDialect.SQLITE) {
             if (preexisting) {
@@ -338,9 +346,8 @@ public final class DatabaseConfig {
                 // That migration rebuilds some tables with a fixed column list, which drops the later columns again for a database
                 // old enough to need it (it already lost order_items.unit_cost): add them once more. A no-op when nothing was rebuilt.
                 addLaterColumns(connection);
-            } else {
-                setUserVersion(connection, CURRENT_SCHEMA_VERSION);
             }
+            // (a fresh file already has its version: it was written in the same transaction as the tables)
         } else if (readSchemaVersion(connection) == 0) {
             writeSchemaVersion(connection, SchemaMigrations.LATEST_VERSION); // a new MariaDB database: already the latest tables
         } else {
@@ -359,6 +366,57 @@ public final class DatabaseConfig {
         if (dialect == SqlDialect.SQLITE) {
             enableWriteAheadLog(); // last, so the pre-migration backup above was taken in the old mode
         }
+    }
+
+    /** What {@link #runAtomically} runs. */
+    @FunctionalInterface
+    interface SqlWork {
+        void run() throws SQLException;
+    }
+
+    /**
+     * Runs {@code work} as one transaction on a SQLite connection (TODO 3.37): it all happens or none of it does. SQLite can roll
+     * back {@code CREATE TABLE}, {@code ALTER TABLE}, {@code CREATE INDEX} and {@code PRAGMA user_version} together, so a process that
+     * dies half way leaves the file as it was before. MariaDB commits every DDL statement by itself, so this is for SQLite only
+     * (the MariaDB set-up repeats safely instead: every statement is {@code IF NOT EXISTS} and the version is written last).
+     * When the caller already has a transaction open the work simply joins it.
+     */
+    static void runAtomically(Connection connection, SqlWork work) throws SQLException {
+        if (!connection.getAutoCommit()) {
+            work.run();
+            return;
+        }
+        connection.setAutoCommit(false);
+        try {
+            work.run();
+            connection.commit();
+        } catch (SQLException | RuntimeException e) {
+            try {
+                connection.rollback();
+            } catch (SQLException rollbackFailure) {
+                e.addSuppressed(rollbackFailure);
+            }
+            throw e;
+        } finally {
+            connection.setAutoCommit(true);
+        }
+    }
+
+    /**
+     * The tables of a brand-new SQLite database, the columns added after the first release and the schema version, written in one
+     * transaction (TODO 3.37). If anything fails, the file has no table and version 0, exactly as if the program had never started,
+     * and the next start begins from the top as a new database instead of mistaking the leftovers for an old one.
+     */
+    static void createFreshSqliteSchema(Connection connection, List<String> tables) throws SQLException {
+        runAtomically(connection, () -> {
+            try (Statement statement = connection.createStatement()) {
+                for (String ddl : tables) {
+                    statement.execute(ddl);
+                }
+            }
+            addLaterColumns(connection);
+            setUserVersion(connection, CURRENT_SCHEMA_VERSION);
+        });
     }
 
     /** Adds every column listed in {@link SqliteSchema#LATER_COLUMNS} that the table does not have yet (both databases). */

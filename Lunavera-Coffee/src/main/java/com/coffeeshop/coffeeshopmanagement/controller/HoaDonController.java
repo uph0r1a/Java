@@ -5,7 +5,6 @@ import com.coffeeshop.coffeeshopmanagement.util.I18n;
 import com.coffeeshop.coffeeshopmanagement.model.Order;
 import com.coffeeshop.coffeeshopmanagement.model.OrderItem;
 import com.coffeeshop.coffeeshopmanagement.model.OrderStatus;
-import com.coffeeshop.coffeeshopmanagement.model.PaymentMethod;
 import com.coffeeshop.coffeeshopmanagement.util.AlertUtil;
 import com.coffeeshop.coffeeshopmanagement.util.CurrencyUtil;
 import com.coffeeshop.coffeeshopmanagement.util.QrCode;
@@ -43,6 +42,12 @@ public class HoaDonController {
     private ScrollPane scroller;
     @FXML
     private VBox invoiceRoot;
+    @FXML
+    private Label shopNameLabel;
+    @FXML
+    private Label footerShopNameLabel;
+    @FXML
+    private Label shopDetailsLabel;
     @FXML
     private Label staffLabel;
     @FXML
@@ -88,8 +93,18 @@ public class HoaDonController {
 
     @FXML
     private void initialize() {
+        // The shop's own name (TODO 4.15), in capitals as the receipt always had it.
+        String shop = com.coffeeshop.coffeeshopmanagement.config.ShopSettings.cachedName().toUpperCase(java.util.Locale.ROOT);
+        shopNameLabel.setText(shop);
+        footerShopNameLabel.setText(shop);
+        // Address and phone (TODO 4.7): shown under the name only when the owner has typed them.
+        java.util.List<String> details = ReceiptText.shopDetailLines();
+        shopDetailsLabel.setText(String.join("\n", details));
+        shopDetailsLabel.setVisible(!details.isEmpty());
+        shopDetailsLabel.setManaged(!details.isEmpty());
         productColumn.setCellValueFactory(data ->
-                new javafx.beans.property.SimpleStringProperty(ReceiptText.productName(data.getValue().getProductName())));
+                new javafx.beans.property.SimpleStringProperty(com.coffeeshop.coffeeshopmanagement.service.OrderNote.withNote(
+                        ReceiptText.productName(data.getValue().getProductName()), data.getValue().getNote()))); // TODO 4.9
         quantityColumn.setCellValueFactory(data ->
                 new javafx.beans.property.SimpleIntegerProperty(data.getValue().getQuantity()));
         priceColumn.setCellValueFactory(data ->
@@ -143,13 +158,12 @@ public class HoaDonController {
         discountReasonLabel.setVisible(hasReason);
         discountReasonLabel.setManaged(hasReason);
         totalLabel.setText(CurrencyUtil.format(order.getTotal()));
-        PaymentMethod method = order.getPaymentMethod();
         // Only the method's name: the transfer QR picture is never printed on a receipt, because a
         // paid receipt that still shows a payment QR could be scanned and paid a second time.
         java.util.List<String> extras = ReceiptText.paymentExtras(order); // cash received and change, or the transfer reference
         paymentMethodLabel.setWrapText(true);
-        paymentMethodLabel.setText(extras.isEmpty() ? ReceiptText.paymentMethod(method)
-                : ReceiptText.paymentMethod(method) + "\n" + String.join("\n", extras));
+        paymentMethodLabel.setText(extras.isEmpty() ? ReceiptText.paymentOf(order)
+                : ReceiptText.paymentOf(order) + "\n" + String.join("\n", extras));
 
         qrOrderIdLabel.setText("#" + order.getId());
         showQrCode(order);

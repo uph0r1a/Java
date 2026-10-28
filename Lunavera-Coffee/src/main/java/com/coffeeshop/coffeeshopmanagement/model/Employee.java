@@ -13,6 +13,8 @@ public class Employee {
     private BigDecimal salary;
     private LocalDate hireDate;
     private boolean active;
+    /** When this person's personal details were removed (TODO 4.29); null = not made anonymous. */
+    private java.time.LocalDateTime anonymisedAt;
 
     public Employee() {
     }
@@ -53,6 +55,10 @@ public class Employee {
 
     public LocalDate getHireDate() { return hireDate; }
     public void setHireDate(LocalDate hireDate) { this.hireDate = hireDate; }
+
+    public java.time.LocalDateTime getAnonymisedAt() { return anonymisedAt; }
+    public void setAnonymisedAt(java.time.LocalDateTime anonymisedAt) { this.anonymisedAt = anonymisedAt; }
+    public boolean isAnonymised() { return anonymisedAt != null; }
 
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }

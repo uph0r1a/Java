@@ -24,9 +24,9 @@ public class AdminScreensTest {
             .resolve("coffeeshopmanagement").resolve("controller");
     private static final Path FXML = MAIN.resolve("resources").resolve("fxml");
 
-    private static final List<String> SCREENS = List.of("AdminDashboardController", "CategoryController", "AccountController", "ProductController");
+    private static final List<String> SCREENS = List.of("AdminDashboardController", "CategoryController", "AccountController", "ProductController", "StaffController");
     private static final List<String> NAVIGATION = List.of("openDashboard", "openProductManagement", "openOrderManagement",
-            "openCustomerManagement", "openCategoryManagement", "openAccountManagement", "logout");
+            "openCustomerManagement", "openCategoryManagement", "openAccountManagement", "openStaffManagement", "logout");
 
     private static String read(Path path) throws IOException {
         return Files.readString(path, StandardCharsets.UTF_8);
@@ -44,6 +44,7 @@ public class AdminScreensTest {
         assertEquals("CategoryController", controllerOf("quanlydanhmuc.fxml"));
         assertEquals("AccountController", controllerOf("quanlytaikhoan.fxml"));
         assertEquals("ProductController", controllerOf("quanlysanpham.fxml"));
+        assertEquals("StaffController", controllerOf("quanlynhanvien.fxml"));
     }
 
     @Test
@@ -85,7 +86,8 @@ public class AdminScreensTest {
     public void aScreenOnlyDeclaresTheFxmlFieldsOfItsOwnFxmlFile() throws IOException {
         Pattern field = Pattern.compile("@FXML\\s+(?:private|protected|public)?\\s*[\\w<>\\[\\],.? ]+?\\s+(\\w+)\\s*;");
         String[][] pairs = {{"admin-trangchu.fxml", "AdminDashboardController"}, {"quanlydanhmuc.fxml", "CategoryController"},
-                {"quanlytaikhoan.fxml", "AccountController"}, {"quanlysanpham.fxml", "ProductController"}};
+                {"quanlytaikhoan.fxml", "AccountController"}, {"quanlysanpham.fxml", "ProductController"},
+                {"quanlynhanvien.fxml", "StaffController"}};
         for (String[] pair : pairs) {
             String fxml = read(FXML.resolve(pair[0]));
             Matcher m = field.matcher(read(CONTROLLERS.resolve(pair[1] + ".java")));

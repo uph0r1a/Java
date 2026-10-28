@@ -1,6 +1,7 @@
 package com.coffeeshop.coffeeshopmanagement.config;
 
 import com.coffeeshop.coffeeshopmanagement.util.I18n;
+import com.coffeeshop.coffeeshopmanagement.util.TextNormalizer;
 import com.coffeeshop.coffeeshopmanagement.util.DataPaths;
 import com.coffeeshop.coffeeshopmanagement.util.DbTime;
 
@@ -45,24 +46,40 @@ final class SqliteToMariaDbImporter {
 
     /** In the order rows may be inserted (a table after the ones its foreign keys point to). */
     static final List<TableSpec> TABLES = List.of(
-            spec("employees", List.of("id", "full_name", "phone", "email", "address", "position", "salary", "hire_date", "active"),
-                    Set.of(), Set.of("hire_date")),
-            spec("customers", List.of("id", "full_name", "phone", "email", "loyalty_points", "created_at"),
-                    Set.of("created_at"), Set.of()),
-            spec("users", List.of("id", "username", "password_hash", "role", "status", "employee_id", "customer_id", "created_at", "must_change_password"),
+            spec("employees", List.of("id", "full_name", "phone", "email", "address", "position", "salary", "hire_date", "active",
+                    "anonymised_at"),
+                    Set.of("anonymised_at"), Set.of("hire_date")),
+            spec("customers", List.of("id", "full_name", "phone", "email", "loyalty_points", "created_at", "anonymised_at"),
+                    Set.of("created_at", "anonymised_at"), Set.of()),
+            spec("customer_merges", List.of("id", "kept_id", "removed_id", "removed_name", "orders_moved", "points_moved",
+                    "merged_by", "merged_at"),
+                    Set.of("merged_at"), Set.of()),
+            spec("users", List.of("id", "username", "password_hash", "role", "status", "employee_id", "customer_id", "created_at", "must_change_password",
+                    "pin_hash", "pin_failures"),
                     Set.of("created_at"), Set.of()),
             spec("categories", List.of("id", "name", "description", "active", "sort_order"), Set.of(), Set.of()),
             spec("products", List.of("id", "name", "category_id", "price", "cost", "stock", "description", "image_path", "active",
-                    "sort_order", "reorder_level"),
+                    "sort_order", "reorder_level", "code"),
                     Set.of(), Set.of()),
             spec("orders", List.of("id", "order_date", "employee_id", "customer_id", "status", "subtotal", "discount", "total",
                     "payment_method", "paid_at", "table_number", "discount_reason", "paid_by", "points_earned", "cash_received", "change_given",
-                    "transfer_ref"),
-                    Set.of("order_date", "paid_at"), Set.of()),
-            spec("order_items", List.of("id", "order_id", "product_id", "product_name", "quantity", "unit_price", "line_total", "unit_cost"),
+                    "transfer_ref", "points_redeemed", "points_value", "cancelled_at"),
+                    Set.of("order_date", "paid_at", "cancelled_at"), Set.of()),
+            spec("order_items", List.of("id", "order_id", "product_id", "product_name", "quantity", "unit_price", "line_total", "unit_cost",
+                    "note"),
                     Set.of(), Set.of()),
+            spec("order_payments", List.of("id", "order_id", "method", "amount"), Set.of(), Set.of()),
             spec("dining_tables", List.of("id", "table_number", "name", "status", "capacity", "current_order_id"),
                     Set.of(), Set.of()),
+            spec("stock_log", List.of("id", "logged_at", "kind", "product_id", "product_name", "quantity", "stock_before", "stock_after",
+                    "unit_cost", "supplier", "note", "employee_id", "employee_name"),
+                    Set.of("logged_at"), Set.of()),
+            spec("expenses", List.of("id", "spent_on", "amount", "category", "note", "from_drawer", "recorded_by", "recorded_by_name",
+                    "created_at"),
+                    Set.of("created_at"), Set.of("spent_on")),
+            spec("shift_closes", List.of("id", "period_start", "period_end", "closed_by", "closed_by_name", "paid_orders", "revenue",
+                    "cash_sales", "opening_cash", "expected_cash", "counted_cash", "difference", "note", "cash_out"),
+                    Set.of("period_start", "period_end"), Set.of()),
             spec("app_flags", List.of("name"), Set.of(), Set.of()));
 
     private static TableSpec spec(String name, List<String> columns, Set<String> dateTimes, Set<String> dates) {
@@ -197,6 +214,10 @@ final class SqliteToMariaDbImporter {
         if (orphans > 0) {
             return new SourceCheck(I18n.t("db.import.orphans", orphans, String.join(", ", examples)), null);
         }
+        String clash = clashingCategoryNames(sqlite);
+        if (clash != null) {
+            return new SourceCheck(clash, null);
+        }
         String warning = version == 0
                 ? "The file is from before the money migration (version 0): prices stored as decimals are rounded to whole dong. "
                 + "If you can, open it once with the SQLite version of the app, which upgrades it, and import that file instead."
@@ -295,8 +316,8 @@ final class SqliteToMariaDbImporter {
     /** Removes what the app created on its first start so the old data can take its place; runs inside the import's transaction. */
     private static void clearFirstRunData(Connection maria) throws SQLException {
         try (Statement statement = maria.createStatement()) {
-            for (String table : List.of("order_items", "dining_tables", "orders", "products", "categories", "users", "customers",
-                    "employees", "app_flags")) {
+            for (String table : List.of("order_payments", "order_items", "dining_tables", "orders", "products", "categories", "users", "customer_merges", "customers",
+                    "employees", "stock_log", "expenses", "shift_closes", "app_flags")) {
                 statement.executeUpdate("DELETE FROM " + table);
             }
         }
@@ -324,6 +345,32 @@ final class SqliteToMariaDbImporter {
         try (Statement statement = maria.createStatement()) {
             statement.execute("SET FOREIGN_KEY_CHECKS = " + (on ? 1 : 0));
         }
+    }
+
+    /**
+     * TODO 3.55: {@code categories.name} is {@code UNIQUE} on both databases, but MariaDB compares with {@code utf8mb4_unicode_ci}
+     * (capitals and accents do not count) and SQLite compares the exact text, so a SQLite shop can hold "Trà" and "Tra" as two
+     * categories that MariaDB would refuse as one. The copy would then stop on the second one with the server's own words, after
+     * the earlier tables were already copied (and rolled back). Looking first lets the owner be told the two names. Compared with
+     * {@link TextNormalizer#collationKey}, which is the server's own rule and nothing stricter, so a file MariaDB would accept is never
+     * refused. Returns the plain-words problem, or null when no two names clash (or the file has no categories table).
+     */
+    static String clashingCategoryNames(Connection sqlite) throws SQLException {
+        if (!sqliteHasTable(sqlite, "categories")) {
+            return null;
+        }
+        Map<String, String> firstWithKey = new LinkedHashMap<>();
+        try (Statement statement = sqlite.createStatement();
+             ResultSet rs = statement.executeQuery("SELECT name FROM categories WHERE name IS NOT NULL ORDER BY id")) {
+            while (rs.next()) {
+                String name = rs.getString(1);
+                String earlier = firstWithKey.putIfAbsent(TextNormalizer.collationKey(name), name);
+                if (earlier != null) {
+                    return I18n.t("db.import.dupcategory", earlier, name);
+                }
+            }
+        }
+        return null;
     }
 
     private static boolean sqliteHasTable(Connection sqlite, String name) throws SQLException {
@@ -375,7 +422,7 @@ final class SqliteToMariaDbImporter {
     /** What to bind for one SQLite value: date text becomes DATETIME / DATE text, everything else is passed through. */
     static Object convert(TableSpec table, String column, Object value) {
         if (value == null) {
-            return "must_change_password".equals(column) || "sort_order".equals(column) ? Integer.valueOf(0) : null; // an older file has no such column
+            return "must_change_password".equals(column) || "pin_failures".equals(column) || "sort_order".equals(column) ? Integer.valueOf(0) : null; // an older file has no such column
         }
         if (table.dateTimeColumns().contains(column)) {
             return DbTime.toSqlDateTime(value.toString());

@@ -8,15 +8,32 @@ package com.coffeeshop.coffeeshopmanagement.service;
  */
 public final class StockLevel {
 
-    /** The reorder level of a product that has none of its own. It was the one shop-wide number before. */
+    /** The reorder level of a product that has none of its own, until the owner sets another one (TODO 4.7). It was the one shop-wide number before. */
     public static final int DEFAULT = 10;
+
+    private static volatile int shopDefault = DEFAULT;
 
     private StockLevel() {
     }
 
-    /** The level that applies: the product's own, or {@link #DEFAULT} when it has none. */
+    /** The shop-wide level the owner chose in the settings screen ({@link #DEFAULT} until then). */
+    public static int defaultLevel() {
+        return shopDefault;
+    }
+
+    /** Called by {@code ShopSettings} when the level is loaded or saved. A value outside 0..{@link Limits#MAX_STOCK} is ignored. */
+    public static void setDefaultLevel(int level) {
+        if (level >= 0 && level <= Limits.MAX_STOCK) shopDefault = level;
+    }
+
+    /** For tests: the factory level again. */
+    public static void resetForTests() {
+        shopDefault = DEFAULT;
+    }
+
+    /** The level that applies: the product's own, or the shop-wide level ({@link #defaultLevel()}) when it has none. */
     public static int effective(Integer own) {
-        return own == null ? DEFAULT : own;
+        return own == null ? shopDefault : own;
     }
 
     public static boolean isLow(int stock, Integer own) {

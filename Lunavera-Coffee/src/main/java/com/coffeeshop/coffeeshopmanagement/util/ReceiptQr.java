@@ -22,7 +22,7 @@ public final class ReceiptQr {
     }
 
     public static String payload(Order order) {
-        StringBuilder text = new StringBuilder("Lunavera Coffee\n")
+        StringBuilder text = new StringBuilder(com.coffeeshop.coffeeshopmanagement.config.ShopSettings.cachedName()).append('\n')
                 .append("Hoa don #").append(order.getId())
                 .append(order.getStatus() == com.coffeeshop.coffeeshopmanagement.model.OrderStatus.CANCELLED ? " (DA HUY)" : "")
                 .append('\n')

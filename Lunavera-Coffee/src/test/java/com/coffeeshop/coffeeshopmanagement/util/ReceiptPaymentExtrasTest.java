@@ -60,4 +60,14 @@ public class ReceiptPaymentExtrasTest {
         o.setTransferRef("X1");
         assertTrue(ReceiptText.paymentExtras(o).isEmpty());
     }
+
+    @Test
+    public void aWalletPaymentShowsItsTransactionCodeLikeATransfer() { // TODO 4.34
+        for (PaymentMethod wallet : PaymentMethod.eWallets()) {
+            Order o = order(wallet);
+            assertTrue(wallet.name(), ReceiptText.paymentExtras(o).isEmpty());
+            o.setTransferRef("MM 123456");
+            assertEquals(wallet.name(), List.of("Reference: MM 123456"), ReceiptText.paymentExtras(o));
+        }
+    }
 }

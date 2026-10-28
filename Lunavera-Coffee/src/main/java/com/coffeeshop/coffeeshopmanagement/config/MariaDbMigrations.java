@@ -32,8 +32,17 @@ final class MariaDbMigrations {
 
     static final int LATEST_VERSION = SchemaMigrations.LATEST_VERSION;
 
-    /** Version -> step. Empty today: version 2 is the first MariaDB schema. */
+    /**
+     * Version -> step. Version 2 is the first MariaDB schema and has no step; version 3 (TODO 3.36) is registered by
+     * {@link SchemaMigrations#ensureMariaPaidAtIndex}: the index on {@code orders.paid_at}.
+     */
     static final Map<Integer, Step> STEPS = new TreeMap<>();
+
+    static {
+        // Registered here, not from SchemaMigrations: DatabaseConfig runs MariaDbMigrations.upgrade first, and a step put into
+        // this map by another class's static initialiser would be missing if that class had not been loaded yet.
+        STEPS.put(3, SchemaMigrations::ensureMariaPaidAtIndex); // TODO 3.36
+    }
 
     private MariaDbMigrations() {
     }

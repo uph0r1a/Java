@@ -18,12 +18,16 @@ import java.util.Optional;
 
 public class CategoryDAO {
 
-    /** Two names that differ only in letter case, spacing or how an accent is encoded are the same name (TODO 3.18). */
+    /**
+     * Two names that differ only in letter case, spacing, how an accent is encoded (TODO 3.18) or in the accents themselves
+     * ({@code Trà} and {@code Tra}, TODO 3.55) are the same name. The last part is MariaDB's own rule for {@code categories.name};
+     * checking it here gives SQLite the same rule and gives both the same plain message instead of the server's.
+     */
     private void rejectDuplicateName(String name, int excludeId) {
-        String wanted = com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.key(name);
+        String wanted = com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.uniqueKey(name);
         for (Category other : findAll()) {
             if (other.getId() != excludeId
-                    && com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.key(other.getName()).equals(wanted)) {
+                    && com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.uniqueKey(other.getName()).equals(wanted)) {
                 throw new DataAccessException(I18n.t("category.exists"));
             }
         }

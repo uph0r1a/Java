@@ -148,7 +148,8 @@ public class LunaveraApplication extends Application {
                 }));
         hourly.setCycleCount(javafx.animation.Animation.INDEFINITE);
         hourly.play();
-        SceneNavigator.setScreenDecorator(SidebarExtras::addChangePasswordButton);
+        SceneNavigator.setScreenDecorator(SidebarExtras::addButtons);
+        com.coffeeshop.coffeeshopmanagement.controller.LockScreen.install(); // TODO 4.36
         FXMLLoader loader = SceneNavigator.newLoader("/fxml/dangnhap.fxml");
 
         ScreenFit fit = ScreenFit.wrap(loader.load());
@@ -165,7 +166,8 @@ public class LunaveraApplication extends Application {
             com.coffeeshop.coffeeshopmanagement.controller.BackupDialogs.offerBeforeLeaving(stage,
                     () -> stage.fireEvent(new javafx.stage.WindowEvent(stage, javafx.stage.WindowEvent.WINDOW_CLOSE_REQUEST)));
         });
-        stage.setTitle("Lunavera Coffee");
+        com.coffeeshop.coffeeshopmanagement.config.ShopSettings.load(); // the owner's shop name (TODO 4.15)
+        stage.setTitle(com.coffeeshop.coffeeshopmanagement.config.ShopSettings.cachedName());
         com.coffeeshop.coffeeshopmanagement.util.AppIcon.apply(stage);
         stage.setScene(ScreenFit.newScene(fit, 0, 0));
         stage.show();

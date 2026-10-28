@@ -117,6 +117,16 @@ public final class SessionGuard {
      */
     public static void idleLogout(java.time.Duration idle) {
         if (Session.getCurrentUser() == null) return;
+        endSession();
+        long minutes = Math.max(1, Math.round(idle.toSeconds() / 60.0));
+        AlertUtil.info(I18n.t("session.idle.title"), I18n.t("session.idle.message", minutes));
+    }
+
+    /**
+     * Signs the person out without a message: clears the session, closes every other window (a lock screen too) and shows the
+     * login screen. Used by the idle timeout and by "Đăng xuất" on the lock screen (TODO 4.36).
+     */
+    public static void endSession() {
         Stage stage = primaryStage;
         Session.clear();
         stopWatching();
@@ -126,8 +136,6 @@ public final class SessionGuard {
             stage.setOnCloseRequest(null);
             SceneNavigator.switchScene(stage, "/fxml/dangnhap.fxml");
         }
-        long minutes = Math.max(1, Math.round(idle.toSeconds() / 60.0));
-        AlertUtil.info(I18n.t("session.idle.title"), I18n.t("session.idle.message", minutes));
     }
 
     /** Call right after a successful login. */

@@ -227,4 +227,97 @@ public Optional<User> findById(int id) {
         user.setMustChangePassword(rs.getInt("must_change_password") != 0);
         return user;
     }
+
+    // ============================================================ The PIN of a cashier (TODO 4.36)
+
+    /** A cashier who has a PIN, for the list on the lock screen. {@code name} is the person's name, else the user name. */
+    public record PinHolder(int userId, String name) {
+    }
+
+    /** The stored PIN hash, or null when the account has none (or does not exist). */
+    public String pinHash(int userId) {
+        try (Connection connection = DatabaseConfig.getConnection();
+             PreparedStatement statement = connection.prepareStatement("SELECT pin_hash FROM users WHERE id = ?")) {
+            statement.setInt(1, userId);
+            try (ResultSet rs = statement.executeQuery()) {
+                return rs.next() ? rs.getString(1) : null;
+            }
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to read the PIN", e);
+        }
+    }
+
+    /** Stores a new PIN hash and forgets earlier wrong PINs. */
+    public void setPinHash(int userId, String pinHash) {
+        update("UPDATE users SET pin_hash = ?, pin_failures = 0 WHERE id = ?", pinHash, userId);
+    }
+
+    /** Removes the PIN (the person sets a new one after signing in with the password). */
+    public void clearPin(int userId) {
+        update("UPDATE users SET pin_hash = NULL, pin_failures = 0 WHERE id = ?", null, userId);
+    }
+
+    /** A right PIN: the count of wrong ones in a row starts again. */
+    public void resetPinFailures(int userId) {
+        update("UPDATE users SET pin_failures = 0 WHERE id = ? AND pin_failures <> 0", null, userId);
+    }
+
+    /**
+     * Counts one more wrong PIN and returns how many there are in a row now. One statement does the adding, so two tills guessing
+     * at the same moment cannot both read the same old number.
+     */
+    public int addPinFailure(int userId) {
+        try (Connection connection = DatabaseConfig.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "UPDATE users SET pin_failures = pin_failures + 1 WHERE id = ? AND pin_hash IS NOT NULL")) {
+                    statement.setInt(1, userId);
+                    statement.executeUpdate();
+                }
+                int failures = 0;
+                try (PreparedStatement statement = connection.prepareStatement("SELECT pin_failures FROM users WHERE id = ?")) {
+                    statement.setInt(1, userId);
+                    try (ResultSet rs = statement.executeQuery()) {
+                        if (rs.next()) failures = rs.getInt(1);
+                    }
+                }
+                connection.commit();
+                return failures;
+            } catch (SQLException | RuntimeException e) {
+                connection.rollback();
+                throw e;
+            }
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to count the wrong PIN", e);
+        }
+    }
+
+    /** Active staff accounts (not administrators) that have a PIN, by name. */
+    public List<PinHolder> pinHolders() {
+        String sql = "SELECT u.id, COALESCE(e.full_name, u.username) AS shown FROM users u LEFT JOIN employees e ON e.id = u.employee_id "
+                + "WHERE u.pin_hash IS NOT NULL AND u.role = '" + Role.EMPLOYEE.name() + "' AND u.status = " + SqlStatus.ACTIVE
+                + " ORDER BY shown, u.id";
+        List<PinHolder> holders = new ArrayList<>();
+        try (Connection connection = DatabaseConfig.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql);
+             ResultSet rs = statement.executeQuery()) {
+            while (rs.next()) holders.add(new PinHolder(rs.getInt(1), rs.getString(2)));
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to list the PINs", e);
+        }
+        return holders;
+    }
+
+    private void update(String sql, String text, int userId) {
+        try (Connection connection = DatabaseConfig.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            int index = 1;
+            if (sql.contains("pin_hash = ?")) statement.setString(index++, text);
+            statement.setInt(index, userId);
+            statement.executeUpdate();
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to update the PIN", e);
+        }
+    }
 }

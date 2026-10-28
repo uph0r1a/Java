@@ -3,7 +3,6 @@ package com.coffeeshop.coffeeshopmanagement.util;
 import com.coffeeshop.coffeeshopmanagement.dao.OrderDAO.OrderSummary;
 import com.coffeeshop.coffeeshopmanagement.model.Customer;
 import com.coffeeshop.coffeeshopmanagement.model.Order;
-import com.coffeeshop.coffeeshopmanagement.model.PaymentMethod;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -44,7 +43,7 @@ public final class ExportCsv {
                 o.getPaidAt() == null ? "" : o.getPaidAt().format(TIME),
                 Csv.cell(row.employeeName()),
                 Csv.cell(row.customerName() == null ? I18n.t("receipt.guest") : row.customerName()),
-                Csv.cell(PaymentMethod.labelOf(o.getPaymentMethod())),
+                Csv.cell(PaymentText.of(o)),
                 o.getDiscount() == null ? "0" : o.getDiscount().toPlainString(),
                 Csv.cell(o.getDiscountReason()),
                 o.getTotal() == null ? "0" : o.getTotal().toPlainString(),

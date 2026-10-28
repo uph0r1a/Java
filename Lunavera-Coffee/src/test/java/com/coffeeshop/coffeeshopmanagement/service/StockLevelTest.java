@@ -1,12 +1,18 @@
 package com.coffeeshop.coffeeshopmanagement.service;
 
 import com.coffeeshop.coffeeshopmanagement.model.Product;
+import org.junit.After;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
 
 /** TODO 3.21 + 4.19: a reorder level per product, the shop default for a product with none. */
 public class StockLevelTest {
+
+    @After
+    public void backToTheFactoryLevel() {
+        StockLevel.resetForTests();
+    }
 
     @Test
     public void aProductWithNoLevelUsesTheShopDefaultOfTen() {

@@ -25,7 +25,7 @@ public final class ProductCsv {
 
     public static final int MAX_ROWS = 5000;
     public static final String HEADER = "Tên sản phẩm,Danh mục,Giá bán (đ),Giá vốn (đ),Tồn kho,Mô tả,Đang bán"
-            + ",M\u1ee9c b\u00e1o nh\u1eadp";
+            + ",M\u1ee9c b\u00e1o nh\u1eadp,M\u00e3 v\u1ea1ch";
 
     /**
      * {@code products} are ready to insert; {@code problems} are plain sentences naming the line (those rows are skipped);
@@ -56,7 +56,8 @@ public final class ProductCsv {
                     String.valueOf(p.getStock()),
                     Csv.cell(p.getDescription()),
                     p.isActive() ? "Có" : "Không",
-                    p.getReorderLevel() == null ? "" : String.valueOf(p.getReorderLevel())));
+                    p.getReorderLevel() == null ? "" : String.valueOf(p.getReorderLevel()),
+                    Csv.cell(p.getCode())));
         }
         return lines;
     }
@@ -65,6 +66,16 @@ public final class ProductCsv {
      * @param exists asks the database whether (name, category id) is taken already
      */
     public static Result parse(String text, List<Category> categories, BiPredicate<String, Integer> exists) {
+        return parse(text, categories, exists, code -> false);
+    }
+
+    /**
+     * @param exists asks the database whether (name, category id) is taken already
+     * @param codeExists asks the database whether a product already has this code (TODO 4.42); a row with a taken code is a problem
+     *        line, because a code identifies one product at the till
+     */
+    public static Result parse(String text, List<Category> categories, BiPredicate<String, Integer> exists,
+                               java.util.function.Predicate<String> codeExists) {
         List<Product> products = new ArrayList<>();
         List<String> problems = new ArrayList<>();
         List<List<String>> rows = split(text);
@@ -81,6 +92,7 @@ public final class ProductCsv {
         int description = column(header, "mo ta", "description");
         int active = column(header, "dang ban", "active");
         int reorder = column(header, "muc bao nhap", "muc bao nhap hang", "reorder level", "reorder");
+        int codeColumn = column(header, "ma vach", "ma sp", "ma", "barcode", "product code", "code");
         if (name < 0 || price < 0 || category < 0) {
             problems.add(I18n.t("csv.nocolumns"));
             return new Result(products, problems);
@@ -90,6 +102,7 @@ public final class ProductCsv {
             return new Result(products, problems);
         }
         Set<String> seen = new HashSet<>();
+        Set<String> seenCodes = new HashSet<>();
         List<String> warnings = new ArrayList<>();
         for (int i = 1; i < rows.size(); i++) {
             List<String> row = rows.get(i);
@@ -149,6 +162,15 @@ public final class ProductCsv {
                 Integer level = StockLevel.parse(cell(row, reorder));
                 if (level == null) problem = I18n.t("csv.p.reorderinvalid", Limits.MAX_STOCK);
                 else p.setReorderLevel(level);
+            }
+            if (problem == null && codeColumn >= 0 && !cell(row, codeColumn).isBlank()) {
+                String typedCode = unprotect(cell(row, codeColumn));
+                String codeProblem = ProductCode.problem(typedCode);
+                String code = ProductCode.clean(typedCode);
+                if (codeProblem != null) problem = I18n.t(codeProblem, ProductCode.MAX_LENGTH);
+                else if (!seenCodes.add(code)) problem = I18n.t("csv.p.codeduplicate", code);
+                else if (codeExists.test(code)) problem = I18n.t("csv.p.codeexists", code);
+                else p.setCode(code);
             }
             if (problem == null) {
                 String d = description < 0 ? "" : TextNormalizer.nfc(unprotect(cell(row, description)));

@@ -20,8 +20,8 @@ import java.util.Map;
 /**
  * What every administrator screen has in common (TODO 6.4): the sidebar navigation, the "is this still an administrator"
  * check, the edit/delete column of the tables, and the guard that sends an employee away from a management screen. The
- * four screens, each with its own FXML and its own controller, extend it: {@link AdminDashboardController},
- * {@link CategoryController}, {@link ProductController} and {@link AccountController}. The handlers are public and marked
+ * five screens, each with its own FXML and its own controller, extend it: {@link AdminDashboardController},
+ * {@link CategoryController}, {@link ProductController}, {@link AccountController} and {@link StaffController}. The handlers are public and marked
  * {@code @FXML}, so an FXML file can name them on a subclass.
  */
 public abstract class AdminScreen {
@@ -69,6 +69,15 @@ public abstract class AdminScreen {
             return;
         }
         SceneNavigator.switchScene(event, "/fxml/quanlytaikhoan.fxml");
+    }
+
+    @FXML
+    public void openStaffManagement(ActionEvent event) {
+        if (!Session.isAdmin()) {
+            AlertUtil.warning(I18n.t("admin.only.title"), I18n.t("admin.only.message"));
+            return;
+        }
+        SceneNavigator.switchScene(event, "/fxml/quanlynhanvien.fxml");
     }
 
     @FXML

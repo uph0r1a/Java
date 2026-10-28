@@ -46,6 +46,7 @@ public final class ReportWindow {
 
     private static final DateTimeFormatter DAY_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private static final int TOP_PRODUCTS_LIMIT = 20;
+    private static final int SHIFT_HISTORY_LIMIT = 100;
 
     private final ReportDAO reportDAO = new ReportDAO();
     private final DatePicker fromPicker = new DatePicker(com.coffeeshop.coffeeshopmanagement.util.AppClock.today().withDayOfMonth(1));
@@ -68,11 +69,17 @@ public final class ReportWindow {
     private List<DailySales> lastDaily = List.of();
     private List<ReportDAO.PaymentSplit> lastSplit = List.of();
     private ReportDAO.Profit lastProfit;
+    private ReportDAO.Waste lastWaste;
+    private ReportDAO.Expenses lastExpenses;           // expenses of the range, for "Chi phí" and "Lợi nhuận ròng" (TODO 4.38)
     private SalesPatterns.Range lastPreviousRange;     // the period just before the one on screen (TODO 4.40)
     private Summary lastPreviousSummary;
     private List<SalesPatterns.Slot> lastHours = List.of();
     private List<SalesPatterns.WeekdaySlot> lastWeekdays = List.of();
     private List<ReportDAO.CategorySales> lastCategories = List.of();
+    private List<com.coffeeshop.coffeeshopmanagement.dao.ShiftDAO.EmployeeShare> lastEmployees = List.of();
+    private final com.coffeeshop.coffeeshopmanagement.dao.ShiftDAO shiftDAO = new com.coffeeshop.coffeeshopmanagement.dao.ShiftDAO();
+    private final TableView<com.coffeeshop.coffeeshopmanagement.dao.ShiftDAO.EmployeeShare> employeeTable = new TableView<>();
+    private final TableView<com.coffeeshop.coffeeshopmanagement.model.ShiftClose> shiftTable = new TableView<>();
     private LocalDate lastFrom;
     private LocalDate lastTo;
     private long loadedAtMillis = -1;   // MonotonicClock reading of the last successful load, -1 before the first
@@ -176,11 +183,46 @@ public final class ReportWindow {
         VBox mainPage = new VBox(8, tables);
         VBox.setVgrow(tables, Priority.ALWAYS);
         mainPage.setPadding(new Insets(8, 0, 0, 0));
+        // Third tab (TODO 4.6): sales per employee for the range, and the closed shifts with the cash difference of each.
+        employeeTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        shiftTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        employeeTable.getColumns().add(this.<com.coffeeshop.coffeeshopmanagement.dao.ShiftDAO.EmployeeShare>column(I18n.t("report.col.employee"), 160, x -> employeeName(x)));
+        employeeTable.getColumns().add(this.<com.coffeeshop.coffeeshopmanagement.dao.ShiftDAO.EmployeeShare>column(I18n.t("report.col.orders"), 70, x -> String.valueOf(x.orders())));
+        employeeTable.getColumns().add(this.<com.coffeeshop.coffeeshopmanagement.dao.ShiftDAO.EmployeeShare>column(I18n.t("report.col.revenue"), 120, x -> CurrencyUtil.format(x.revenue())));
+        employeeTable.getColumns().add(this.<com.coffeeshop.coffeeshopmanagement.dao.ShiftDAO.EmployeeShare>column(I18n.t("report.col.cash"), 120, x -> CurrencyUtil.format(x.cash())));
+        employeeTable.getColumns().add(this.<com.coffeeshop.coffeeshopmanagement.dao.ShiftDAO.EmployeeShare>column(I18n.t("report.col.avgorder"), 110,
+                x -> CurrencyUtil.format(x.orders() == 0 ? BigDecimal.ZERO : x.revenue().divide(BigDecimal.valueOf(x.orders()), 0, java.math.RoundingMode.HALF_UP))));
+        employeeTable.setPlaceholder(new Label(I18n.t("report.empty.employees")));
+        java.time.format.DateTimeFormatter shiftTime = java.time.format.DateTimeFormatter.ofPattern("HH:mm dd/MM");
+        shiftTable.getColumns().add(this.<com.coffeeshop.coffeeshopmanagement.model.ShiftClose>column(I18n.t("shift.col.period"), 170,
+                c -> c.periodStart().format(shiftTime) + " \u2192 " + c.periodEnd().format(shiftTime)));
+        shiftTable.getColumns().add(this.<com.coffeeshop.coffeeshopmanagement.model.ShiftClose>column(I18n.t("shift.col.by"), 110, c -> c.closedByName()));
+        shiftTable.getColumns().add(this.<com.coffeeshop.coffeeshopmanagement.model.ShiftClose>column(I18n.t("shift.col.cashsales"), 110, c -> CurrencyUtil.format(c.cashSales())));
+        shiftTable.getColumns().add(this.<com.coffeeshop.coffeeshopmanagement.model.ShiftClose>column(I18n.t("shift.col.cashout"), 110, c -> CurrencyUtil.format(c.cashOut())));
+        shiftTable.getColumns().add(this.<com.coffeeshop.coffeeshopmanagement.model.ShiftClose>column(I18n.t("shift.col.expected"), 110, c -> CurrencyUtil.format(c.expectedCash())));
+        shiftTable.getColumns().add(this.<com.coffeeshop.coffeeshopmanagement.model.ShiftClose>column(I18n.t("shift.col.counted"), 110, c -> CurrencyUtil.format(c.countedCash())));
+        shiftTable.getColumns().add(this.<com.coffeeshop.coffeeshopmanagement.model.ShiftClose>column(I18n.t("shift.col.difference"), 100,
+                c -> (c.difference().signum() > 0 ? "+" : "") + CurrencyUtil.format(c.difference())));
+        shiftTable.getColumns().add(this.<com.coffeeshop.coffeeshopmanagement.model.ShiftClose>column(I18n.t("shift.col.note"), 140, c -> c.note() == null ? "" : c.note()));
+        shiftTable.setPlaceholder(new Label(I18n.t("shift.empty")));
+        VBox employeeBox = new VBox(6, new Label(I18n.t("report.employee.title")), employeeTable);
+        VBox shiftBox = new VBox(6, new Label(I18n.t("shift.history.title")), shiftTable);
+        VBox.setVgrow(employeeTable, Priority.ALWAYS);
+        VBox.setVgrow(shiftTable, Priority.ALWAYS);
+        HBox staffTables = new HBox(14, employeeBox, shiftBox);
+        HBox.setHgrow(employeeBox, Priority.ALWAYS);
+        HBox.setHgrow(shiftBox, Priority.ALWAYS);
+        VBox staffPage = new VBox(8, staffTables);
+        VBox.setVgrow(staffTables, Priority.ALWAYS);
+        staffPage.setPadding(new Insets(8, 0, 0, 0));
+
         Tab mainTab = new Tab(I18n.t("report.tab.main"), mainPage);
         Tab whenTab = new Tab(I18n.t("report.tab.when"), whenPage);
+        Tab staffTab = new Tab(I18n.t("report.tab.staff"), staffPage);
         mainTab.setClosable(false);
         whenTab.setClosable(false);
-        TabPane tabs = new TabPane(mainTab, whenTab);
+        staffTab.setClosable(false);
+        TabPane tabs = new TabPane(mainTab, whenTab, staffTab);
         VBox.setVgrow(tabs, Priority.ALWAYS);
 
         summaryLabel.setWrapText(true);
@@ -243,7 +285,9 @@ public final class ReportWindow {
                     return new Object[]{reportDAO.summary(from, to), reportDAO.allProducts(from, to),
                             reportDAO.dailySales(from, to), reportDAO.paymentSplit(from, to), reportDAO.profit(from, to),
                             before, reportDAO.summary(before.from(), before.to()),
-                            SalesPatterns.byHour(paid), SalesPatterns.byWeekday(paid, from, to), reportDAO.categorySales(from, to)};
+                            SalesPatterns.byHour(paid), SalesPatterns.byWeekday(paid, from, to), reportDAO.categorySales(from, to),
+                            reportDAO.employeeSales(from, to), shiftDAO.findRecent(SHIFT_HISTORY_LIMIT),
+                            reportDAO.waste(from, to), reportDAO.expenses(from, to)};
                 },
                 result -> {
                     if (myRequest != requestCounter) return;
@@ -259,18 +303,25 @@ public final class ReportWindow {
                     lastHours = castList(result[7]);
                     lastWeekdays = castList(result[8]);
                     lastCategories = castList(result[9]);
+                    lastEmployees = castList(result[10]);
+                    lastWaste = (ReportDAO.Waste) result[12];
+                    lastExpenses = (ReportDAO.Expenses) result[13];
                     lastFrom = from;
                     lastTo = to;
                     productTable.getItems().setAll(lastProducts);
                     dailyTable.getItems().setAll(lastDaily);
                     summaryLabel.setText(I18n.t("report.summary", lastSummary.paidOrders(), CurrencyUtil.format(lastSummary.revenue()),
                             CurrencyUtil.format(lastSummary.averageOrderValue()), CurrencyUtil.format(lastSummary.discounts()),
-                            lastSummary.cancelledOrders(), CurrencyUtil.format(lastProfit.grossProfit()), profitNote(lastProfit)));
+                            lastSummary.cancelledOrders(), CurrencyUtil.format(lastProfit.grossProfit()), profitNote(lastProfit))
+                            + (lastWaste.lines() == 0 ? "" : "\n" + com.coffeeshop.coffeeshopmanagement.util.WasteText.summaryLine(lastWaste))
+                            + "\n" + com.coffeeshop.coffeeshopmanagement.util.ExpenseText.summaryLines(lastProfit.grossProfit(), lastWaste, lastExpenses));
                     paymentLabel.setText(paymentText(lastSplit));
                     comparisonLabel.setText(SalesPatternsText.comparison(lastPreviousRange, lastSummary, lastPreviousSummary));
                     hourTable.getItems().setAll(lastHours);
                     weekdayTable.getItems().setAll(lastWeekdays);
                     categoryTable.getItems().setAll(lastCategories);
+                    employeeTable.getItems().setAll(lastEmployees);
+                    shiftTable.getItems().setAll(this.<com.coffeeshop.coffeeshopmanagement.model.ShiftClose>castList(result[11]));
                     busiestLabel.setText(busiestText(lastHours, lastWeekdays));
                     loadedAtMillis = com.coffeeshop.coffeeshopmanagement.util.MonotonicClock.millis();
                     loadedLabel.setText(com.coffeeshop.coffeeshopmanagement.util.ReportRefresh
@@ -358,6 +409,8 @@ public final class ReportWindow {
         lines.add(I18n.t("report.csv.cancelled") + "," + lastSummary.cancelledOrders());
         lines.add(I18n.t("report.csv.profit") + "," + lastProfit.grossProfit().toPlainString());
         lines.add(I18n.t("report.csv.nocost") + "," + lastProfit.linesWithoutCost());
+        lines.addAll(com.coffeeshop.coffeeshopmanagement.util.WasteText.csvLines(lastWaste)); // TODO 4.33
+        lines.addAll(com.coffeeshop.coffeeshopmanagement.util.ExpenseText.csvLines(lastProfit.grossProfit(), lastWaste, lastExpenses)); // TODO 4.38
         lines.add(I18n.t("report.csv.prev") + "," + lastPreviousRange.from().format(DAY_FORMAT) + "," + lastPreviousRange.to().format(DAY_FORMAT));
         lines.add(I18n.t("report.csv.prev.paid") + "," + lastPreviousSummary.paidOrders());
         lines.add(I18n.t("report.csv.prev.revenue") + "," + lastPreviousSummary.revenue().toPlainString());
@@ -389,6 +442,11 @@ public final class ReportWindow {
             lines.add(csv(categoryName(c)) + "," + c.quantity() + "," + c.revenue().toPlainString());
         }
         lines.add("");
+        lines.add(I18n.t("report.csv.employee.header")); // TODO 4.6
+        for (com.coffeeshop.coffeeshopmanagement.dao.ShiftDAO.EmployeeShare x : lastEmployees) {
+            lines.add(csv(employeeName(x)) + "," + x.orders() + "," + x.revenue().toPlainString() + "," + x.cash().toPlainString());
+        }
+        lines.add("");
         lines.add(I18n.t("report.csv.daily.header"));
         for (DailySales d : lastDaily) {
             lines.add(d.date().format(DAY_FORMAT) + "," + d.orders() + "," + d.revenue().toPlainString() + ","
@@ -411,6 +469,11 @@ public final class ReportWindow {
                     release.run();
                     AlertUtil.error(I18n.t("common.file.savefail"), error.getMessage());
                 });
+    }
+
+    /** The person's name, or "unknown" for an order that has no person on record. */
+    private static String employeeName(com.coffeeshop.coffeeshopmanagement.dao.ShiftDAO.EmployeeShare x) {
+        return x.employeeName() == null || x.employeeName().isBlank() ? I18n.t("report.employee.unknown") : x.employeeName();
     }
 
     private static String csv(String value) {

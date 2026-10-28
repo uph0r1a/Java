@@ -23,6 +23,18 @@ public final class ReceiptText {
         return I18n.in(LANGUAGE, key, args);
     }
 
+    /**
+     * The lines under the shop name on every receipt, window and paper (TODO 4.7, 4.22): the address and the phone as the owner
+     * typed them, then "Tax code: ..." in the receipt's language. Only what is filled in; empty when nothing is.
+     */
+    public static java.util.List<String> shopDetailLines() {
+        java.util.List<String> lines = new java.util.ArrayList<>(
+                com.coffeeshop.coffeeshopmanagement.config.ShopSettings.receiptDetailLines());
+        String tax = com.coffeeshop.coffeeshopmanagement.config.ShopSettings.cachedTaxCode();
+        if (!tax.isEmpty()) lines.add(t("receipt.taxcode", tax));
+        return lines;
+    }
+
     /** For loading the receipt window's FXML. */
     public static ResourceBundle bundle() {
         return I18n.bundleFor(LANGUAGE);
@@ -30,6 +42,11 @@ public final class ReceiptText {
 
     public static String paymentMethod(PaymentMethod method) {
         return PaymentMethod.labelOf(method, LANGUAGE);
+    }
+
+    /** The payment of the order, with what each method paid when there were two (TODO 4.32). */
+    public static String paymentOf(com.coffeeshop.coffeeshopmanagement.model.Order order) {
+        return PaymentText.withAmounts(order, LANGUAGE);
     }
 
     /**
@@ -45,10 +62,16 @@ public final class ReceiptText {
                 lines.add(t("receipt.line.change", CurrencyUtil.format(order.getChangeGiven())));
             }
         }
-        if (order.getPaymentMethod() == PaymentMethod.TRANSFER && order.getTransferRef() != null && !order.getTransferRef().isBlank()) {
+        if (order.getPaymentMethod() != null && order.getPaymentMethod().needsReceivedConfirmation() && order.getTransferRef() != null && !order.getTransferRef().isBlank()) {
             lines.add(t("receipt.line.ref", order.getTransferRef())); // as the cashier typed it
         }
         return lines;
+    }
+
+    /** "Points spent: 5" for a sale that was part-paid with loyalty points (TODO 4.16); null when it was not. */
+    public static String pointsSpent(com.coffeeshop.coffeeshopmanagement.model.Order order) {
+        Integer spent = order.getPointsRedeemed();
+        return spent == null || spent <= 0 ? null : t("receipt.points.spent", String.valueOf(spent));
     }
 
     public static String productName(String storedName) {

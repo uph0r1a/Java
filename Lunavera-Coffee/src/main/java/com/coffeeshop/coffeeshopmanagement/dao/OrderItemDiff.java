@@ -11,7 +11,7 @@ import java.util.Objects;
  * What an autosave of an open order has to change (TODO 6.37). Until now every autosave deleted all the lines of the order and
  * inserted them again, which on a shared MariaDB server means a burst of writes every few seconds per till and a gap in
  * which another till could read an empty order. The plan compares the lines already saved with the lines on screen and only
- * touches the difference. A line is "the same line" when product, name and unit price match, taken in order; so a changed
+ * touches the difference. A line is "the same line" when product, name, note and unit price match, taken in order; so a changed
  * quantity is an update in place and a removed line is one delete. No database here, so it is unit-tested.
  */
 public final class OrderItemDiff {
@@ -72,6 +72,8 @@ public final class OrderItemDiff {
     private static boolean sameLine(OrderItem a, OrderItem b) {
         return Objects.equals(a.getProductId(), b.getProductId())
                 && Objects.equals(a.getProductName(), b.getProductName())
+                && Objects.equals(com.coffeeshop.coffeeshopmanagement.service.OrderNote.clean(a.getNote()),
+                        com.coffeeshop.coffeeshopmanagement.service.OrderNote.clean(b.getNote())) // TODO 4.9: a changed note is another line
                 && sameMoney(a.getUnitPrice(), b.getUnitPrice());
     }
 

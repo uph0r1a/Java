@@ -29,6 +29,7 @@ public final class SqlStatus {
     public static final String OCCUPIED = quote(TableStatus.OCCUPIED);
 
     public static final String ROLE_ADMIN = quote(Role.ADMIN);
+    public static final String ROLE_CUSTOMER = quote(Role.CUSTOMER);
 
     private SqlStatus() {
     }

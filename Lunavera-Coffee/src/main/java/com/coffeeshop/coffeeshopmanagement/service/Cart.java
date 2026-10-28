@@ -37,21 +37,33 @@ public final class Cart {
         this.lines = Objects.requireNonNull(lines);
     }
 
-    /** The line already holding this product, if any. */
+    /**
+     * The line of this product that has no note, if any. A line with a note (TODO 4.9: "less sugar") is its own line and is never
+     * topped up by tapping the product again: the second cup may be wanted with the usual sugar.
+     */
     public Optional<OrderItem> lineFor(int productId) {
         return lines.stream()
                 .filter(item -> item.getProductId() != null && item.getProductId() == productId)
+                .filter(item -> item.getNote() == null)
                 .findFirst();
     }
 
-    /** One more piece of the product: on its existing line, or on a new line at the product's current price. */
+    /** All pieces of the product in the cart, over every line it has (lines with different notes count together against the stock). */
+    public int quantityOf(int productId) {
+        return lines.stream()
+                .filter(item -> item.getProductId() != null && item.getProductId() == productId)
+                .mapToInt(OrderItem::getQuantity)
+                .sum();
+    }
+
+    /** One more piece of the product: on its plain line (no note), or on a new line at the product's current price. */
     public Result add(Product product) {
         Optional<OrderItem> existing = lineFor(product.getId());
         int newQuantity = existing.map(OrderItem::getQuantity).orElse(0) + 1;
         if (newQuantity > Limits.MAX_LINE_QUANTITY) {
             return new Result(Outcome.LINE_LIMIT, product.getStock());
         }
-        if (newQuantity > product.getStock()) {
+        if (quantityOf(product.getId()) + 1 > product.getStock()) {
             return new Result(Outcome.NOT_ENOUGH_STOCK, product.getStock());
         }
         if (existing.isPresent()) {
@@ -80,6 +92,51 @@ public final class Cart {
             line.setQuantity(quantity);
             line.setLineTotal(line.getUnitPrice().multiply(BigDecimal.valueOf(quantity)));
         }
+    }
+
+    /** What {@link #setNote} did. */
+    public enum NoteOutcome {
+        /** The line now has this note (or already had it). */
+        SET,
+        /** Another line of the same product already had this note, so the two became one line with the pieces added. */
+        MERGED
+    }
+
+    /**
+     * Puts a note on a line, or takes it off (empty text). When another line of the same product already carries exactly this note
+     * (or none, for an emptied note) the two lines are joined into one, so the same drink is never listed twice with the same words;
+     * if joining would pass the per-line ceiling the lines stay apart.
+     */
+    public NoteOutcome setNote(OrderItem line, String typed) {
+        String note = OrderNote.clean(typed);
+        if (java.util.Objects.equals(note, line.getNote())) {
+            return NoteOutcome.SET;
+        }
+        if (line.getProductId() != null) {
+            Optional<OrderItem> same = lines.stream()
+                    .filter(other -> other != line && java.util.Objects.equals(other.getProductId(), line.getProductId())
+                            && java.util.Objects.equals(other.getNote(), note))
+                    .findFirst();
+            if (same.isPresent() && same.get().getQuantity() + line.getQuantity() <= Limits.MAX_LINE_QUANTITY) {
+                int total = same.get().getQuantity() + line.getQuantity();
+                lines.remove(line);
+                setQuantity(same.get(), total);
+                return NoteOutcome.MERGED;
+            }
+        }
+        line.setNote(note);
+        return NoteOutcome.SET;
+    }
+
+    /**
+     * Would {@code wantedQuantity} pieces on {@code line} be more than the stock, counting the other lines of the same product too?
+     * A product that is not known (null) has no limit here.
+     */
+    public boolean exceedsStock(Product product, OrderItem line, int wantedQuantity) {
+        if (product == null) return false;
+        int others = quantityOf(product.getId()) - (line != null && line.getProductId() != null && line.getProductId() == product.getId()
+                ? line.getQuantity() : 0);
+        return others + wantedQuantity > product.getStock();
     }
 
     /** Would {@code wantedQuantity} pieces on one line be more than the ceiling? */

@@ -19,7 +19,7 @@ import java.util.UUID;
 
 import static org.junit.Assert.*;
 
-/** TODO 2.6 (indexes as schema version 2) and 2.7 (one customer per phone, enforced by the database). */
+/** TODO 2.6 (indexes as schema version 2), 2.7 (one customer per phone, enforced by the database) and 3.36 (the paid-time index, version 3). */
 public class SchemaMigrationsTest {
 
     @BeforeClass
@@ -67,15 +67,16 @@ public class SchemaMigrationsTest {
     }
 
     @Test
-    public void aFreshDatabaseHasTheIndexesAndVersion2() throws Exception {
+    public void aFreshDatabaseHasTheIndexesAndTheLatestVersion() throws Exception {
         try (Connection c = DatabaseConfig.getConnection()) {
             List<String> names = indexNames(c);
             for (String expected : List.of("idx_orders_order_date", "idx_orders_status", "idx_orders_table_number",
                     "idx_orders_customer_id", "idx_order_items_order_id", "idx_products_category_id",
-                    SchemaMigrations.UNIQUE_PHONE_INDEX)) {
+                    SchemaMigrations.PAID_AT_INDEX, SchemaMigrations.UNIQUE_PHONE_INDEX, SchemaMigrations.PRODUCT_CODE_INDEX)) {
                 assertTrue("missing index " + expected + " in " + names, names.contains(expected));
             }
-            assertEquals(2, scalar(c, "PRAGMA user_version"));
+            assertEquals(3, SchemaMigrations.LATEST_VERSION);
+            assertEquals(SchemaMigrations.LATEST_VERSION, scalar(c, "PRAGMA user_version"));
         }
     }
 
@@ -86,14 +87,39 @@ public class SchemaMigrationsTest {
             assertEquals(1, scalar(c, "PRAGMA user_version"));
             assertTrue(indexNames(c).isEmpty());
             SchemaMigrations.upgrade(c);
-            assertEquals(2, scalar(c, "PRAGMA user_version"));
+            assertEquals(SchemaMigrations.LATEST_VERSION, scalar(c, "PRAGMA user_version"));
             assertTrue(indexNames(c).contains("idx_orders_status"));
+            assertTrue(indexNames(c).contains(SchemaMigrations.PAID_AT_INDEX));
             assertTrue(indexNames(c).contains(SchemaMigrations.UNIQUE_PHONE_INDEX));
             SchemaMigrations.upgrade(c); // running it again changes nothing and does not fail
-            assertEquals(2, scalar(c, "PRAGMA user_version"));
+            assertEquals(SchemaMigrations.LATEST_VERSION, scalar(c, "PRAGMA user_version"));
         } finally {
             Files.deleteIfExists(file);
         }
+    }
+
+    /** TODO 3.36: a shop that is already at version 2 (all the other indexes, none on paid_at) gets only the missing one. */
+    @Test
+    public void aVersion2DatabaseGetsThePaidAtIndex() throws Exception {
+        Path file = Files.createTempFile("lunavera-v2", ".db");
+        try (Connection c = oldVersionCopy(file); Statement st = c.createStatement()) {
+            SchemaMigrations.createPerformanceIndexes(c);
+            st.execute("PRAGMA user_version = 2");
+            assertFalse(indexNames(c).contains(SchemaMigrations.PAID_AT_INDEX));
+            SchemaMigrations.upgrade(c);
+            assertEquals(3, scalar(c, "PRAGMA user_version"));
+            assertTrue(indexNames(c).contains(SchemaMigrations.PAID_AT_INDEX));
+            SchemaMigrations.upgrade(c); // twice: nothing to do, no error
+            assertEquals(3, scalar(c, "PRAGMA user_version"));
+        } finally {
+            Files.deleteIfExists(file);
+        }
+    }
+
+    @Test
+    public void mariaDbHasAStepForVersion3SoAnOlderDatabaseGetsThePaidAtIndex() {
+        assertTrue(MariaDbMigrations.STEPS.containsKey(3));
+        assertEquals(java.util.List.of(3), MariaDbMigrations.plan(2, MariaDbMigrations.LATEST_VERSION, MariaDbMigrations.STEPS.keySet()));
     }
 
     @Test

@@ -9,6 +9,8 @@ public class Customer {
     private String email;
     private int loyaltyPoints;
     private LocalDateTime createdAt;
+    /** When the customer's personal details were removed on request (TODO 3.4, rule D21); null = not made anonymous. */
+    private LocalDateTime anonymisedAt;
 
     public Customer() {
     }
@@ -40,6 +42,12 @@ public class Customer {
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    public LocalDateTime getAnonymisedAt() { return anonymisedAt; }
+    public void setAnonymisedAt(LocalDateTime anonymisedAt) { this.anonymisedAt = anonymisedAt; }
+
+    /** True once the customer asked to be forgotten: no name, phone or e-mail is left, only the orders that point at the row. */
+    public boolean isAnonymised() { return anonymisedAt != null; }
 
     @Override
     public String toString() {

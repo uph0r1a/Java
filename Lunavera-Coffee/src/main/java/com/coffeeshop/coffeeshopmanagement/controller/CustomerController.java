@@ -42,14 +42,15 @@ import java.util.stream.Collectors;
  * with distinct fx:id names, avoiding the collision risk entirely rather than adding to it.
  *
  * The screen lists and searches customers, adds and edits them, and opens a customer's purchase history (double-click or the
- * history button, through {@code OrderHistoryWindow.showForCustomer}). There is deliberately no delete button: a customer may
- * be referenced by past orders via customer_id or by a login account, and removing one safely is a bigger feature than this
- * screen needs. (The data layer's {@code deleteIfUnused} exists only to undo a customer created for a payment that then
- * failed.)
+ * history button, through {@code OrderHistoryWindow.showForCustomer}). For an administrator it also has "merge duplicate",
+ * "make anonymous" and "delete" (TODO 4.8 and 3.4, rule D21, all in {@code CustomerMergeService}): a customer that nothing points
+ * at is deleted, one with orders can only be made anonymous, and two rows of one person are merged.
  */
 public class CustomerController {
 
     private final CustomerDAO customerDAO = new CustomerDAO();
+    private final com.coffeeshop.coffeeshopmanagement.service.CustomerMergeService mergeService =
+            new com.coffeeshop.coffeeshopmanagement.service.CustomerMergeService();
 
     @FXML private Label accountNameLabel;
     @FXML private Label accountRoleLabel;
@@ -178,7 +179,123 @@ public class CustomerController {
             export.setPrefHeight(42);
             export.setOnAction(e -> exportCsv());
             bar.getChildren().add(at + 1, export);
+            addMergeButtons(bar, at + 2);
         }
+    }
+
+    /**
+     * \"Gộp khách trùng\", \"Ẩn danh hóa\" and \"Xóa\" for the selected customer (TODO 4.8 and 3.4, rule D21; administrators only,
+     * the rules are checked again in {@code CustomerMergeService}). An anonymous customer can only be looked at.
+     */
+    private void addMergeButtons(javafx.scene.layout.HBox bar, int at) {
+        Button merge = new Button(I18n.t("customers.button.merge"));
+        Button anonymise = new Button(I18n.t("customers.button.anonymise"));
+        Button delete = new Button(I18n.t("customers.button.delete"));
+        delete.getStyleClass().add("danger-button");
+        for (Button b : new Button[]{merge, anonymise, delete}) {
+            b.setPrefHeight(42);
+            b.setDisable(true);
+        }
+        customerTable.getSelectionModel().selectedItemProperty().addListener((o, old, selected) -> {
+            boolean none = selected == null || selected.isAnonymised();
+            merge.setDisable(none);
+            anonymise.setDisable(none);
+            delete.setDisable(selected == null);
+        });
+        merge.setOnAction(e -> handleMerge());
+        anonymise.setOnAction(e -> handleAnonymise());
+        delete.setOnAction(e -> handleDelete());
+        bar.getChildren().addAll(at, java.util.List.of(merge, anonymise, delete));
+    }
+
+    private void handleMerge() {
+        Customer duplicate = customerTable.getSelectionModel().getSelectedItem();
+        if (duplicate == null) {
+            AlertUtil.info(I18n.t("customers.button.merge"), I18n.t("customers.none.selected"));
+            return;
+        }
+        java.util.Optional<Customer> chosen = CustomerPickerDialog.choose(I18n.t("customers.merge.pick.title"),
+                I18n.t("customers.merge.pick.intro", duplicate));
+        if (chosen.isEmpty()) return;
+        Customer keep = chosen.get();
+        if (keep.getId() == duplicate.getId()) {
+            AlertUtil.warning(I18n.t("customers.merge.pick.title"), I18n.t("customers.merge.same"));
+            return;
+        }
+        Async.run(
+                () -> mergeService.impact(duplicate.getId()),
+                impact -> {
+                    if (!AlertUtil.confirm(I18n.t("customers.merge.confirm.title"), I18n.t("customers.merge.confirm",
+                            duplicate, keep, impact.orders(), impact.points()))) {
+                        return;
+                    }
+                    Async.run(
+                            () -> mergeService.merge(keep.getId(), duplicate.getId()),
+                            result -> {
+                                AlertUtil.info(I18n.t("customers.merge.pick.title"), I18n.t("customers.merge.done",
+                                        result.ordersMoved(), result.pointsMoved(), result.keptName()));
+                                reloadCustomers();
+                            },
+                            error -> AlertUtil.error(I18n.t("customers.merge.fail"), error.getMessage()),
+                            customerTable);
+                },
+                error -> AlertUtil.error(I18n.t("customers.merge.fail"), error.getMessage()),
+                customerTable);
+    }
+
+    private void handleAnonymise() {
+        Customer target = customerTable.getSelectionModel().getSelectedItem();
+        if (target == null) {
+            AlertUtil.info(I18n.t("customers.anon.title"), I18n.t("customers.none.selected"));
+            return;
+        }
+        Async.run(
+                () -> mergeService.impact(target.getId()),
+                impact -> {
+                    if (!AlertUtil.confirm(I18n.t("customers.anon.title"),
+                            I18n.t("customers.anon.confirm", target.getFullName(), impact.orders()))) {
+                        return;
+                    }
+                    Async.run(
+                            () -> {
+                                mergeService.anonymise(target.getId());
+                                return Boolean.TRUE;
+                            },
+                            done -> reloadCustomers(),
+                            error -> AlertUtil.error(I18n.t("customers.anon.fail"), error.getMessage()),
+                            customerTable);
+                },
+                error -> AlertUtil.error(I18n.t("customers.anon.fail"), error.getMessage()),
+                customerTable);
+    }
+
+    private void handleDelete() {
+        Customer target = customerTable.getSelectionModel().getSelectedItem();
+        if (target == null) {
+            AlertUtil.info(I18n.t("customers.delete.title"), I18n.t("customers.none.selected"));
+            return;
+        }
+        Async.run(
+                () -> mergeService.impact(target.getId()),
+                impact -> {
+                    if (!impact.deletable()) { // orders, points or a login: the reports would change, so only anonymising is left
+                        AlertUtil.info(I18n.t("customers.delete.title"), I18n.t("customers.delete.used"));
+                        return;
+                    }
+                    if (!AlertUtil.confirm(I18n.t("customers.delete.title"), I18n.t("customers.delete.confirm", target.getFullName()))) {
+                        return;
+                    }
+                    Async.run(
+                            () -> mergeService.delete(target.getId()),
+                            deleted -> {
+                                if (!deleted) AlertUtil.info(I18n.t("customers.delete.title"), I18n.t("customers.delete.used"));
+                                reloadCustomers();
+                            },
+                            error -> AlertUtil.error(I18n.t("customers.delete.fail"), error.getMessage()),
+                            customerTable);
+                },
+                error -> AlertUtil.error(I18n.t("customers.delete.fail"), error.getMessage()),
+                customerTable);
     }
 
     private void openPurchaseHistory() {
@@ -249,6 +366,10 @@ public class CustomerController {
     }
 
     private void openEditDialog(Customer customer) {
+        if (customer.isAnonymised()) { // nothing personal is left to edit (TODO 3.4)
+            AlertUtil.info(I18n.t("customers.dialog.edit"), I18n.t("customers.edit.anonymous"));
+            return;
+        }
         openCustomerDialog(customer);
     }
 
@@ -400,6 +521,15 @@ public class CustomerController {
             return;
         }
         SceneNavigator.switchScene(event, "/fxml/quanlytaikhoan.fxml");
+    }
+
+    @FXML
+    public void openStaffManagement(ActionEvent event) {
+        if (!Session.isAdmin()) {
+            AlertUtil.warning(I18n.t("admin.only.title"), I18n.t("admin.only.message"));
+            return;
+        }
+        SceneNavigator.switchScene(event, "/fxml/quanlynhanvien.fxml");
     }
 
     @FXML

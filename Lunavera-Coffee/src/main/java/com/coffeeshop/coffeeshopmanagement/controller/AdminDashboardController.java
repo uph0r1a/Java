@@ -29,6 +29,8 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -75,7 +77,7 @@ public class AdminDashboardController extends AdminScreen {
     @FXML
     private void initialize() {
         setupPendingRestoreBanner();
-        showMenuReviewNoticeOnce();
+        showSetupWizardOrMenuNoticeOnce();
         loadDatabaseHealth();
         loadHomeTableGrid();
         if (todayOrderLabel != null || todayRevenueLabel != null) {
@@ -229,6 +231,43 @@ public class AdminDashboardController extends AdminScreen {
         pendingRestoreBanner = new javafx.scene.layout.VBox(6, pendingRestoreText, cancel);
         box.getChildren().add(Math.max(0, box.getChildren().indexOf(staleOrderLabel)), pendingRestoreBanner);
         refreshPendingRestoreBanner();
+    }
+
+    /**
+     * On the first administrator login of a new shop the setup window comes first (shop name, tables, review of the starter menu,
+     * TODO 4.15); in every other case the old one-time reminder about the starter menu is used (TODO 2.20).
+     */
+    private void showSetupWizardOrMenuNoticeOnce() {
+        if (staleOrderLabel == null || !Session.isAdmin()) return; // only on the admin home screen
+        Async.run(
+                () -> {
+                    if (!com.coffeeshop.coffeeshopmanagement.config.AppFlags.has(
+                            com.coffeeshop.coffeeshopmanagement.config.AppFlags.SETUP_PENDING)) {
+                        return null;
+                    }
+                    List<Integer> numbers = new ArrayList<>();
+                    new com.coffeeshop.coffeeshopmanagement.dao.TableDAO().findAll().forEach(t -> numbers.add(t.getTableNumber()));
+                    return numbers;
+                },
+                numbers -> {
+                    javafx.stage.Window window = staleOrderLabel.getScene() == null ? null : staleOrderLabel.getScene().getWindow();
+                    if (numbers == null || window == null) {
+                        showMenuReviewNoticeOnce();
+                        return;
+                    }
+                    SetupWizard.show(window, numbers, result -> {
+                        if (!result.saved()) return;
+                        if (window instanceof javafx.stage.Stage stage) {
+                            stage.setTitle(com.coffeeshop.coffeeshopmanagement.config.ShopSettings.cachedName());
+                            if (result.openProducts()) {
+                                SceneNavigator.switchScene(stage, "/fxml/quanlysanpham.fxml");
+                                return;
+                            }
+                        }
+                        loadHomeTableGrid();
+                    });
+                },
+                error -> showMenuReviewNoticeOnce());
     }
 
     /** One-time reminder after the starter menu was added: its prices and stock are placeholders (TODO 2.20). */
@@ -447,6 +486,19 @@ public class AdminDashboardController extends AdminScreen {
     public void handleManageTables() {
         if (!requireAdmin()) return;
         TableManagerDialog.show(this::loadHomeTableGrid);
+    }
+
+    /** The owner's settings window (TODO 4.7): shop name, address, phone, tables, low-stock level, bank details. */
+    @FXML
+    public void handleOpenSettings() {
+        if (!requireAdmin()) return;
+        SettingsDialog.show(this::loadHomeTableGrid, this::handleSetTransferQr, () -> {
+            javafx.stage.Window window = staleOrderLabel.getScene() == null ? null : staleOrderLabel.getScene().getWindow();
+            if (window instanceof javafx.stage.Stage stage) {
+                stage.setTitle(com.coffeeshop.coffeeshopmanagement.config.ShopSettings.cachedName());
+            }
+            loadDashboardStats(); // the low-stock count and list follow the new level
+        });
     }
 
     /** Lists the pictures no product uses, and deletes them after a confirmation and a backup. */

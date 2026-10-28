@@ -109,8 +109,10 @@ public class ProductController extends AdminScreen {
         importButton.setOnAction(e -> importProductsCsv());
         Button exportButton = new Button(I18n.t("common.exportcsv"));
         exportButton.setOnAction(e -> exportProductsCsv());
+        Button stockButton = new Button(I18n.t("stock.open")); // "Nhập kho": goods received and the stock log (TODO 4.5)
+        stockButton.setOnAction(e -> StockLogDialog.show(allProducts, this::reloadProducts));
         int at = bar.getChildren().indexOf(addProductButton);
-        bar.getChildren().addAll(at, List.of(importButton, exportButton));
+        bar.getChildren().addAll(at, List.of(stockButton, importButton, exportButton));
     }
 
     private void exportProductsCsv() {
@@ -158,8 +160,12 @@ public class ProductController extends AdminScreen {
         com.coffeeshop.coffeeshopmanagement.service.ProductCsv.Result result;
         try {
             String text = com.coffeeshop.coffeeshopmanagement.service.ProductCsv.decode(java.nio.file.Files.readAllBytes(file.toPath()));
+            java.util.Set<String> codesInUse = new java.util.HashSet<>(); // the database's own unique rule is the last word (TODO 4.42)
+            for (Product p : allProducts) {
+                if (p.getCode() != null) codesInUse.add(p.getCode());
+            }
             result = com.coffeeshop.coffeeshopmanagement.service.ProductCsv.parse(text, allActiveCategories,
-                    (name, categoryId) -> productDAO.existsByNameInCategory(name, categoryId, 0));
+                    (name, categoryId) -> productDAO.existsByNameInCategory(name, categoryId, 0), codesInUse::contains);
         } catch (java.io.IOException | RuntimeException e) {
             AlertUtil.error(I18n.t("products.import.unreadable.title"), I18n.t("products.import.unreadable.message", (e instanceof java.io.IOException ? "" : e.getMessage())));
             return;
@@ -428,7 +434,8 @@ public class ProductController extends AdminScreen {
 
         List<Product> filtered = allProducts.stream()
                 .filter(p -> selectedProductCategoryId == null || (p.getCategoryId() != null && p.getCategoryId().equals(selectedProductCategoryId)))
-                .filter(p -> keyword.isEmpty() || com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.searchKey(p.getName()).contains(keyword))
+                .filter(p -> keyword.isEmpty() || com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.searchKey(p.getName()).contains(keyword)
+                        || (p.getCode() != null && com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.searchKey(p.getCode()).contains(keyword))) // TODO 4.42
                 .filter(p -> categoryChoice == null || categoryChoice.startsWith(I18n.t("pos.category.all"))
                         || (p.getCategoryName() != null && categoryChoice.equals(p.getCategoryName())))
                 .filter(p -> statusChoice == null || statusChoice.startsWith(I18n.t("pos.category.all"))
@@ -533,9 +540,12 @@ public class ProductController extends AdminScreen {
         TextLengthLimiter.limit(priceField, TextLengthLimiter.NUMBER_MAX);
         TextLengthLimiter.limit(costField, TextLengthLimiter.NUMBER_MAX);
         TextLengthLimiter.limit(stockField, 9);
+        TextField codeField = new TextField(existing != null && existing.getCode() != null ? existing.getCode() : "");
+        codeField.setPromptText(I18n.t("products.code.prompt"));
+        TextLengthLimiter.limit(codeField, com.coffeeshop.coffeeshopmanagement.service.ProductCode.MAX_LENGTH);
         TextField reorderField = new TextField(existing != null && existing.getReorderLevel() != null
                 ? String.valueOf(existing.getReorderLevel()) : "");
-        reorderField.setPromptText(I18n.t("products.reorder.prompt", com.coffeeshop.coffeeshopmanagement.service.StockLevel.DEFAULT));
+        reorderField.setPromptText(I18n.t("products.reorder.prompt", com.coffeeshop.coffeeshopmanagement.service.StockLevel.defaultLevel()));
         TextLengthLimiter.limit(reorderField, 7);
         TextArea descriptionField = new TextArea(existing != null ? existing.getDescription() : "");
         TextLengthLimiter.limit(descriptionField, TextLengthLimiter.DESCRIPTION_MAX);
@@ -598,6 +608,7 @@ public class ProductController extends AdminScreen {
         int row = 0;
         grid.addRow(row++, new Label(I18n.t("products.label.name")), nameField);
         grid.addRow(row++, new Label(I18n.t("products.label.category")), categoryBox);
+        grid.addRow(row++, new Label(I18n.t("products.label.code")), codeField);
         grid.addRow(row++, new Label(I18n.t("products.label.price")), priceField);
         grid.addRow(row++, new Label(I18n.t("products.label.cost")), costField);
         grid.addRow(row++, new Label(I18n.t("products.label.stock")), stockField);
@@ -689,6 +700,23 @@ public class ProductController extends AdminScreen {
                 event.consume();
                 return;
             }
+            String codeProblem = com.coffeeshop.coffeeshopmanagement.service.ProductCode.problem(codeField.getText());
+            if (codeProblem != null) {
+                AlertUtil.warning(I18n.t("products.val.code.title"), I18n.t(codeProblem, com.coffeeshop.coffeeshopmanagement.service.ProductCode.MAX_LENGTH));
+                event.consume();
+                return;
+            }
+            try {
+                if (productDAO.codeTaken(codeField.getText(), existing != null ? existing.getId() : 0)) {
+                    AlertUtil.warning(I18n.t("products.val.code.title"), I18n.t("products.code.taken"));
+                    event.consume();
+                    return;
+                }
+            } catch (DataAccessException ex) {
+                AlertUtil.error(I18n.t("products.dup.checkfail"), ex.getMessage());
+                event.consume();
+                return;
+            }
             String reorderProblem = com.coffeeshop.coffeeshopmanagement.service.StockLevel.problem(reorderField.getText());
             if (reorderProblem != null) {
                 AlertUtil.warning(I18n.t("products.val.stock.title"), I18n.t(reorderProblem, Limits.MAX_STOCK));
@@ -702,6 +730,7 @@ public class ProductController extends AdminScreen {
             product.setCost(cost);
             product.setStock(stock);
             product.setReorderLevel(com.coffeeshop.coffeeshopmanagement.service.StockLevel.parse(reorderField.getText()));
+            product.setCode(com.coffeeshop.coffeeshopmanagement.service.ProductCode.clean(codeField.getText()));
             product.setDescription(descriptionField.getText());
             product.setImagePath(pickedImagePath[0]);
             product.setActive(activeBox.isSelected());

@@ -95,6 +95,12 @@
                         maxWidth="1.7976931348623157E308"
                         styleClass="menu-button"
                         onAction="#openAccountManagement"/>
+
+                <Button text="%nav.staff"
+                        prefHeight="48.0"
+                        maxWidth="1.7976931348623157E308"
+                        styleClass="menu-button"
+                        onAction="#openStaffManagement"/>
             </VBox>
 
             <Region VBox.vgrow="ALWAYS"/>

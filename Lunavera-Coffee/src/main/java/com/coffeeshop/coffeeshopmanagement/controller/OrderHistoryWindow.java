@@ -9,7 +9,6 @@ import com.coffeeshop.coffeeshopmanagement.dao.OrderDAO.HistoryFilter;
 import com.coffeeshop.coffeeshopmanagement.dao.OrderDAO.OrderSummary;
 import com.coffeeshop.coffeeshopmanagement.model.OrderItem;
 import com.coffeeshop.coffeeshopmanagement.model.OrderStatus;
-import com.coffeeshop.coffeeshopmanagement.model.PaymentMethod;
 import com.coffeeshop.coffeeshopmanagement.util.AlertUtil;
 import com.coffeeshop.coffeeshopmanagement.util.PageBar;
 import com.coffeeshop.coffeeshopmanagement.util.Async;
@@ -225,7 +224,7 @@ public final class OrderHistoryWindow {
                 ? shownTime(s.order()).format(TIME_FORMAT) : "-"));
         addColumn(OrderDAO.HistorySortKey.EMPLOYEE, column(I18n.t("history.col.employee"), 150, s -> orDash(s.employeeName())));
         addColumn(OrderDAO.HistorySortKey.CUSTOMER, column(I18n.t("history.col.customer"), 150, s -> s.customerName() != null ? s.customerName() : I18n.t("receipt.guest")));
-        addColumn(OrderDAO.HistorySortKey.PAYMENT, column(I18n.t("history.col.payment"), 100, s -> PaymentMethod.labelOf(s.order().getPaymentMethod())));
+        addColumn(OrderDAO.HistorySortKey.PAYMENT, column(I18n.t("history.col.payment"), 170, s -> com.coffeeshop.coffeeshopmanagement.util.PaymentText.of(s.order())));
         // Who gave what discount and why, visible to the owner without opening the database (TODO 2.37).
         TableColumn<OrderSummary, String> reason = column(I18n.t("history.col.discount"), 200, s -> {
             java.math.BigDecimal d = s.order().getDiscount();

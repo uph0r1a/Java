@@ -14,6 +14,8 @@ public class OrderItem {
     private int quantity;
     private BigDecimal unitPrice;
     private BigDecimal lineTotal;
+    /** What the customer asked for on this line ("less sugar"), see {@code OrderNote}; null = nothing (TODO 4.9). */
+    private String note;
 
     public OrderItem() {
     }
@@ -33,6 +35,9 @@ public class OrderItem {
 
     public BigDecimal getUnitPrice() { return unitPrice; }
     public void setUnitPrice(BigDecimal unitPrice) { this.unitPrice = unitPrice; }
+
+    public String getNote() { return note; }
+    public void setNote(String note) { this.note = note; }
 
     public BigDecimal getLineTotal() { return lineTotal; }
     public void setLineTotal(BigDecimal lineTotal) { this.lineTotal = lineTotal; }

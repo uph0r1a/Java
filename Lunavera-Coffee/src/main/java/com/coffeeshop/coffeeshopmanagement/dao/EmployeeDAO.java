@@ -2,7 +2,10 @@ package com.coffeeshop.coffeeshopmanagement.dao;
 
 import com.coffeeshop.coffeeshopmanagement.util.I18n;
 import com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig;
+import com.coffeeshop.coffeeshopmanagement.model.AccountStatus;
 import com.coffeeshop.coffeeshopmanagement.model.Employee;
+import com.coffeeshop.coffeeshopmanagement.model.Role;
+import com.coffeeshop.coffeeshopmanagement.model.StaffRow;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -123,6 +126,40 @@ public class EmployeeDAO {
         return result;
     }
 
+    /**
+     * Every staff record with its login account, if any (TODO 4.12). One line per person: when more than one account points at the
+     * same staff record (the program never makes that, but an old import might), the oldest account is shown. Accounts of the
+     * customer role are not staff and are left out, so a customer account never appears next to a staff record.
+     */
+    public List<StaffRow> findAllWithAccounts() {
+        String sql = "SELECT e.*, u.id AS user_id, u.username AS user_name, u.role AS user_role, u.status AS user_status " +
+                "FROM employees e LEFT JOIN users u ON u.employee_id = e.id AND u.role <> " + com.coffeeshop.coffeeshopmanagement.config.SqlStatus.ROLE_CUSTOMER + " " +
+                "ORDER BY e.id, u.id";
+        List<StaffRow> result = new ArrayList<>();
+        try (Connection connection = DatabaseConfig.getConnection();
+             Statement statement = connection.createStatement();
+             ResultSet rs = statement.executeQuery(sql)) {
+            int lastEmployeeId = -1;
+            while (rs.next()) {
+                Employee employee = map(rs);
+                if (employee.getId() == lastEmployeeId) {
+                    continue; // a second account of the same person: the first (oldest) one stays
+                }
+                lastEmployeeId = employee.getId();
+                int userId = rs.getInt("user_id");
+                if (rs.wasNull()) {
+                    result.add(new StaffRow(employee, null, null, null, null));
+                } else {
+                    result.add(new StaffRow(employee, userId, rs.getString("user_name"),
+                            Role.valueOf(rs.getString("user_role")), AccountStatus.valueOf(rs.getString("user_status"))));
+                }
+            }
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to load staff", e);
+        }
+        return result;
+    }
+
     public void setActive(int id, boolean active) {
         String sql = "UPDATE employees SET active = ? WHERE id = ?";
         try (Connection connection = DatabaseConfig.getConnection();
@@ -132,6 +169,32 @@ public class EmployeeDAO {
             statement.executeUpdate();
         } catch (SQLException e) {
             throw new DataAccessException("Failed to change employee status", e);
+        }
+    }
+
+    /**
+     * True when this person appears anywhere in the shop's records (TODO 4.29): an order they opened or took the money for, a line of
+     * the stock log, a closed shift. Such a person cannot be deleted without making those records lie (and the orders' foreign
+     * key refuses it); they can be made anonymous instead. Asked on the caller's connection so the answer belongs to its transaction.
+     */
+    public static boolean hasHistory(Connection connection, int employeeId) throws SQLException {
+        String sql = "SELECT CASE WHEN EXISTS (SELECT 1 FROM orders WHERE employee_id = ? OR paid_by = ?) "
+                + "OR EXISTS (SELECT 1 FROM stock_log WHERE employee_id = ?) "
+                + "OR EXISTS (SELECT 1 FROM shift_closes WHERE closed_by = ?) THEN 1 ELSE 0 END";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            for (int i = 1; i <= 4; i++) statement.setInt(i, employeeId);
+            try (ResultSet rs = statement.executeQuery()) {
+                return rs.next() && rs.getInt(1) == 1;
+            }
+        }
+    }
+
+    /** Same as {@link #hasHistory(Connection, int)} on its own connection, for the screen to choose its wording. */
+    public boolean hasHistory(int employeeId) {
+        try (Connection connection = DatabaseConfig.getConnection()) {
+            return hasHistory(connection, employeeId);
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to check the staff history", e);
         }
     }
 
@@ -197,6 +260,7 @@ public class EmployeeDAO {
         String hireDate = rs.getString("hire_date");
         employee.setHireDate(readHireDate(employee.getId(), hireDate));
         employee.setActive(rs.getBoolean("active"));
+        employee.setAnonymisedAt(com.coffeeshop.coffeeshopmanagement.util.DbTime.parse(rs.getString("anonymised_at")));
         return employee;
     }
 }

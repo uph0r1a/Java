@@ -30,7 +30,9 @@ public class I18nTest {
     private static final Pattern JAVA_KEY = Pattern.compile("I18n\\.t\\(\\s*\"([\\w.\\-]+)\"");
 
     /** Text that is the same in both languages on purpose (a language's own name, a currency amount). */
-    private static final Set<String> SAME_ON_PURPOSE = Set.of("lang.en", "lang.vi", "money.zero", "pos.money.zero");
+    private static final Set<String> SAME_ON_PURPOSE = Set.of("lang.en", "lang.vi", "money.zero", "pos.money.zero",
+            "payment.momo", "payment.zalopay", "payment.vnpay", // brand names, written the same in every language (TODO 4.34)
+            "staff.detail.email", "staff.label.email"); // the word "Email" (and its label) is the same in both languages (TODO 4.12)
 
     private final String languageAtStart = I18n.current();
 

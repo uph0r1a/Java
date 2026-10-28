@@ -165,4 +165,37 @@ public class SqliteImportSourceCheckTest {
         }
         assertArrayEquals("the file must be byte for byte as it was", before, Files.readAllBytes(file));
     }
+
+    // ---- TODO 3.55: names that SQLite keeps apart and MariaDB's collation does not ----
+
+    private Path fileWithCategories(String... names) throws SQLException, IOException {
+        String[] statements = new String[names.length + 1];
+        statements[0] = "CREATE TABLE categories (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE)";
+        for (int i = 0; i < names.length; i++) {
+            statements[i + 1] = "INSERT INTO categories(name) VALUES ('" + names[i].replace("'", "''") + "')";
+        }
+        return newFile(SchemaMigrations.LATEST_VERSION, statements);
+    }
+
+    @Test
+    public void twoCategoriesThatDifferOnlyInAccentsAreNamedInTheProblem() throws Exception {
+        SqliteToMariaDbImporter.SourceCheck result = check(fileWithCategories("Cà phê", "Trà", "Tra"));
+        assertNotNull(result.problem());
+        assertTrue(result.problem(), result.problem().contains("\"Trà\"") && result.problem().contains("\"Tra\""));
+        assertNull(result.warning());
+    }
+
+    @Test
+    public void twoCategoriesThatDifferOnlyInCapitalsOrTrailingSpacesAreAlsoReported() throws Exception {
+        assertNotNull(check(fileWithCategories("Cà phê", "CÀ PHÊ")).problem());
+        assertNotNull("MariaDB ignores spaces at the end", check(fileWithCategories("Bánh", "Bánh  ")).problem());
+    }
+
+    @Test
+    public void namesThatMariaDbKeepsApartPassEvenWhenTheyLookAlike() throws Exception {
+        // d with a stroke is its own letter in utf8mb4_unicode_ci, and a space inside a name counts: nothing to refuse
+        assertNull(check(fileWithCategories("Đá", "Da", "Cà phê", "Cà  phê")).problem());
+        assertNull(check(fileWithCategories()).problem());
+    }
 }
+

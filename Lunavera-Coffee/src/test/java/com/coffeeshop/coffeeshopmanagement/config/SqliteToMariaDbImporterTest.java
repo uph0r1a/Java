@@ -42,8 +42,10 @@ public class SqliteToMariaDbImporterTest {
     public void theCopiedColumnsAreExactlyTheColumnsOfTheMariaDbTables() {
         Map<String, String> ddl = SchemaColumns.byTable(MariaDbSchema.TABLES);
         for (SqliteToMariaDbImporter.TableSpec spec : SqliteToMariaDbImporter.TABLES) {
-            assertEquals("columns of " + spec.name(), new HashSet<>(SchemaColumns.columns(ddl.get(spec.name()))),
-                    new HashSet<>(spec.columns()));
+            HashSet<String> mariaColumns = new HashSet<>(SchemaColumns.columns(ddl.get(spec.name())));
+            // MariaDB only: the lower-case key that makes login names unique (TODO 1.9). The server fills it, so it is never copied.
+            if (spec.name().equals("users")) mariaColumns.remove("username_key");
+            assertEquals("columns of " + spec.name(), mariaColumns, new HashSet<>(spec.columns()));
             assertTrue(spec.name(), spec.columns().containsAll(spec.dateTimeColumns()));
             assertTrue(spec.name(), spec.columns().containsAll(spec.dateColumns()));
         }
