@@ -25,8 +25,8 @@ public class Ex13 {
 
     public static void main(String[] args) throws IOException {
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-
         List<Student> students = new ArrayList<>();
+
         System.out.print("Enter number of students: ");
         int n;
 

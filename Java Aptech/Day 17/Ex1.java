@@ -1,384 +1,416 @@
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.util.ArrayList;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Queue;
-import java.util.Stack;
+import java.util.*;
+import java.io.*;
 
 public class Ex1 {
-    public static class Category {
-        private int id, parentId, level;
-        private String name;
-        private List<Category> children;
+    static class Category {
+        int id, parentId, level;
+        String name;
+        List<Category> children;
 
-        public Category(int id, String name, int parentId) {
+        public Category(int id, String name, int parentId, int level) {
             this.id = id;
             this.name = name;
             this.parentId = parentId;
-            this.level = 0;
-            this.children = new ArrayList<>();
-        }
-
-        public int getId() {
-            return id;
-        }
-
-        public void setId(int id) {
-            this.id = id;
-        }
-
-        public String getName() {
-            return name;
-        }
-
-        public void setName(String name) {
-            this.name = name;
-        }
-
-        public int getParentId() {
-            return parentId;
-        }
-
-        public void setParentId(int parentId) {
-            this.parentId = parentId;
-        }
-
-        public int getLevel() {
-            return level;
-        }
-
-        public void setLevel(int level) {
             this.level = level;
-        }
-
-        public List<Category> getChildren() {
-            return children;
-        }
-
-        public boolean isLeaf() {
-            return children.isEmpty();
-        }
-
-        @Override
-        public String toString() {
-            return "ID: " + id + "\nName: " + name + "\nParent ID: " + parentId + "\nLevel: " + level;
+            this.children = new ArrayList<>();
         }
     }
 
-    public static class CategoryManager {
-        private List<Category> flatList;
-        private Category root;
+    static List<Category> categories = new ArrayList<>();
+    static Category root;
+    static BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 
-        public CategoryManager() {
-            this.flatList = new ArrayList<>();
-            this.root = null;
+    static Category buildTree(List<Category> list) {
+        for (Category category : list) {
+            category.children.clear();
         }
 
-        public void addCategory(int id, String name, int parentId) {
-            flatList.add(new Category(id, name, parentId));
-            System.out.println(name + " (id=" + id + ") added successfully");
-        }
+        Category treeRoot = null;
 
-        public void buildTree() {
-            for (Category c : flatList) {
-                if (c.getParentId() == 0) {
-                    root = c;
-                    root.setLevel(0);
-                    break;
-                }
-            }
-
-            if (root == null) {
-                System.out.println("No root category found");
-                return;
-            }
-            attachChildren(root);
-            sortTreeRecursively(root);
-        }
-
-        private void attachChildren(Category parent) {
-            parent.getChildren().clear();
-            for (Category c : flatList) {
-                if (c.getParentId() == parent.getId()) {
-                    c.setLevel(parent.getLevel() + 1);
-                    parent.getChildren().add(c);
-                    attachChildren(c);
-                }
+        for (Category category : list) {
+            if (category.parentId == 0) {
+                treeRoot = category;
+                break;
             }
         }
 
-        public Category getRoot() {
-            return root;
-        }
-
-        public List<Category> getFlatList() {
-            return flatList;
-        }
-
-        public void printTree(Category node, String prefix) {
-            if (node == null)
-                return;
-            System.out.println(prefix + "- " + node.getName());
-            List<Category> children = node.getChildren();
-            for (Category child : children) {
-                printTree(child, prefix + "   ");
-            }
-        }
-
-        public int countTotalCategories(Category node) {
-            if (node == null)
-                return 0;
-            int count = 1;
-            for (Category child : node.getChildren()) {
-                count += countTotalCategories(child);
-            }
-            return count;
-        }
-
-        public Category findCategoryByName(Category node, String name) {
-            if (node == null)
-                return null;
-            if (node.getName().equalsIgnoreCase(name))
-                return node;
-
-            for (Category child : node.getChildren()) {
-                Category found = findCategoryByName(child, name);
-                if (found != null)
-                    return found;
-            }
+        if (treeRoot == null) {
             return null;
         }
 
-        public List<Category> getAllLeafCategories(Category node) {
-            List<Category> leaves = new ArrayList<>();
-            collectLeaves(node, leaves);
+        treeRoot.level = 0;
+        buildTreeRecursive(treeRoot, list);
+
+        return treeRoot;
+    }
+
+    static void buildTreeRecursive(Category parent, List<Category> list) {
+        for (Category category : list) {
+            if (category.parentId == parent.id) {
+                category.level = parent.level + 1;
+                parent.children.add(category);
+                buildTreeRecursive(category, list);
+            }
+        }
+    }
+
+    static boolean addCategory(int id, String name, int parentId) {
+        for (Category category : categories) {
+            if (category.id == id) {
+                System.out.println("Error: Category ID already exists.");
+                return false;
+            }
+        }
+
+        Category parent = findCategoryById(root, parentId);
+
+        if (parent == null) {
+            System.out.println("Error: Parent category not found.");
+            return false;
+        }
+
+        Category newCategory = new Category(id, name, parentId, parent.level + 1);
+
+        categories.add(newCategory);
+        parent.children.add(newCategory);
+
+        System.out.println("Category added successfully.");
+        return true;
+    }
+
+    static void printTree(Category current, String prefix) {
+        if (current == null) {
+            return;
+        }
+
+        System.out.println(prefix + current.name + " (ID: " + current.id + ")");
+
+        for (Category child : current.children) {
+            printTree(child, prefix + "    ");
+        }
+    }
+
+    static int countTotalCategories(Category current) {
+        if (current == null) {
+            return 0;
+        }
+
+        int count = 1;
+
+        for (Category child : current.children) {
+            count += countTotalCategories(child);
+        }
+
+        return count;
+    }
+
+    static Category findCategoryByName(Category current, String name) {
+        if (current == null) {
+            return null;
+        }
+
+        if (current.name.equalsIgnoreCase(name)) {
+            return current;
+        }
+
+        for (Category child : current.children) {
+            Category result = findCategoryByName(child, name);
+
+            if (result != null) {
+                return result;
+            }
+        }
+
+        return null;
+    }
+
+    static Category findCategoryById(Category current, int id) {
+        if (current == null) {
+            return null;
+        }
+
+        if (current.id == id) {
+            return current;
+        }
+
+        for (Category child : current.children) {
+            Category result = findCategoryById(child, id);
+
+            if (result != null) {
+                return result;
+            }
+        }
+
+        return null;
+    }
+
+    static List<Category> getAllLeafCategories(Category current) {
+        List<Category> leaves = new ArrayList<>();
+
+        if (current == null) {
             return leaves;
         }
 
-        private void collectLeaves(Category node, List<Category> leaves) {
-            if (node == null)
-                return;
-            if (node.isLeaf()) {
-                leaves.add(node);
-                return;
-            }
-            for (Category child : node.getChildren()) {
-                collectLeaves(child, leaves);
-            }
+        if (current.children.isEmpty()) {
+            leaves.add(current);
+            return leaves;
         }
 
-        public void sortChildrenBubbleSort(Category node) {
-            if (node == null)
-                return;
-            List<Category> children = node.getChildren();
-            int n = children.size();
+        for (Category child : current.children) {
+            leaves.addAll(getAllLeafCategories(child));
+        }
 
-            for (int i = 0; i < n - 1; i++) {
-                for (int j = 0; j < n - 1 - i; j++) {
-                    if (children.get(j).getName().compareToIgnoreCase(children.get(j + 1).getName()) > 0) {
-                        Category temp = children.get(j);
-                        children.set(j, children.get(j + 1));
-                        children.set(j + 1, temp);
-                    }
+        return leaves;
+    }
+
+    static void bubbleSort(List<Category> list) {
+        int n = list.size();
+
+        for (int i = 0; i < n - 1; i++) {
+            boolean swapped = false;
+
+            for (int j = 0; j < n - i - 1; j++) {
+                if (list.get(j).name.compareToIgnoreCase(list.get(j + 1).name) > 0) {
+                    Category temp = list.get(j);
+                    list.set(j, list.get(j + 1));
+                    list.set(j + 1, temp);
+
+                    swapped = true;
                 }
             }
+
+            if (!swapped) {
+                break;
+            }
+        }
+    }
+
+    static void sortAllCategories(Category current) {
+        if (current == null) {
+            return;
         }
 
-        public void sortTreeRecursively(Category node) {
-            if (node == null)
-                return;
-            sortChildrenBubbleSort(node);
-            for (Category child : node.getChildren()) {
-                sortTreeRecursively(child);
+        bubbleSort(current.children);
+
+        for (Category child : current.children) {
+            sortAllCategories(child);
+        }
+    }
+
+    static Category binarySearchByName(List<Category> list, String name) {
+        int left = 0, right = list.size() - 1;
+
+        while (left <= right) {
+            int mid = left + (right - left) / 2, comparison = list.get(mid).name.compareToIgnoreCase(name);
+
+            if (comparison == 0) {
+                return list.get(mid);
+            }
+
+            if (comparison < 0) {
+                left = mid + 1;
+            } else {
+                right = mid - 1;
             }
         }
 
-        public Category binarySearchByName(List<Category> sortedList, String name) {
-            int low = 0;
-            int high = sortedList.size() - 1;
+        return null;
+    }
 
-            while (low <= high) {
-                int mid = (low + high) / 2;
-                String midName = sortedList.get(mid).getName();
-                int cmp = midName.compareToIgnoreCase(name);
+    static boolean buildBreadcrumb(Category current, int targetId, Stack<Category> path) {
 
-                if (cmp == 0) {
-                    return sortedList.get(mid);
-                } else if (cmp < 0) {
-                    low = mid + 1;
-                } else {
-                    high = mid - 1;
+        if (current == null) {
+            return false;
+        }
+
+        path.push(current);
+
+        if (current.id == targetId) {
+            return true;
+        }
+
+        for (Category child : current.children) {
+            if (buildBreadcrumb(child, targetId, path)) {
+                return true;
+            }
+        }
+
+        path.pop();
+        return false;
+    }
+
+    static void printBreadcrumb(int targetId) {
+        Stack<Category> path = new Stack<>();
+
+        if (buildBreadcrumb(root, targetId, path)) {
+            System.out.println("Breadcrumb:");
+            for (int i = 0; i < path.size(); i++) {
+                System.out.print(path.get(i).name);
+
+                if (i < path.size() - 1) {
+                    System.out.print(" -> ");
                 }
-            }
-            return null;
-        }
-
-        public void printBreadcrumb(String name) {
-            Category target = findCategoryByName(root, name);
-            if (target == null) {
-                System.out.println(name + " not found");
-                return;
-            }
-
-            Stack<Category> stack = new Stack<>();
-            Category current = target;
-
-            while (current != null) {
-                stack.push(current);
-                if (current.getParentId() == 0)
-                    break;
-                current = findCategoryById(root, current.getParentId());
-            }
-
-            StringBuilder sb = new StringBuilder();
-            while (!stack.isEmpty()) {
-                sb.append(stack.pop().getName());
-                if (!stack.isEmpty())
-                    sb.append(" > ");
-            }
-            System.out.println("Breadcrumb: " + sb);
-        }
-
-        private Category findCategoryById(Category node, int id) {
-            if (node == null)
-                return null;
-            if (node.getId() == id)
-                return node;
-            for (Category child : node.getChildren()) {
-                Category found = findCategoryById(child, id);
-                if (found != null)
-                    return found;
-            }
-            return null;
-        }
-
-        public void levelOrderTraversal(Category root) {
-            if (root == null) {
-                System.out.println("Tree is empty.");
-                return;
-            }
-
-            Queue<Category> queue = new LinkedList<>();
-            queue.offer(root);
-
-            while (!queue.isEmpty()) {
-                Category current = queue.poll();
-                System.out.println("Level " + current.getLevel() + ": " + current.getName());
-
-                for (Category child : current.getChildren()) {
-                    queue.offer(child);
-                }
-            }
-        }
-    }
-
-    private static void handleAddCategory() throws IOException {
-        System.out.print("Enter new category id: ");
-        int id = Integer.parseInt(br.readLine().trim());
-
-        System.out.print("Enter category name: ");
-        String name = br.readLine().trim();
-
-        System.out.print("Enter parent id: ");
-        int parentId = Integer.parseInt(br.readLine().trim());
-
-        manager.addCategory(id, name, parentId);
-        manager.buildTree();
-        System.out.println("Tree rebuilt successfully.");
-    }
-
-    private static void handleShowTree() {
-        System.out.println("\n--- Category Tree ---");
-        manager.printTree(manager.getRoot(), "");
-    }
-
-    private static void handleSearchByName() throws IOException {
-        System.out.print("Enter category name to search: ");
-        String name = br.readLine().trim();
-
-        Category found = manager.findCategoryByName(manager.getRoot(), name);
-        if (found != null) {
-            System.out.println("Found: " + found);
-        } else {
-            System.out.println("Category \"" + name + "\" was not found.");
-        }
-    }
-
-    private static void handleCountTotal() {
-        int total = manager.countTotalCategories(manager.getRoot());
-        System.out.println("Total number of categories: " + total);
-    }
-
-    private static void handleBreadcrumb() throws IOException {
-        System.out.print("Enter category name for the breadcrumb path: ");
-        String name = br.readLine().trim();
-        manager.printBreadcrumb(name);
-    }
-
-    private static void handleLevelOrder() {
-        System.out.println("\n--- Level-order Traversal (Queue) ---");
-        manager.levelOrderTraversal(manager.getRoot());
-    }
-
-    private static CategoryManager manager = new CategoryManager();
-    private static BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-
-    public static void main(String[] args) throws IOException {
-        manager.addCategory(1, "Electronics", 0);
-        manager.addCategory(2, "Mobile Phones", 1);
-        manager.addCategory(3, "Laptops", 1);
-        manager.addCategory(4, "Accessories", 1);
-        manager.addCategory(5, "Samsung", 2);
-        manager.addCategory(6, "iPhone", 2);
-        manager.addCategory(7, "Dell", 3);
-        manager.addCategory(8, "MacBook", 3);
-        manager.buildTree();
-
-        Category mobilePhones = manager.findCategoryByName(manager.getRoot(), "Mobile Phones");
-        if (mobilePhones != null) {
-            System.out.println("\n--- Binary Search Demo (Part 4) ---");
-            Category result = manager.binarySearchByName(mobilePhones.getChildren(), "iPhone");
-            System.out
-                    .println(result != null ? "Binary search found: " + result.getName() : "Binary search: not found");
-        }
-
-        boolean isExit = false;
-        while (!isExit) {
-            System.out.print("""
-                    =====================================
-                        PRODUCT CATEGORY TREE MANAGEMENT
-                    =====================================
-                    1. Add a new category
-                    2. Display the whole category tree
-                    3. Search a category by name
-                    4. Count total number of categories
-                    5. Show breadcrumb path of a category
-                    6. Level-order traversal (Queue)
-                    7. Exit
-                    =====================================
-                    Enter your choice:\s""");
-
-            try {
-                int choice = Integer.parseInt(br.readLine().trim());
-                switch (choice) {
-                    case 1 -> handleAddCategory();
-                    case 2 -> handleShowTree();
-                    case 3 -> handleSearchByName();
-                    case 4 -> handleCountTotal();
-                    case 5 -> handleBreadcrumb();
-                    case 6 -> handleLevelOrder();
-                    case 7 -> isExit = true;
-                    default -> System.out.println("Invalid choice, please try again.");
-                }
-            } catch (NumberFormatException e) {
-                System.out.println("Invalid input. Please enter a number between 1 and 7.");
-            } catch (IOException e) {
-                System.out.println("Error reading input: " + e.getMessage());
             }
 
             System.out.println();
+
+        } else {
+            System.out.println("Category not found.");
+        }
+    }
+
+    static void levelOrderTraversal(Category root) {
+        if (root == null) {
+            return;
+        }
+
+        Queue<Category> queue = new LinkedList<>();
+        queue.offer(root);
+        System.out.println("Level-order Traversal:");
+
+        while (!queue.isEmpty()) {
+            Category current = queue.poll();
+            System.out.println("Level " + current.level + ": " + current.name);
+
+            for (Category child : current.children) {
+                queue.offer(child);
+            }
+        }
+    }
+
+    static void displayLeafCategories() {
+        List<Category> leaves = getAllLeafCategories(root);
+        System.out.println("Leaf Categories:");
+
+        for (Category category : leaves) {
+            System.out.println(category.name + " (ID: " + category.id + ")");
+        }
+    }
+
+    static void initializeCategories() {
+        categories.add(new Category(1, "Electronics", 0, 0));
+        categories.add(new Category(2, "Mobile Phones", 1, 1));
+        categories.add(new Category(3, "Laptops", 1, 1));
+        categories.add(new Category(4, "Accessories", 1, 1));
+        categories.add(new Category(5, "Samsung", 2, 2));
+        categories.add(new Category(6, "iPhone", 2, 2));
+        categories.add(new Category(7, "Dell", 3, 2));
+        categories.add(new Category(8, "MacBook", 3, 2));
+
+        root = buildTree(categories);
+    }
+
+    static int readInt(String message) throws IOException {
+        while (true) {
+            System.out.print(message);
+
+            try {
+                return Integer.parseInt(br.readLine().trim());
+            } catch (NumberFormatException e) {
+                System.out.println("Please enter a valid integer.");
+            } catch (NullPointerException e) {
+                throw new IOException("Input stream closed.");
+            }
+        }
+    }
+
+    static String readString(String message) throws IOException {
+        System.out.print(message);
+        return br.readLine().trim();
+    }
+
+    static void displayMenu() {
+        System.out.println("""
+                ========== CATEGORY MANAGEMENT SYSTEM ==========
+                1. Add a new category
+                2. Display the category tree
+                3. Search category by name
+                4. Count total categories
+                5. Display category breadcrumb
+                6. Level-order traversal
+                7. Display all leaf categories
+                8. Binary Search in a parent's children
+                9. Sort all categories alphabetically
+                0. Exit
+                =================================================""");
+
+    }
+
+    public static void main(String[] args) throws IOException {
+        boolean isExit = false;
+        initializeCategories();
+        System.out.println("Category Management System Started.");
+
+        while (!isExit) {
+            displayMenu();
+            int choice = readInt("Enter your choice: ");
+
+            switch (choice) {
+                case 1 -> {
+                    int id = readInt("Enter category ID: "), parentId = readInt("Enter parent ID: ");
+                    String name = readString("Enter category name: ");
+                    addCategory(id, name, parentId);
+                }
+                case 2 -> {
+                    System.out.println("\nCategory Tree:");
+                    printTree(root, "");
+                }
+                case 3 -> {
+                    String name = readString("Enter category name: ");
+                    Category result = findCategoryByName(root, name);
+
+                    if (result != null) {
+                        System.out.println("Category found:");
+                        System.out.println("ID: " + result.id);
+                        System.out.println("Name: " + result.name);
+                        System.out.println("Parent ID: " + result.parentId);
+                        System.out.println("Level: " + result.level);
+
+                    } else {
+                        System.out.println("Category not found.");
+                    }
+                }
+                case 4 -> {
+                    int total = countTotalCategories(root);
+                    System.out.println("Total categories: " + total);
+                }
+                case 5 -> {
+                    int id = readInt("Enter category ID: ");
+                    printBreadcrumb(id);
+                }
+                case 6 -> levelOrderTraversal(root);
+                case 7 -> displayLeafCategories();
+                case 8 -> {
+                    int parentId = readInt("Enter parent category ID: ");
+                    Category parent = findCategoryById(root, parentId);
+
+                    if (parent == null) {
+                        System.out.println("Parent category not found.");
+                        break;
+                    }
+
+                    bubbleSort(parent.children);
+
+                    String name = readString("Enter child category name to search: ");
+                    Category result = binarySearchByName(parent.children, name);
+
+                    if (result != null) {
+                        System.out.println("Category found: " + result.name + " (ID: " + result.id + ")");
+                    } else {
+                        System.out.println("Category not found.");
+                    }
+                }
+                case 9 -> {
+                    sortAllCategories(root);
+                    System.out.println("All categories sorted alphabetically.");
+                }
+                case 0 -> {
+                    System.out.println("Exiting program.");
+                    br.close();
+                    isExit = true;
+                }
+                default -> System.out.println("Invalid choice. Try again.");
+            }
         }
     }
 }
