@@ -1,5 +1,8 @@
 package com.coffeeshop.coffeeshopmanagement.controller;
 
+import com.coffeeshop.coffeeshopmanagement.util.Async;
+import com.coffeeshop.coffeeshopmanagement.util.PrintRunner;
+import com.coffeeshop.coffeeshopmanagement.util.ReceiptPrinting;
 import com.coffeeshop.coffeeshopmanagement.util.ReceiptText;
 import com.coffeeshop.coffeeshopmanagement.util.I18n;
 import com.coffeeshop.coffeeshopmanagement.model.Order;
@@ -54,6 +57,9 @@ public class HoaDonController {
     private Label timeCaptionLabel;
     @FXML
     private Label statusBannerLabel;
+    /** "COPY - print no. 2": shown (and so printed) when the receipt was printed before (TODO 3.72). */
+    @FXML
+    private Label copyLabel;
     @FXML
     private Label discountReasonLabel;
     @FXML
@@ -103,8 +109,8 @@ public class HoaDonController {
         shopDetailsLabel.setVisible(!details.isEmpty());
         shopDetailsLabel.setManaged(!details.isEmpty());
         productColumn.setCellValueFactory(data ->
-                new javafx.beans.property.SimpleStringProperty(com.coffeeshop.coffeeshopmanagement.service.OrderNote.withNote(
-                        ReceiptText.productName(data.getValue().getProductName()), data.getValue().getNote()))); // TODO 4.9
+                new javafx.beans.property.SimpleStringProperty(ReceiptText.withPromo(com.coffeeshop.coffeeshopmanagement.service.LineOptions.withOptions(
+                        ReceiptText.productName(data.getValue().getProductName()), data.getValue()), data.getValue()))); // TODO 4.9, 4.47, 4.55
         quantityColumn.setCellValueFactory(data ->
                 new javafx.beans.property.SimpleIntegerProperty(data.getValue().getQuantity()));
         priceColumn.setCellValueFactory(data ->
@@ -130,18 +136,18 @@ public class HoaDonController {
         invoiceIdLabel.setText("#" + order.getId());
         showPoints(order);
         staffLabel.setText(employeeName != null ? employeeName : "-");
-        tableLabel.setText(ReceiptText.table(order.getTableNumber()));
+        tableLabel.setText(ReceiptText.tableOf(order));
         customerLabel.setText(customerName != null ? customerName : ReceiptText.t("receipt.guest"));
         // The time of payment, not of opening (TODO 2.44); the opening time is shown only when it is much earlier.
-        java.time.LocalDateTime shown = order.getPaidAt() != null ? order.getPaidAt() : order.getOrderDate();
-        orderTimeLabel.setText(shown != null ? shown.format(TIME_FORMAT) : "-");
-        boolean cancelled = order.getStatus() == OrderStatus.CANCELLED;
-        // A refunded order must not pass for proof of a sale (TODO 2.45).
+        orderTimeLabel.setText(ReceiptText.timeOf(order, TIME_FORMAT));
+        // A refunded order must not pass for proof of a sale (TODO 2.45); an open order has no banner.
+        String bannerKey = ReceiptText.bannerKey(order);
         boolean paid = order.getStatus() == OrderStatus.PAID;
-        statusBannerLabel.setText(ReceiptText.t(cancelled ? "receipt.cancelled" : "receipt.paid"));
+        if (bannerKey != null) statusBannerLabel.setText(ReceiptText.t(bannerKey));
         statusBannerLabel.setStyle(paid ? "-fx-text-fill: #2e7d32; -fx-background-color: #e8f5e9; -fx-border-color: #2e7d32; -fx-border-width: 1; -fx-border-radius: 4;" : "");
-        statusBannerLabel.setVisible(cancelled || paid);
-        statusBannerLabel.setManaged(cancelled || paid);
+        statusBannerLabel.setVisible(bannerKey != null);
+        statusBannerLabel.setManaged(bannerKey != null);
+        showCopyMark();
 
         invoiceDetailTable.getItems().setAll(items);
         // The item table grows with the order instead of scrolling inside a fixed box (TODO 2.22).
@@ -160,13 +166,34 @@ public class HoaDonController {
         totalLabel.setText(CurrencyUtil.format(order.getTotal()));
         // Only the method's name: the transfer QR picture is never printed on a receipt, because a
         // paid receipt that still shows a payment QR could be scanned and paid a second time.
-        java.util.List<String> extras = ReceiptText.paymentExtras(order); // cash received and change, or the transfer reference
-        paymentMethodLabel.setWrapText(true);
-        paymentMethodLabel.setText(extras.isEmpty() ? ReceiptText.paymentOf(order)
-                : ReceiptText.paymentOf(order) + "\n" + String.join("\n", extras));
+        showPaymentText(order);
+        loadGiftCardUses(order);
 
         qrOrderIdLabel.setText("#" + order.getId());
         showQrCode(order);
+        showPrintOptionsButton();
+    }
+
+    /** The method(s) and the extra lines under them: cash received and change, the transfer reference, the gift cards (TODO 5.51). */
+    private void showPaymentText(Order order) {
+        java.util.List<String> extras = ReceiptText.paymentExtras(order);
+        paymentMethodLabel.setWrapText(true);
+        paymentMethodLabel.setText(extras.isEmpty() ? ReceiptText.paymentOf(order)
+                : ReceiptText.paymentOf(order) + "\n" + String.join("\n", extras));
+    }
+
+    /** Reads which gift card paid and what is left on it, in the background, and adds it under the payment (TODO 5.51). */
+    private void loadGiftCardUses(Order order) {
+        if (!order.paidWithGiftCard() || !order.getGiftCardUses().isEmpty()) return;
+        int orderId = order.getId();
+        com.coffeeshop.coffeeshopmanagement.util.Async.run(
+                () -> new com.coffeeshop.coffeeshopmanagement.service.GiftCardService().usesForOrder(orderId),
+                uses -> {
+                    if (shownOrder != order || uses.isEmpty()) return; // another receipt was loaded meanwhile
+                    order.setGiftCardUses(uses);
+                    showPaymentText(order);
+                },
+                error -> LOGGER.log(java.util.logging.Level.INFO, "Could not read the gift card of the receipt", error));
     }
 
     /**
@@ -182,7 +209,7 @@ public class HoaDonController {
         if (!show) return;
         int customerId = order.getCustomerId();
         com.coffeeshop.coffeeshopmanagement.util.Async.run(
-                () -> new com.coffeeshop.coffeeshopmanagement.dao.CustomerDAO().findById(customerId)
+                () -> new com.coffeeshop.coffeeshopmanagement.service.CustomerService().findById(customerId)
                         .map(com.coffeeshop.coffeeshopmanagement.model.Customer::getLoyaltyPoints).orElse(null),
                 balance -> {
                     if (shownOrder != order || balance == null) return; // another receipt was loaded meanwhile
@@ -235,22 +262,73 @@ public class HoaDonController {
         });
     }
 
+    /** Shows the copy mark when the next print is not the first; hides it otherwise (TODO 3.72). */
+    private void showCopyMark() {
+        String mark = shownOrder == null ? null : ReceiptText.copyMark(shownOrder);
+        copyLabel.setText(mark == null ? "" : mark);
+        copyLabel.setVisible(mark != null);
+        copyLabel.setManaged(mark != null);
+    }
+
+    /** After a page was printed: counts it (and notes a reprint in the audit log) off the screen thread, then updates the mark for the next one. */
+    private void recordPrint(Order order) {
+        com.coffeeshop.coffeeshopmanagement.util.Async.run(
+                () -> new com.coffeeshop.coffeeshopmanagement.service.ReceiptPrintService().recordPrint(order.getId()),
+                count -> {
+                    if (count > 0) order.setPrintCount(count);
+                    if (order == shownOrder) {
+                        showCopyMark();
+                        fitWindowToContent();
+                    }
+                },
+                error -> AlertUtil.error(I18n.t("receipt.print.fail.title"), I18n.t("receipt.print.record.fail", error.getMessage())));
+    }
+    @FXML private javafx.scene.control.Button printButton;
+    /** "Print with options": shown only when this computer prints without the dialog, so the dialog is still one click away (TODO 5.39). */
+    @FXML private javafx.scene.control.Button printOptionsButton;
+
+    /** The Print button: where the receipt goes follows what this computer chose (TODO 5.39); the dialog when nothing was chosen. */
     @FXML
     public void handlePrint() {
-        PrinterJob job = PrinterJob.createPrinterJob();
-        if (job == null) {
-            AlertUtil.error(I18n.t("receipt.print.fail.title"), I18n.t("receipt.print.noprinter"));
-            return;
+        print(false);
+    }
+
+    /** "Print with options": the print dialog, whatever this computer chose. */
+    @FXML
+    public void handlePrintWithOptions() {
+        print(true);
+    }
+
+    /** Called by the till right after a payment: prints at once when this computer is set to print without the dialog and automatically (TODO 5.39). */
+    public void printAfterPayment() {
+        ReceiptPrinting.Choice choice = ReceiptPrinting.load();
+        if (choice.direct() && choice.automatic()) print(false);
+    }
+
+    private void showPrintOptionsButton() {
+        boolean direct = ReceiptPrinting.load().direct();
+        if (printOptionsButton != null) {
+            printOptionsButton.setVisible(direct);
+            printOptionsButton.setManaged(direct);
         }
-        boolean proceed = job.showPrintDialog(invoiceRoot.getScene().getWindow());
-        if (!proceed) {
-            job.cancelJob(); // the person closed the print dialog: do not leave the job open (TODO 2.14)
-            return;
+    }
+
+    private void print(boolean forceDialog) {
+        ReceiptPrinting.Choice choice = ReceiptPrinting.load();
+        ReceiptPrinterJob.Opened opened = ReceiptPrinterJob.open(choice, forceDialog);
+        if (opened == null) return; // the computer has no printer at all: the box said so
+        PrinterJob job = opened.job();
+        if (opened.showDialog()) {
+            boolean proceed = job.showPrintDialog(invoiceRoot.getScene().getWindow());
+            if (!proceed) {
+                job.cancelJob(); // the person closed the print dialog: do not leave the job open (TODO 2.14)
+                return;
+            }
         }
         // Roll paper (58 / 80 mm): print the narrow layout built for that width instead of shrinking the screen receipt (TODO 4.3).
         javafx.scene.Node toPrint = invoiceRoot;
         double printableWidth = job.getJobSettings().getPageLayout().getPrintableWidth();
-        if (shownOrder != null && com.coffeeshop.coffeeshopmanagement.util.ThermalReceipt.isNarrow(printableWidth)) {
+        if (shownOrder != null && ReceiptPrinting.useRoll(choice.paper(), printableWidth, com.coffeeshop.coffeeshopmanagement.util.ThermalReceipt.NARROW_BELOW_POINTS)) {
             try {
                 javafx.print.Printer printer = job.getPrinter();
                 javafx.print.PageLayout wide = printer.createPageLayout(job.getJobSettings().getPageLayout().getPaper(),
@@ -260,9 +338,10 @@ public class HoaDonController {
             } catch (RuntimeException e) {
                 LOGGER.log(java.util.logging.Level.INFO, "Could not use the smallest margins for the roll", e);
             }
+            double rollWidth = ReceiptPrinting.rollWidth(choice.paper(), printableWidth);
             javafx.scene.image.Image qr = qrCodeImage == null ? null : qrCodeImage.getImage();
             javafx.scene.layout.VBox narrow = com.coffeeshop.coffeeshopmanagement.util.ThermalReceipt.build(
-                    shownOrder, shownItems, shownEmployee, shownCustomer, qr, printableWidth, shownPointsBalance);
+                    shownOrder, shownItems, shownEmployee, shownCustomer, qr, rollWidth, shownPointsBalance);
             com.coffeeshop.coffeeshopmanagement.util.ThermalReceipt.layOut(narrow);
             toPrint = narrow;
         }
@@ -270,33 +349,38 @@ public class HoaDonController {
         javafx.print.PageLayout layout = job.getJobSettings().getPageLayout();
         double scale = Math.min(1.0, Math.min(layout.getPrintableWidth() / toPrint.getLayoutBounds().getWidth(),
                 layout.getPrintableHeight() / toPrint.getLayoutBounds().getHeight()));
-        javafx.scene.transform.Scale transform = new javafx.scene.transform.Scale(scale, scale);
-        if (scale < 1.0) {
-            toPrint.getTransforms().add(transform);
+        final javafx.scene.Node page = ReceiptPrinterJob.offScreenPage(toPrint, scale);
+        if (page == null) {
+            // The receipt on the screen could not be copied: print it here, on the screen thread, as before.
+            javafx.scene.transform.Scale transform = new javafx.scene.transform.Scale(scale, scale);
+            if (scale < 1.0) toPrint.getTransforms().add(transform);
+            try {
+                showPrintOutcome(PrintRunner.run(ReceiptPrinterJob.jobOf(job, toPrint)));
+            } finally {
+                toPrint.getTransforms().remove(transform);
+            }
+            return;
         }
-        boolean printed;
-        String driverProblem = null;
-        try {
-            printed = job.printPage(toPrint);
-        } catch (RuntimeException e) {
-            // A printer that went offline or a network printer that timed out: close the job and say why (TODO 2.83).
-            LOGGER.log(java.util.logging.Level.WARNING, "The printer driver failed", e);
-            printed = false;
-            driverProblem = com.coffeeshop.coffeeshopmanagement.util.ErrorText.forScreen(e.getMessage());
-        } finally {
-            toPrint.getTransforms().remove(transform);
-        }
-        if (printed) {
-            job.endJob();
+        // Printing a node that is not in a window may be done off the screen thread (TODO 2.83): a slow or offline network printer no
+        // longer freezes the till while it answers; the button is back, and the result shown, when it has.
+        if (printButton != null) printButton.setDisable(true);
+        Async.run(() -> PrintRunner.run(ReceiptPrinterJob.jobOf(job, page)), outcome -> {
+            if (printButton != null) printButton.setDisable(false);
+            showPrintOutcome(outcome);
+        }, error -> {
+            if (printButton != null) printButton.setDisable(false);
+            LOGGER.log(java.util.logging.Level.WARNING, "Printing failed", error);
+            showPrintOutcome(new PrintRunner.Outcome(false, com.coffeeshop.coffeeshopmanagement.util.ErrorText.forScreen(error.getMessage())));
+        });
+    }
+
+    private void showPrintOutcome(PrintRunner.Outcome outcome) {
+        if (outcome.printed()) {
+            if (shownOrder != null) recordPrint(shownOrder); // the copy mark for the next print (TODO 3.72)
             AlertUtil.info(I18n.t("receipt.print.title"), I18n.t("receipt.print.sent"));
         } else {
-                try {
-                    job.cancelJob(); // a failed page must not leave the job (and the printer queue entry) open
-                } catch (RuntimeException e) {
-                    LOGGER.log(java.util.logging.Level.WARNING, "Could not cancel the print job", e);
-                }
-                AlertUtil.error(I18n.t("receipt.print.fail.title"), driverProblem == null
-                        ? I18n.t("receipt.print.fail") : I18n.t("receipt.print.fail.driver", driverProblem));
+            AlertUtil.error(I18n.t("receipt.print.fail.title"), outcome.problem() == null
+                    ? I18n.t("receipt.print.fail") : I18n.t("receipt.print.fail.driver", outcome.problem()));
         }
     }
 

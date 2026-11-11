@@ -75,7 +75,7 @@ public class SchemaMigrationsTest {
                     SchemaMigrations.PAID_AT_INDEX, SchemaMigrations.UNIQUE_PHONE_INDEX, SchemaMigrations.PRODUCT_CODE_INDEX)) {
                 assertTrue("missing index " + expected + " in " + names, names.contains(expected));
             }
-            assertEquals(3, SchemaMigrations.LATEST_VERSION);
+            assertEquals("the schema version: raise this number together with the new migration step (TODO 6.72 made it 5)", 5, SchemaMigrations.LATEST_VERSION);
             assertEquals(SchemaMigrations.LATEST_VERSION, scalar(c, "PRAGMA user_version"));
         }
     }
@@ -107,10 +107,10 @@ public class SchemaMigrationsTest {
             st.execute("PRAGMA user_version = 2");
             assertFalse(indexNames(c).contains(SchemaMigrations.PAID_AT_INDEX));
             SchemaMigrations.upgrade(c);
-            assertEquals(3, scalar(c, "PRAGMA user_version"));
+            assertEquals(SchemaMigrations.LATEST_VERSION, scalar(c, "PRAGMA user_version"));
             assertTrue(indexNames(c).contains(SchemaMigrations.PAID_AT_INDEX));
             SchemaMigrations.upgrade(c); // twice: nothing to do, no error
-            assertEquals(3, scalar(c, "PRAGMA user_version"));
+            assertEquals(SchemaMigrations.LATEST_VERSION, scalar(c, "PRAGMA user_version"));
         } finally {
             Files.deleteIfExists(file);
         }
@@ -119,7 +119,64 @@ public class SchemaMigrationsTest {
     @Test
     public void mariaDbHasAStepForVersion3SoAnOlderDatabaseGetsThePaidAtIndex() {
         assertTrue(MariaDbMigrations.STEPS.containsKey(3));
-        assertEquals(java.util.List.of(3), MariaDbMigrations.plan(2, MariaDbMigrations.LATEST_VERSION, MariaDbMigrations.STEPS.keySet()));
+        assertEquals(java.util.List.of(3, 4, 5), MariaDbMigrations.plan(2, MariaDbMigrations.LATEST_VERSION, MariaDbMigrations.STEPS.keySet()));
+    }
+
+    /** TODO 4.37 (6.90 a): version 4 puts on SQLite's refunds table the two indexes MariaDB's table is made with. */
+    @Test
+    public void aVersion3DatabaseGetsTheTwoRefundIndexes() throws Exception {
+        Path file = Files.createTempFile("lunavera-v3", ".db");
+        try (Connection c = oldVersionCopy(file); Statement st = c.createStatement()) {
+            SchemaMigrations.createPerformanceIndexes(c);
+            SchemaMigrations.createPaidAtIndex(c);
+            st.execute("PRAGMA user_version = 3");
+            assertFalse(indexNames(c).contains(SchemaMigrations.REFUNDS_ORDER_INDEX));
+            SchemaMigrations.upgrade(c);
+            assertEquals(SchemaMigrations.LATEST_VERSION, scalar(c, "PRAGMA user_version"));
+            assertTrue(indexNames(c).contains(SchemaMigrations.REFUNDS_ORDER_INDEX));
+            assertTrue(indexNames(c).contains(SchemaMigrations.REFUNDS_AT_INDEX));
+            SchemaMigrations.upgrade(c); // twice: nothing to do, no error
+            assertEquals(SchemaMigrations.LATEST_VERSION, scalar(c, "PRAGMA user_version"));
+        } finally {
+            Files.deleteIfExists(file);
+        }
+    }
+
+    /** TODO 6.72: a database made at version 4 gets every plain index MariaDB has; a new file ends with all of them too. */
+    @Test
+    public void aVersion4DatabaseGetsTheRestOfTheMirroredIndexes() throws Exception {
+        Path file = Files.createTempFile("lunavera-v4", ".db");
+        try (Connection c = oldVersionCopy(file); Statement st = c.createStatement()) {
+            SchemaMigrations.createPerformanceIndexes(c);
+            SchemaMigrations.createPaidAtIndex(c);
+            SchemaMigrations.createRefundIndexes(c);
+            st.execute("PRAGMA user_version = 4");
+            for (String[] index : SchemaMigrations.INDEXES_SINCE_V5) {
+                assertFalse(index[0] + " is new", indexNames(c).contains(index[0]));
+            }
+            SchemaMigrations.upgrade(c);
+            assertEquals(SchemaMigrations.LATEST_VERSION, scalar(c, "PRAGMA user_version"));
+            for (String[] index : SchemaMigrations.INDEXES_SINCE_V5) {
+                assertTrue(index[0], indexNames(c).contains(index[0]));
+            }
+            for (String[] index : SchemaMigrations.INDEXES_SQLITE_ONLY_SINCE_V5) {
+                assertTrue(index[0], indexNames(c).contains(index[0]));
+            }
+            for (String[] index : SchemaMigrations.INDEXES_BEFORE_V5) {
+                assertTrue(index[0], indexNames(c).contains(index[0]));
+            }
+            SchemaMigrations.upgrade(c); // twice: nothing to do, no error
+        } finally {
+            Files.deleteIfExists(file);
+        }
+    }
+
+    @Test
+    public void mariaDbHasAStepForVersion4AndItsTableIsMadeWithTheSameTwoIndexes() throws Exception {
+        assertTrue(MariaDbMigrations.STEPS.containsKey(4));
+        String schema = Files.readString(Path.of("src/main/java/com/coffeeshop/coffeeshopmanagement/config/MariaDbSchema.java"));
+        assertTrue(schema.contains("INDEX " + SchemaMigrations.REFUNDS_ORDER_INDEX + " (order_id)"));
+        assertTrue(schema.contains("INDEX " + SchemaMigrations.REFUNDS_AT_INDEX + " (refunded_at)"));
     }
 
     @Test

@@ -1,0 +1,58 @@
+/*
+ * GENERATED FILE - do not edit by hand (TODO 5.44, the large text).
+ * The large sizes of admin-trangchu.css, rule by rule.
+ * Added by AppStyle to a window while the large text is chosen. Regenerate with service/LargeTextSheet.main after a
+ * change to any style sheet; LargeTextSheetTest fails when a file here is out of date.
+ */
+
+.today-order-id {
+    -fx-font-size: 15px !important;
+}
+
+.today-order-table {
+    -fx-font-size: 14px !important;
+}
+
+.today-order-time {
+    -fx-font-size: 13px !important;
+}
+
+.today-order-badge-paid {
+    -fx-font-size: 13px !important;
+}
+
+.today-order-badge-open {
+    -fx-font-size: 13px !important;
+}
+
+.today-order-badge-cancelled {
+    -fx-font-size: 13px !important;
+}
+
+.today-order-total {
+    -fx-font-size: 15px !important;
+}
+
+.today-orders-empty {
+    -fx-font-size: 15px !important;
+}
+
+.section-subtitle {
+    -fx-font-size: 15px !important;
+}
+
+.table-footer {
+    -fx-font-size: 13px !important;
+}
+
+.page-button {
+    -fx-font-size: 13px !important;
+}
+
+.db-health-line {
+    -fx-font-size: 14px !important;
+}
+
+.stale-order-warning {
+    -fx-font-size: 14px !important;
+}

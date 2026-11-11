@@ -1,0 +1,90 @@
+/*
+ * GENERATED FILE - do not edit by hand (TODO 5.44, the large text).
+ * The large sizes of quanlytaikhoan.css, rule by rule.
+ * Added by AppStyle to a window while the large text is chosen. Regenerate with service/LargeTextSheet.main after a
+ * change to any style sheet; LargeTextSheetTest fails when a file here is out of date.
+ */
+
+.stat-icon {
+    -fx-font-size: 19px !important;
+}
+
+.stat-icon-active {
+    -fx-font-size: 19px !important;
+}
+
+.stat-icon-locked {
+    -fx-font-size: 19px !important;
+}
+
+.filter-combo {
+    -fx-font-size: 14px !important;
+}
+
+.filter-combo .list-cell {
+    -fx-font-size: 14px !important;
+}
+
+.account-count {
+    -fx-font-size: 13px !important;
+}
+
+.account-table .column-header .label {
+    -fx-font-size: 13px !important;
+}
+
+.account-table .table-cell {
+    -fx-font-size: 13px !important;
+}
+
+.close-button {
+    -fx-font-size: 20px !important;
+}
+
+.avatar {
+    -fx-font-size: 27px !important;
+}
+
+.profile-name {
+    -fx-font-size: 17px !important;
+}
+
+.role-badge {
+    -fx-font-size: 12px !important;
+}
+
+.info-label {
+    -fx-font-size: 12px !important;
+}
+
+.info-value {
+    -fx-font-size: 12px !important;
+}
+
+.status-active {
+    -fx-font-size: 12px !important;
+}
+
+.permission-title {
+    -fx-font-size: 15px !important;
+}
+
+.permission-item {
+    -fx-font-size: 12px !important;
+}
+
+.secondary-button {
+    -fx-font-size: 12px !important;
+}
+
+.danger-button {
+    -fx-font-size: 12px !important;
+}
+
+.combo-box-popup .list-cell {
+    -fx-font-size: 14px !important;
+}
+
+.tooltip {
+    -fx-font-size: 13px !important;
+}

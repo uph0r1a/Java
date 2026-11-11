@@ -20,7 +20,8 @@ public final class MoneyParser {
      *  @throws IllegalArgumentException with a message fit to show the person, for anything that is not a plain amount */
     public static BigDecimal parseDong(String text) {
         if (text == null || text.isBlank()) return null;
-        String s = text.trim();
+        String s = TextNormalizer.strip(text).trim(); // U+202F, U+200B and the like from a pasted amount (TODO 3.71)
+        if (s.isEmpty()) return null;
         // The dong sign U+20AB, as Windows, phone keyboards, bank apps and supplier lists write it, may come first or last (TODO 2.80).
         if (s.startsWith("₫")) s = s.substring(1).trim();
         String lower = s.toLowerCase(java.util.Locale.ROOT);
@@ -51,6 +52,13 @@ public final class MoneyParser {
     private static final java.util.regex.Pattern SHORTHAND_NUMBER = java.util.regex.Pattern.compile("[0-9]+(?:[.,][0-9]{1,2})?");
 
     /**
+     * Whole millions, the word, then the rest said as a decimal of a million: {@code 1tr5} is 1,500,000, {@code 2tr350} is
+     * 2,350,000 and {@code 1tr05} is 1,050,000 (one to three digits, so thousands at the finest; four or more are refused).
+     */
+    private static final java.util.regex.Pattern MILLIONS_THEN_DIGITS =
+            java.util.regex.Pattern.compile("([0-9]+) ?(?:tri\u1ec7u|trieu|tr) ?([0-9]{1,3})");
+
+    /**
      * {@code 50k}, {@code 50 nghìn}, {@code 1tr}, {@code 1,5tr} and {@code 1 triệu} (TODO 5.33), any capitals. The number before
      * the word is plain: no thousands separators ({@code 1.500k} stays refused, it is unclear what it means) and at most two
      * decimals. Returns null when the text does not end in such a word, so the ordinary reading applies.
@@ -58,6 +66,14 @@ public final class MoneyParser {
     private static BigDecimal parseShorthand(String s) {
         String text = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFC);
         String lower = text.toLowerCase(java.util.Locale.ROOT);
+        java.util.regex.Matcher spoken = MILLIONS_THEN_DIGITS.matcher(lower);
+        if (spoken.matches()) { // "1tr5" and "2tr350" (TODO 3.82)
+            String fraction = spoken.group(2);
+            BigDecimal value = new BigDecimal(spoken.group(1)).multiply(BigDecimal.valueOf(1_000_000))
+                    .add(new BigDecimal(fraction + "000".substring(fraction.length())).multiply(BigDecimal.valueOf(1_000)));
+            if (value.precision() > MAX_DIGITS) throw new IllegalArgumentException(I18n.t("money.toolarge"));
+            return value;
+        }
         for (Object[] entry : SHORTHAND) {
             String word = (String) entry[0];
             if (!lower.endsWith(word)) continue;
@@ -129,7 +145,7 @@ public final class MoneyParser {
      * not a valid amount is {@code null}, so the caller can say "enter a valid number" (TODO 6.5, moved out of the till screen).
      */
     public static BigDecimal parseOptionalDong(String text) {
-        if (text == null || text.isBlank()) {
+        if (ValidationUtil.isBlank(text)) {
             return BigDecimal.ZERO;
         }
         try {

@@ -46,6 +46,22 @@ public final class StartupProblem {
         return I18n.t("startup.check", hint, DataPaths.dataDir().resolve("database.properties"));
     }
 
+    /**
+     * The paragraphs added to the start-up box when the local file is offered (TODO 5.40): what the button does, what to do instead
+     * for a shop that means to use a server, and whether the local data file is already there (opened with its data) or not (a new
+     * empty shop is made).
+     */
+    public static String localFileOffer() {
+        return localFileOffer(safe(() -> DataPaths.dataDir().resolve(com.coffeeshop.coffeeshopmanagement.config.DatabaseSettings.FILE_NAME)),
+                safe(com.coffeeshop.coffeeshopmanagement.config.LocalFileChoice::localFile),
+                com.coffeeshop.coffeeshopmanagement.config.LocalFileChoice.localFileExists());
+    }
+
+    static String localFileOffer(String settingsFile, String localFile, boolean localFileExists) {
+        return I18n.t("startup.local.offer", I18n.t("startup.local.button"), settingsFile) + "\n\n"
+                + I18n.t(localFileExists ? "startup.local.found" : "startup.local.new", localFile);
+    }
+
     static String describe(Throwable error, String dataDir, String logsDir, String backupsDir) {
         StringBuilder text = new StringBuilder();
         text.append(I18n.t("startup.p1") + " ")

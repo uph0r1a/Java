@@ -2,6 +2,7 @@
 
 package com.coffeeshop.coffeeshopmanagement.controller;
 
+import com.coffeeshop.coffeeshopmanagement.service.OrderCancelService;
 import com.coffeeshop.coffeeshopmanagement.util.ReceiptText;
 import com.coffeeshop.coffeeshopmanagement.util.I18n;
 import com.coffeeshop.coffeeshopmanagement.dao.OrderDAO;
@@ -76,18 +77,19 @@ public final class OrderHistoryWindow {
     private record HistoryPage(List<OrderSummary> rows, int totalCount) {
     }
 
-    private final OrderDAO orderDAO = new OrderDAO();
+    private final com.coffeeshop.coffeeshopmanagement.service.OrderHistoryService historyService = new com.coffeeshop.coffeeshopmanagement.service.OrderHistoryService();
     private final TableView<OrderSummary> table = new TableView<>();
     private final TextField searchField = new TextField();
     private final ComboBox<String> statusFilter = new ComboBox<>();
-    private final DatePicker fromPicker = new DatePicker();
-    private final DatePicker toPicker = new DatePicker();
+    private final DatePicker fromPicker = com.coffeeshop.coffeeshopmanagement.util.DateBoxes.picker();
+    private final DatePicker toPicker = com.coffeeshop.coffeeshopmanagement.util.DateBoxes.picker();
     private final Label countLabel = new Label();
     private final PageBar pageBar = new PageBar(50, 20, 50, 100, 200).remember("history.pageSize");
     private final java.util.Map<TableColumn<OrderSummary, ?>, OrderDAO.HistorySortKey> sortKeys = new java.util.HashMap<>();
     private OrderDAO.HistorySort sort = OrderDAO.HistorySort.NEWEST_FIRST;
     private final Button viewButton = new Button(I18n.t("history.view"));
     private final Button cancelButton = new Button(I18n.t("history.cancel"));
+    private final Button refundLinesButton = new Button(I18n.t("refund.button")); // TODO 4.37
     private final Button exportButton = new Button(I18n.t("common.exportcsv"));
     private int totalCount = 0;
     /** Set for the "purchase history of one customer" window (TODO 4.4); null for the full history. */
@@ -151,13 +153,14 @@ public final class OrderHistoryWindow {
 
         viewButton.setDisable(true);
         cancelButton.setDisable(true);
+        refundLinesButton.setDisable(true);
         viewButton.setOnAction(e -> viewSelectedReceipt());
         cancelButton.setOnAction(e -> cancelSelectedOrder());
+        refundLinesButton.setOnAction(e -> refundSelectedLines());
+        CopyMenus.history(table, viewButton, cancelButton, refundLinesButton); // right-click menu (TODO 5.46)
         table.getSelectionModel().selectedItemProperty().addListener((obs, old, selected) -> updateButtons(selected));
         table.setPlaceholder(new Label(I18n.t("history.empty")));
-        table.setOnMouseClicked(e -> {
-            if (e.getClickCount() == 2) viewSelectedReceipt();
-        });
+        table.setOnMouseClicked(e -> { if (e.getClickCount() == 2) viewSelectedReceipt(); });
 
         fromPicker.setPromptText(I18n.t("history.from"));
         toPicker.setPromptText(I18n.t("history.to"));
@@ -200,7 +203,7 @@ public final class OrderHistoryWindow {
         exportButton.setVisible(Session.isAdmin());
         exportButton.setManaged(Session.isAdmin());
         exportButton.setOnAction(e -> exportCsv());
-        HBox bottom = new HBox(10, viewButton, cancelButton, exportButton, new Region(), pageBar);
+        HBox bottom = new HBox(10, viewButton, cancelButton, refundLinesButton, exportButton, new Region(), pageBar);
         HBox.setHgrow(bottom.getChildren().get(3), Priority.ALWAYS);
         VBox root = new VBox(12, top, table, bottom);
         root.setPadding(new Insets(16));
@@ -211,7 +214,7 @@ public final class OrderHistoryWindow {
         stage.setTitle(onlyCustomerId == null ? I18n.t("history.title") : I18n.t("history.title.customer", onlyCustomerName));
         com.coffeeshop.coffeeshopmanagement.util.AppIcon.apply(stage);
         stage.setScene(new Scene(root, 1100, 620));
-        com.coffeeshop.coffeeshopmanagement.util.UiSettings.rememberSize(stage, onlyCustomerId == null ? "history.window" : "customerHistory.window", 1100, 620);
+        com.coffeeshop.coffeeshopmanagement.util.StageSize.remember(stage, onlyCustomerId == null ? "history.window" : "customerHistory.window", 1100, 620);
         AlertUtil.closeOnEscape(stage.getScene());
         stage.show();
 
@@ -219,22 +222,18 @@ public final class OrderHistoryWindow {
     }
 
     private void buildColumns() {
-        addColumn(OrderDAO.HistorySortKey.ID, column(I18n.t("history.col.id"), 80, s -> "#" + s.order().getId()));
+        addColumn(OrderDAO.HistorySortKey.ID, column(I18n.t("history.col.id"), 80, s -> com.coffeeshop.coffeeshopmanagement.util.CopyText.orderNumber(s.order().getId())));
         addColumn(OrderDAO.HistorySortKey.DATE, column(I18n.t("history.col.time"), 150, s -> shownTime(s.order()) != null
                 ? shownTime(s.order()).format(TIME_FORMAT) : "-"));
         addColumn(OrderDAO.HistorySortKey.EMPLOYEE, column(I18n.t("history.col.employee"), 150, s -> orDash(s.employeeName())));
         addColumn(OrderDAO.HistorySortKey.CUSTOMER, column(I18n.t("history.col.customer"), 150, s -> s.customerName() != null ? s.customerName() : I18n.t("receipt.guest")));
         addColumn(OrderDAO.HistorySortKey.PAYMENT, column(I18n.t("history.col.payment"), 170, s -> com.coffeeshop.coffeeshopmanagement.util.PaymentText.of(s.order())));
         // Who gave what discount and why, visible to the owner without opening the database (TODO 2.37).
-        TableColumn<OrderSummary, String> reason = column(I18n.t("history.col.discount"), 200, s -> {
-            java.math.BigDecimal d = s.order().getDiscount();
-            if (d == null || d.signum() == 0) return "";
-            String why = s.order().getDiscountReason();
-            return CurrencyUtil.format(d) + (why == null || why.isBlank() ? "" : " - " + why);
-        });
-        table.getColumns().add(reason);
+        table.getColumns().add(column(I18n.t("history.col.discount"), 200, com.coffeeshop.coffeeshopmanagement.util.HistoryText::discount));
         addColumn(OrderDAO.HistorySortKey.TOTAL, column(I18n.t("history.col.total"), 120, s -> CurrencyUtil.format(s.order().getTotal())));
-        addColumn(OrderDAO.HistorySortKey.STATUS, column(I18n.t("history.col.status"), 120, s -> statusLabel(s.order().getStatus())));
+        addColumn(OrderDAO.HistorySortKey.STATUS, column(I18n.t("history.col.status"), 120, s -> statusLabel(s.order().getStatus()) + (s.linesRefunded() ? " " + I18n.t("history.refunded.mark") : ""))); // TODO 4.37: some lines were given back
+        table.getColumns().add(column(I18n.t("history.col.cash"), 120, com.coffeeshop.coffeeshopmanagement.util.HistoryText::cashGiven)); // TODO 3.17
+        table.getColumns().add(column(I18n.t("history.col.change"), 110, com.coffeeshop.coffeeshopmanagement.util.HistoryText::change));
     }
 
     private void addColumn(OrderDAO.HistorySortKey key, TableColumn<OrderSummary, String> column) {
@@ -305,8 +304,8 @@ public final class OrderHistoryWindow {
         countLabel.setText(I18n.t("common.loading"));
         Async.run(
                 () -> new HistoryPage(
-                        orderDAO.findHistoryPage(filter, order, pageSize, (int) Math.min(Integer.MAX_VALUE, (long) (page - 1) * pageSize)),
-                        orderDAO.countHistory(filter)),
+                        historyService.findHistoryPage(filter, order, pageSize, (int) Math.min(Integer.MAX_VALUE, (long) (page - 1) * pageSize)),
+                        historyService.countHistory(filter)),
                 result -> {
                     if (myRequest != requestCounter) return; // a newer query has been started: this answer is out of date
                     table.getItems().setAll(result.rows());
@@ -335,37 +334,26 @@ public final class OrderHistoryWindow {
             AlertUtil.warning(I18n.t("history.export.title"), I18n.t("history.dates.invalid")); // no empty file (TODO 3.58)
             return;
         }
-        javafx.stage.FileChooser chooser = new javafx.stage.FileChooser();
-        chooser.setTitle(I18n.t("history.export.title"));
-        chooser.setInitialFileName("don-hang-" + java.time.LocalDate.now() + ".csv");
-        chooser.getExtensionFilters().add(new javafx.stage.FileChooser.ExtensionFilter("CSV", "*.csv"));
-        java.io.File file = chooser.showSaveDialog(stage);
-        if (file == null) return;
-        HistoryFilter filter = currentFilter();
-        OrderDAO.HistorySort order = sort;
-        Runnable release = com.coffeeshop.coffeeshopmanagement.util.BusyIndicator.hold(exportButton, I18n.t("busy.export"));
-        Async.run(
-                () -> {
-                    // Written while the rows are read: no list of every order, no row limit (TODO 3.54).
-                    int written = com.coffeeshop.coffeeshopmanagement.util.ExportCsv.writeOrders(file.toPath(),
-                            sink -> orderDAO.exportOrders(filter, order, sink));
-                    com.coffeeshop.coffeeshopmanagement.util.SecurityLog.event("exported " + written + " orders to CSV");
-                    return written;
-                },
-                count -> {
-                    release.run();
-                    AlertUtil.info(I18n.t("history.export.title"), I18n.t("history.export.done", count, file.getAbsolutePath()));
-                },
-                error -> {
-                    release.run();
-                    AlertUtil.error(I18n.t("common.file.savefail"), error.getMessage());
-                });
+        OrderHistoryExport.run(stage, exportButton, historyService, currentFilter(), sort);
     }
 
     private void updateButtons(OrderSummary selected) {
         viewButton.setDisable(selected == null);
         cancelButton.setDisable(selected == null || !Session.isAdmin()
                 || selected.order().getStatus() != OrderStatus.PAID);
+        refundLinesButton.setDisable(selected == null || !Session.isAdmin()
+                || selected.order().getStatus() != OrderStatus.PAID);
+    }
+
+    /** "Hoàn từng dòng": refund some pieces of some lines of the selected paid order, not the whole order (TODO 4.37). */
+    private void refundSelectedLines() {
+        OrderSummary selected = table.getSelectionModel().getSelectedItem();
+        if (selected == null || !stillAllowed()) return;
+        if (!Session.isAdmin()) {
+            AlertUtil.warning(I18n.t("admin.only.title"), I18n.t("history.cancel.adminonly"));
+            return;
+        }
+        RefundLinesDialog.show(selected.order(), this::reload);
     }
 
     /** Re-reads the account before showing customer data or refunding: a demoted or locked person is sent to login. */
@@ -381,7 +369,7 @@ public final class OrderHistoryWindow {
         OrderSummary selected = table.getSelectionModel().getSelectedItem();
         if (selected == null || !stillAllowed()) return;
         Async.run(
-                () -> orderDAO.findItemsByOrderId(selected.order().getId()),
+                () -> historyService.findItemsByOrderId(selected.order().getId()),
                 (List<OrderItem> items) -> {
                     HoaDonController controller = SceneNavigator.loadAndShowNewWindow(
                             "/fxml/donthanhtoan.fxml", ReceiptText.t("pos.invoice.title", selected.order().getId()), ReceiptText.bundle());
@@ -397,34 +385,11 @@ public final class OrderHistoryWindow {
     private void cancelSelectedOrder() {
         OrderSummary selected = table.getSelectionModel().getSelectedItem();
         if (selected == null || !stillAllowed()) return;
-        if (!Session.isAdmin()) {
+        if (!OrderCancelService.mayCancelPaid()) {
             AlertUtil.warning(I18n.t("admin.only.title"), I18n.t("history.cancel.adminonly"));
             return;
         }
-        // Three answers (TODO 2.66): a drink that was already made must not go back into stock. Enter = "do not return".
-        javafx.scene.control.ButtonType back = new javafx.scene.control.ButtonType(I18n.t("history.cancel.back"), javafx.scene.control.ButtonBar.ButtonData.YES);
-        javafx.scene.control.ButtonType keep = new javafx.scene.control.ButtonType(I18n.t("history.cancel.keep"), javafx.scene.control.ButtonBar.ButtonData.NO);
-        javafx.scene.control.ButtonType stop = new javafx.scene.control.ButtonType(I18n.t("history.cancel.stop"), javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE);
-        javafx.scene.control.Alert ask = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.CONFIRMATION,
-                I18n.t("history.cancel.message", selected.order().getId(), CurrencyUtil.format(selected.order().getTotal())),
-                back, keep, stop);
-        ask.setTitle(I18n.t("history.cancel.title"));
-        ask.setHeaderText(null);
-        AlertUtil.configure(ask);
-        AlertUtil.setDefaultButton(ask, keep);
-        AlertUtil.setCancelButton(ask, stop);
-        java.util.Optional<javafx.scene.control.ButtonType> answer = ask.showAndWait();
-        if (answer.isEmpty() || answer.get() == stop) return;
-        boolean returnToStock = answer.get() == back;
-        cancelButton.setDisable(true);
-        Async.run(
-                () -> { orderDAO.cancelPaidOrder(selected.order().getId(), returnToStock); return Boolean.TRUE; },
-                done -> reload(),
-                error -> {
-                    AlertUtil.error(I18n.t("history.cancel.fail"), error.getMessage());
-                    reload();
-                }
-        );
+        OrderCancelFlow.run(selected.order().getId(), selected.order().getTotal(), cancelButton, this::reload); // the question, then the cancel
     }
 
     /** The time of payment when there is one, else the time the order was opened: the same day the money is counted under (TODO 2.67). */

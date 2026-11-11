@@ -27,7 +27,6 @@ import java.util.stream.Collectors;
  */
 public class CategoryController extends AdminScreen {
 
-    private final CategoryDAO categoryDAO = new CategoryDAO();
     private final CategoryService categoryService = new CategoryService();
 
     // ---------------------------------------------------------------- Category management
@@ -106,7 +105,7 @@ public class CategoryController extends AdminScreen {
     /** Reloads the list; when {@code selectId} is given and on the page shown, that category is selected again (after an arrow). */
     private void reloadCategories(Integer selectId) {
         Async.run(
-                () -> new Object[]{categoryDAO.findAll(), categoryDAO.countProductsByCategory()},
+                () -> new Object[]{categoryService.findAll(), categoryService.countProductsByCategory()},
                 result -> {
                     allCategories = castList(result[0]);
                     categoryProductCounts = castCountMap(result[1]);
@@ -179,7 +178,7 @@ public class CategoryController extends AdminScreen {
         }
         int id = selected.getId();
         Async.run(
-                () -> categoryDAO.move(id, delta),
+                () -> categoryService.move(id, delta),
                 moved -> reloadCategories(id),
                 error -> AlertUtil.error(I18n.t("common.error.title"), error.getMessage()));
     }

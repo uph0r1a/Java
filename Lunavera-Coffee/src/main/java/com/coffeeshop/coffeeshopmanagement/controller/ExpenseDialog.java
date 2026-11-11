@@ -1,12 +1,13 @@
 package com.coffeeshop.coffeeshopmanagement.controller;
 
+import com.coffeeshop.coffeeshopmanagement.util.BusinessDay;
 import com.coffeeshop.coffeeshopmanagement.dao.DataAccessException;
-import com.coffeeshop.coffeeshopmanagement.dao.ExpenseDAO;
 import com.coffeeshop.coffeeshopmanagement.model.Expense;
 import com.coffeeshop.coffeeshopmanagement.service.ExpenseRules;
+import com.coffeeshop.coffeeshopmanagement.service.ExpenseService;
 import com.coffeeshop.coffeeshopmanagement.service.StockRules;
 import com.coffeeshop.coffeeshopmanagement.util.AlertUtil;
-import com.coffeeshop.coffeeshopmanagement.util.AppClock;
+import com.coffeeshop.coffeeshopmanagement.util.Async;
 import com.coffeeshop.coffeeshopmanagement.util.CurrencyUtil;
 import com.coffeeshop.coffeeshopmanagement.util.I18n;
 import com.coffeeshop.coffeeshopmanagement.util.MoneyParser;
@@ -41,7 +42,7 @@ import java.time.format.DateTimeFormatter;
  * "Chi phí" (TODO 4.38): the expenses of the shop. {@link #show()} is the administrator's window: write an expense down (day, amount,
  * category, note, and whether it came out of the cash drawer), see the expenses of a range of days with their total, and delete one
  * written by mistake. {@link #showCashOut} is the small box for any signed-in person to write down cash taken out of the drawer, used
- * from "Chốt ca" so the drawer's expected cash is right. The rules are in {@link ExpenseRules}; {@link ExpenseDAO} enforces them and
+ * from "Chốt ca" so the drawer's expected cash is right. The rules are in {@link ExpenseRules}; {@link ExpenseService} enforces them and
  * who may do what, so this class only collects the typing.
  */
 public final class ExpenseDialog {
@@ -82,7 +83,7 @@ public final class ExpenseDialog {
             AlertUtil.warning(I18n.t("admin.only.title"), I18n.t("expense.adminonly"));
             return;
         }
-        ExpenseDAO dao = new ExpenseDAO();
+        ExpenseService dao = new ExpenseService();
 
         Dialog<ButtonType> dialog = new Dialog<>();
         dialog.setTitle(I18n.t("expense.title"));
@@ -90,7 +91,7 @@ public final class ExpenseDialog {
         dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
         dialog.setResizable(true);
 
-        DatePicker dayField = new DatePicker(AppClock.today());
+        DatePicker dayField = com.coffeeshop.coffeeshopmanagement.util.DateBoxes.picker(BusinessDay.today());
         TextField amountField = new TextField();
         amountField.setPromptText(I18n.t("expense.amount.prompt"));
         ComboBox<String> categoryField = categoryBox();
@@ -107,8 +108,8 @@ public final class ExpenseDialog {
         hint.setStyle("-fx-text-fill: #6d4c41;");
 
         // the list: a range of days (this month by default) with its total
-        DatePicker fromField = new DatePicker(AppClock.today().withDayOfMonth(1));
-        DatePicker toField = new DatePicker(AppClock.today());
+        DatePicker fromField = com.coffeeshop.coffeeshopmanagement.util.DateBoxes.picker(BusinessDay.today().withDayOfMonth(1));
+        DatePicker toField = com.coffeeshop.coffeeshopmanagement.util.DateBoxes.picker(BusinessDay.today());
         Button showButton = new Button(I18n.t("expense.show"));
         Label totalLabel = new Label();
         totalLabel.setStyle("-fx-font-weight: bold;");
@@ -118,8 +119,8 @@ public final class ExpenseDialog {
         table.getColumns().add(column(I18n.t("expense.col.day"), 90, e -> DAY.format(e.spentOn())));
         table.getColumns().add(column(I18n.t("expense.col.category"), 130, e -> ExpenseRules.categoryName(e.category())));
         table.getColumns().add(column(I18n.t("expense.col.amount"), 120, e -> CurrencyUtil.format(e.amount())));
-        table.getColumns().add(column(I18n.t("expense.col.drawer"), 80, e -> e.fromDrawer() ? I18n.t("expense.yes") : ""));
-        table.getColumns().add(column(I18n.t("expense.col.note"), 200, e -> e.note() == null ? "" : e.note()));
+        table.getColumns().add(column(I18n.t("expense.col.drawer"), 115, e -> e.fromDrawer() ? I18n.t("expense.yes") : ""));
+        table.getColumns().add(column(I18n.t("expense.col.note"), 165, e -> e.note() == null ? "" : e.note()));
         table.getColumns().add(column(I18n.t("expense.col.by"), 120, e -> e.recordedByName() == null ? "" : e.recordedByName()));
         table.getColumns().add(column(I18n.t("expense.col.written"), 130, e -> e.createdAt() == null ? "" : TIME.format(e.createdAt())));
         Button deleteButton = new Button(I18n.t("expense.delete"));
@@ -133,36 +134,41 @@ public final class ExpenseDialog {
                 status.setText(I18n.t("expense.val.range"));
                 return;
             }
-            try {
-                table.getItems().setAll(dao.find(from, to, ExpenseDAO.DEFAULT_LIMIT));
-                BigDecimal total = BigDecimal.ZERO;
-                for (Expense e : table.getItems()) total = total.add(e.amount());
-                totalLabel.setText(I18n.t("expense.total", table.getItems().size(), CurrencyUtil.format(total)));
-            } catch (DataAccessException ex) {
-                AlertUtil.error(I18n.t("expense.title"), ex.getMessage());
-            }
+            // TODO 6.14: read off the screen thread; the table and the total are filled when the answer comes back
+            Async.run(() -> dao.find(from, to, ExpenseService.DEFAULT_LIMIT),
+                    found -> {
+                        table.getItems().setAll(found);
+                        BigDecimal total = BigDecimal.ZERO;
+                        for (Expense e : table.getItems()) total = total.add(e.amount());
+                        totalLabel.setText(I18n.t("expense.total", table.getItems().size(), CurrencyUtil.format(total)));
+                    },
+                    error -> AlertUtil.error(I18n.t("expense.title"), error.getMessage()));
         };
         reload.run();
         showButton.setOnAction(e -> reload.run());
 
         addButton.setOnAction(e -> {
             BigDecimal amount = MoneyParser.parseOptionalDong(amountField.getText());
-            String problem = ExpenseRules.problem(dayField.getValue(), amount, categoryField.getValue(), AppClock.today());
+            String problem = ExpenseRules.problem(dayField.getValue(), amount, categoryField.getValue(), BusinessDay.today());
             if (problem != null) {
                 status.setText(problem);
                 return;
             }
-            try {
-                dao.add(dayField.getValue(), amount, categoryField.getValue(), noteField.getText(), drawerBox.isSelected());
-                status.setText(I18n.t("expense.saved", CurrencyUtil.format(amount)));
-                amountField.clear();
-                noteField.clear();
-                drawerBox.setSelected(false);
-                reload.run();
-                amountField.requestFocus();
-            } catch (DataAccessException ex) {
-                status.setText(ex.getMessage());
-            }
+            final LocalDate day = dayField.getValue();
+            final String category = categoryField.getValue();
+            final String note = noteField.getText();
+            final boolean fromDrawer = drawerBox.isSelected();
+            Async.run(() -> dao.add(day, amount, category, note, fromDrawer),
+                    saved -> {
+                        status.setText(I18n.t("expense.saved", CurrencyUtil.format(amount)));
+                        amountField.clear();
+                        noteField.clear();
+                        drawerBox.setSelected(false);
+                        reload.run();
+                        amountField.requestFocus();
+                    },
+                    error -> status.setText(error.getMessage()),
+                    addButton);
         });
         deleteButton.setOnAction(e -> {
             Expense selected = table.getSelectionModel().getSelectedItem();
@@ -171,12 +177,14 @@ public final class ExpenseDialog {
                     ExpenseRules.categoryName(selected.category()), CurrencyUtil.format(selected.amount()), DAY.format(selected.spentOn())))) {
                 return;
             }
-            try {
-                dao.delete(selected.id());
-                reload.run();
-            } catch (DataAccessException ex) {
-                AlertUtil.error(I18n.t("expense.title"), ex.getMessage());
-            }
+            final int id = selected.id();
+            Async.run(() -> {
+                        dao.delete(id);
+                        return null;
+                    },
+                    done -> reload.run(),
+                    error -> AlertUtil.error(I18n.t("expense.title"), error.getMessage()),
+                    deleteButton);
         });
 
         GridPane form = new GridPane();
@@ -211,7 +219,7 @@ public final class ExpenseDialog {
      * @param onSaved called after the line was saved, so the caller (the shift close) can total the drawer again
      */
     public static void showCashOut(Runnable onSaved) {
-        ExpenseDAO dao = new ExpenseDAO();
+        ExpenseService dao = new ExpenseService();
         Dialog<ButtonType> dialog = new Dialog<>();
         dialog.setTitle(I18n.t("expense.cashout.title"));
         AlertUtil.configure(dialog);
@@ -247,14 +255,14 @@ public final class ExpenseDialog {
         final boolean[] saved = new boolean[1];
         dialog.getDialogPane().lookupButton(ButtonType.OK).addEventFilter(ActionEvent.ACTION, event -> {
             BigDecimal amount = MoneyParser.parseOptionalDong(amountField.getText());
-            String problem = ExpenseRules.problem(AppClock.today(), amount, categoryField.getValue(), AppClock.today());
+            String problem = ExpenseRules.problem(BusinessDay.today(), amount, categoryField.getValue(), BusinessDay.today());
             if (problem != null) {
                 AlertUtil.warning(I18n.t("expense.cashout.title"), problem);
                 event.consume();
                 return;
             }
             try {
-                dao.add(AppClock.today(), amount, categoryField.getValue(), noteField.getText(), true);
+                dao.add(BusinessDay.today(), amount, categoryField.getValue(), noteField.getText(), true);
                 saved[0] = true;
             } catch (DataAccessException ex) {
                 AlertUtil.error(I18n.t("expense.cashout.title"), ex.getMessage());

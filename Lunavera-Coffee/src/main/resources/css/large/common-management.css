@@ -1,0 +1,66 @@
+/*
+ * GENERATED FILE - do not edit by hand (TODO 5.44, the large text).
+ * The large sizes of common-management.css, rule by rule.
+ * Added by AppStyle to a window while the large text is chosen. Regenerate with service/LargeTextSheet.main after a
+ * change to any style sheet; LargeTextSheetTest fails when a file here is out of date.
+ */
+
+.page-title {
+    -fx-font-size: 26px !important;
+}
+
+.page-description {
+    -fx-font-size: 14px !important;
+}
+
+.header-icon {
+    -fx-font-size: 17px !important;
+}
+
+.admin-name {
+    -fx-font-size: 15px !important;
+}
+
+.admin-role {
+    -fx-font-size: 12px !important;
+}
+
+.profile-icon {
+    -fx-font-size: 18px !important;
+}
+
+.stat-title {
+    -fx-font-size: 14px !important;
+}
+
+.stat-value {
+    -fx-font-size: 26px !important;
+}
+
+.stat-description {
+    -fx-font-size: 12px !important;
+}
+
+.section-title {
+    -fx-font-size: 17px !important;
+}
+
+.search-field {
+    -fx-font-size: 14px !important;
+}
+
+.primary-button {
+    -fx-font-size: 14px !important;
+}
+
+.empty-label {
+    -fx-font-size: 14px !important;
+}
+
+.table-footer {
+    -fx-font-size: 13px !important;
+}
+
+.page-button {
+    -fx-font-size: 13px !important;
+}

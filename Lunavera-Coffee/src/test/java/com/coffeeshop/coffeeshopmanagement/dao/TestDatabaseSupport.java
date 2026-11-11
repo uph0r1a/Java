@@ -100,6 +100,113 @@ public final class TestDatabaseSupport {
         }
     }
 
+    // ------------------------------------------------------------------ days of a test's own (TODO 6.77)
+
+    /** The first day handed out by {@link #freshDays}: far beyond every date a test writes by hand (the latest is in the 2400s). */
+    private static final int FIRST_FRESH_YEAR = 3000;
+    private static final java.util.concurrent.atomic.AtomicInteger NEXT_FRESH_DAY = new java.util.concurrent.atomic.AtomicInteger();
+
+    /**
+     * The first of {@code count} consecutive days that no other test of this run has been given, so a test that writes sales,
+     * expenses, clock-ins or bookings on them and then counts over a range sees only its own rows. The days are in the year 3000
+     * and after (both databases keep dates that far), a gap of a week is left after every block so a range that is a day too wide
+     * still touches nobody else, and a call from any test class or in any order gets a block of its own. Prefer this to a year chosen
+     * by hand: two classes both claiming 2032 as their own was exactly the fault ({@code TestYearsAreOwnedTest}).
+     */
+    public static java.time.LocalDate freshDays(int count) {
+        if (count < 1) throw new IllegalArgumentException("count must be at least 1");
+        int offset = NEXT_FRESH_DAY.getAndAdd(count + 7);
+        return java.time.LocalDate.of(FIRST_FRESH_YEAR, 1, 1).plusDays(offset);
+    }
+
+    /** {@link #freshDays(int)} for a test that needs just one day. */
+    public static java.time.LocalDate freshDay() {
+        return freshDays(1);
+    }
+
+    // ------------------------------------------------------------------ putting tables back (TODO 6.77)
+
+    /**
+     * The rows of some small tables as they were, so a test that changes them (the table list, the settings, the vouchers) can put
+     * them back in an {@code @After} and the next test class sees what it expected, whatever order the classes run in:
+     * <pre>
+     *   private TestDatabaseSupport.Snapshot before;
+     *   &#64;Before public void remember() { before = TestDatabaseSupport.snapshot("settings", "dining_tables"); }
+     *   &#64;After  public void putBack()  { before.restore(); }
+     * </pre>
+     * Name a parent table before the tables that point at it. Not for a table with a generated column ({@code orders},
+     * {@code time_clock}: their rows are made by the program) or with a lot of rows: it reads them all into memory.
+     */
+    public static Snapshot snapshot(String... tables) {
+        Snapshot snapshot = new Snapshot();
+        try (java.sql.Connection c = com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig.getConnection()) {
+            for (String table : tables) {
+                snapshot.tables.add(Snapshot.read(c, table));
+            }
+        } catch (java.sql.SQLException e) {
+            throw new IllegalStateException("Could not read the tables to put back later: " + java.util.Arrays.toString(tables), e);
+        }
+        return snapshot;
+    }
+
+    /** What {@link #snapshot} took; {@link #restore()} deletes whatever the tables hold now and writes the old rows back. */
+    public static final class Snapshot {
+        private record Rows(String table, java.util.List<String> columns, java.util.List<Object[]> rows) { }
+
+        private final java.util.List<Rows> tables = new java.util.ArrayList<>();
+
+        private static Rows read(java.sql.Connection c, String table) throws java.sql.SQLException {
+            if (!table.matches("[a-z_]+")) throw new IllegalArgumentException("not a table name: " + table);
+            try (java.sql.Statement st = c.createStatement(); java.sql.ResultSet rs = st.executeQuery("SELECT * FROM " + table)) {
+                java.sql.ResultSetMetaData meta = rs.getMetaData();
+                java.util.List<String> columns = new java.util.ArrayList<>();
+                for (int i = 1; i <= meta.getColumnCount(); i++) columns.add(meta.getColumnName(i));
+                java.util.List<Object[]> rows = new java.util.ArrayList<>();
+                while (rs.next()) {
+                    Object[] row = new Object[columns.size()];
+                    for (int i = 0; i < row.length; i++) row[i] = rs.getObject(i + 1);
+                    rows.add(row);
+                }
+                return new Rows(table, columns, rows);
+            }
+        }
+
+        public void restore() {
+            try (java.sql.Connection c = com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig.getConnection()) {
+                boolean auto = c.getAutoCommit();
+                c.setAutoCommit(false);
+                try {
+                    // children first when deleting, parents first when writing back
+                    for (int i = tables.size() - 1; i >= 0; i--) {
+                        try (java.sql.Statement st = c.createStatement()) {
+                            st.executeUpdate("DELETE FROM " + tables.get(i).table());
+                        }
+                    }
+                    for (Rows t : tables) {
+                        if (t.rows().isEmpty()) continue;
+                        String marks = String.join(", ", java.util.Collections.nCopies(t.columns().size(), "?"));
+                        String sql = "INSERT INTO " + t.table() + " (" + String.join(", ", t.columns()) + ") VALUES (" + marks + ")";
+                        try (java.sql.PreparedStatement ps = c.prepareStatement(sql)) {
+                            for (Object[] row : t.rows()) {
+                                for (int i = 0; i < row.length; i++) ps.setObject(i + 1, row[i]);
+                                ps.addBatch();
+                            }
+                            ps.executeBatch();
+                        }
+                    }
+                    c.commit();
+                } catch (java.sql.SQLException | RuntimeException e) {
+                    c.rollback();
+                    throw e;
+                } finally {
+                    c.setAutoCommit(auto);
+                }
+            } catch (java.sql.SQLException e) {
+                throw new IllegalStateException("Could not put the tables back", e);
+            }
+        }
+    }
+
     /** Skips the calling test when the run uses MariaDB: for tests about SQLite files, PRAGMAs and the SQLite-only migrations. */
     public static void requireSqlite() {
         org.junit.Assume.assumeTrue("SQLite-only test (this run uses MariaDB)",
@@ -115,8 +222,11 @@ public final class TestDatabaseSupport {
         // test in this run would be writing into the real data/ folder. Stop instead of polluting it.
         if (com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig.isSqlite()) {
             Path live = com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig.databaseFile().toAbsolutePath().normalize();
+            // The folders a program started without any setting would use: the project's data/ and (TODO 3.69) the fixed per-user folder.
             Path realData = Path.of(System.getProperty("user.dir"), "data").toAbsolutePath().normalize();
-            if (live.startsWith(realData) && !TEMP_HOME.toAbsolutePath().normalize().startsWith(realData)) {
+            Path realDefault = com.coffeeshop.coffeeshopmanagement.util.DataPaths.defaultDir();
+            boolean touchesReal = live.startsWith(realData) || live.startsWith(realDefault);
+            if (touchesReal && !TEMP_HOME.toAbsolutePath().normalize().startsWith(realData) && !TEMP_HOME.toAbsolutePath().normalize().startsWith(realDefault)) {
                 throw new IllegalStateException("A test started DatabaseConfig before the temp data folder was set; "
                         + "it would use the real database " + live + ". Call TestDatabaseSupport.ensureReady() "
                         + "(or touch TestDatabaseSupport.TEMP_HOME) in that test's @BeforeClass.");

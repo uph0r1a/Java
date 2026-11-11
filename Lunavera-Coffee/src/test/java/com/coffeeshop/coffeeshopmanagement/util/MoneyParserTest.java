@@ -187,4 +187,40 @@ public class MoneyParserTest {
         assertNull(MoneyParser.parseOptionalDong("1.500k"));
         assertEquals(BigDecimal.valueOf(100_000), MoneyParser.parseOptionalDong("100k"));
     }
+
+    @Test
+    public void everyKindOfSpaceAndInvisibleMarkIsReadAsInPlainText() {
+        // TODO 3.71: the narrow no-break space (newer phone and spreadsheet locales), the no-break space, a zero-width space and a mark
+        assertParses(50_000, "50\u202F000");
+        assertParses(50_000, "50\u00A0000");
+        assertParses(50_000, "50\u200B000");
+        assertParses(50_000, "\u200E50.000\u200F");
+        assertParses(1_250_000, "1\u202F250\u202F000\u202F\u20AB");
+    }
+
+    @Test
+    public void millionsFollowedByDigitsAreReadAsADecimalOfAMillion() { // TODO 3.82
+        assertParses(1_500_000, "1tr5");
+        assertParses(2_350_000, "2tr350");
+        assertParses(2_350_000, "2tr35");
+        assertParses(1_050_000, "1tr05");
+        assertParses(1_005_000, "1tr005");
+        assertParses(1_500_000, "1TR5");
+        assertParses(1_500_000, "1 tr 5");
+        assertParses(1_500_000, "1trieu5");
+        assertParses(1_500_000, "1triệu5đ");
+        assertParses(10_250_000, "10tr25");
+    }
+
+    @Test
+    public void millionsFollowedByTooManyOrOddDigitsAreRefused() { // TODO 3.82
+        for (String bad : new String[]{"1tr5000", "1tr5k", "1,5tr5", "1tr5.5", "1tr-5", "tr5", "1tr5tr"}) {
+            try {
+                MoneyParser.parseDong(bad);
+                fail("should be refused: " + bad);
+            } catch (IllegalArgumentException expected) {
+                // the right answer
+            }
+        }
+    }
 }

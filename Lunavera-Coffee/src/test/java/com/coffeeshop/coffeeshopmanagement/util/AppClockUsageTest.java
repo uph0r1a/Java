@@ -26,7 +26,7 @@ public class AppClockUsageTest {
     /** Files that must follow the real clock: file times, file names, the PC-clock check, timers. Keep it short. */
     private static final Set<String> REAL_CLOCK = Set.of(
             "AppClock.java", "MonotonicClock.java", "LunaveraApplication.java", "DatabaseHealth.java", "MoneyMigration.java",
-            "SqliteSnapshotService.java", "AdminDashboardController.java", "CustomerController.java", "OrderHistoryWindow.java",
+            "SqliteSnapshotService.java", "AdminDashboardController.java", "CustomerController.java",
             "ProductController.java", "BackupService.java", "DataPaths.java", "ImageStorage.java", "UnusedPictures.java");
 
     @Test

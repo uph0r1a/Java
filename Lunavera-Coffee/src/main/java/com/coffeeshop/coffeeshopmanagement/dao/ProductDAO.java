@@ -1,6 +1,8 @@
 package com.coffeeshop.coffeeshopmanagement.dao;
 
 import com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig;
+import com.coffeeshop.coffeeshopmanagement.model.AuditAction;
+import com.coffeeshop.coffeeshopmanagement.model.AuditTarget;
 import com.coffeeshop.coffeeshopmanagement.model.Product;
 import com.coffeeshop.coffeeshopmanagement.util.Permissions;
 
@@ -16,7 +18,95 @@ import java.util.List;
 public class ProductDAO {
 
     private static final String SELECT_WITH_CATEGORY =
-            "SELECT p.*, c.name AS category_name FROM products p LEFT JOIN categories c ON p.category_id = c.id";
+            "SELECT p.*, c.name AS category_name, "
+                    // TODO 4.41: a product with a recipe can be sold as many times as its scarcest ingredient allows (null = no recipe)
+                    + "(SELECT MIN(i.stock * 1.0 / r.amount) FROM recipes r JOIN ingredients i ON i.id = r.ingredient_id WHERE r.product_id = p.id) AS recipe_servings "
+                    + "FROM products p LEFT JOIN categories c ON p.category_id = c.id";
+    /**
+     * The products as the till may SELL them (TODO 3.1): what other OPEN orders already hold is not for sale again. A line in an open
+     * order is the reservation, so nothing is stored and nothing has to be released: paying, cancelling or emptying a table makes the
+     * lines stop counting by itself. Two numbers are worked out next to the true stock: {@code held_cups}, the pieces of a product
+     * without a recipe that other open orders hold, and {@code recipe_servings_net}, the servings of a recipe product that are left
+     * once the ingredient amounts of the other open orders' recipe lines (any product that uses the same ingredient) are taken off.
+     * The two {@code ?} before the ids are the order that must not count against itself (0 = none: a new order). The statement is
+     * plain SQL that SQLite and MariaDB both run.
+     */
+    static String forSaleSql(int idCount) {
+        String others = "o2.status = " + com.coffeeshop.coffeeshopmanagement.config.SqlStatus.OPEN + " AND o2.id <> ?";
+        String sql = "SELECT p.*, c.name AS category_name, "
+                + "(SELECT MIN(i.stock * 1.0 / r.amount) FROM recipes r JOIN ingredients i ON i.id = r.ingredient_id WHERE r.product_id = p.id) AS recipe_servings, "
+                + "(SELECT MIN((i.stock - COALESCE((SELECT SUM(r2.amount * oi2.quantity) FROM order_items oi2 "
+                + "JOIN orders o2 ON o2.id = oi2.order_id JOIN recipes r2 ON r2.product_id = oi2.product_id "
+                + "WHERE " + others + " AND r2.ingredient_id = i.id), 0)) * 1.0 / r.amount) "
+                + "FROM recipes r JOIN ingredients i ON i.id = r.ingredient_id WHERE r.product_id = p.id) AS recipe_servings_net, "
+                + "COALESCE((SELECT SUM(oi3.quantity) FROM order_items oi3 JOIN orders o3 ON o3.id = oi3.order_id "
+                + "WHERE o3.status = " + com.coffeeshop.coffeeshopmanagement.config.SqlStatus.OPEN + " AND o3.id <> ? AND oi3.product_id = p.id), 0) AS held_cups "
+                + "FROM products p LEFT JOIN categories c ON p.category_id = c.id";
+        if (idCount > 0) {
+            sql += " WHERE p.id IN (" + String.join(", ", java.util.Collections.nCopies(idCount, "?")) + ")";
+        }
+        return sql + " ORDER BY p.sort_order, p.id";
+    }
+
+    /**
+     * Every product with its stock taken down to what {@code exceptOrderId} may still sell: the true stock less what the other open
+     * orders hold ({@link Product#getHeldElsewhere()} says how much that was). Pass the open order on the screen, or 0 when there is
+     * none. For the sales screen only; the product screens use {@link #findAll()}, which is the shelf.
+     */
+    public List<Product> findAllForSale(int exceptOrderId) {
+        try (Connection connection = DatabaseConfig.getConnection()) {
+            return forSale(connection, null, exceptOrderId);
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to load products", e);
+        }
+    }
+
+    /**
+     * The same on a connection the caller already holds: the autosave of an open order asks it, inside its own transaction, whether
+     * the pieces it is about to keep are really free (TODO 3.1). {@code ids} null or empty = every product.
+     */
+    static List<Product> forSale(Connection connection, java.util.Collection<Integer> ids, int exceptOrderId) throws SQLException {
+        List<Product> result = new ArrayList<>();
+        int count = ids == null ? 0 : ids.size();
+        if (ids != null && ids.isEmpty()) {
+            return result;
+        }
+        try (PreparedStatement statement = connection.prepareStatement(forSaleSql(count))) {
+            statement.setInt(1, exceptOrderId);
+            statement.setInt(2, exceptOrderId);
+            int position = 3;
+            if (ids != null) {
+                for (int id : ids) {
+                    statement.setInt(position++, id);
+                }
+            }
+            try (ResultSet rs = statement.executeQuery()) {
+                while (rs.next()) {
+                    result.add(mapForSale(rs));
+                }
+            }
+        }
+        return result;
+    }
+
+    private static Product mapForSale(ResultSet rs) throws SQLException {
+        Product product = new ProductDAO().map(rs);
+        int shelf = product.getStock();
+        int net;
+        if (product.isRecipeBased()) {
+            double servings = rs.getDouble("recipe_servings_net");
+            net = (int) Math.max(0, Math.min(Math.floor(servings + 1e-9), Integer.MAX_VALUE));
+        } else {
+            net = Math.max(0, shelf - rs.getInt("held_cups"));
+        }
+        product.setHeldElsewhere(shelf - net);
+        product.setStock(net);
+        product.setLoadedStock(net);
+        return product;
+    }
+
+    /** Products with a recipe count their ingredients, not their cup number, so the cup-count low-stock card skips them (TODO 4.41). */
+    private static final String NO_RECIPE = " AND NOT EXISTS (SELECT 1 FROM recipes r WHERE r.product_id = p.id)";
 
     public Product insert(Product product) {
         Permissions.requireAdmin("add a product");
@@ -229,10 +319,12 @@ public class ProductDAO {
                     statement.setNull(5, Types.INTEGER);
                 }
                 statement.setInt(11, product.getId());
+                Long[] oldMoney = readPriceAndCost(connection, product.getId()); // for the audit line (TODO 4.2)
                 statement.executeUpdate();
                 if (typedStock) {
                     StockLogDAO.logAdjustment(connection, product.getId(), product.getName(), before, product.getStock());
                 }
+                auditEdit(connection, product, oldMoney, typedStock, before);
                 connection.commit();
                 product.setLoadedStock(product.getStock());
             } catch (SQLException | RuntimeException e) {
@@ -241,6 +333,41 @@ public class ProductDAO {
             }
         } catch (SQLException e) {
             throw codeTakenOr(e, "Failed to update product");
+        }
+    }
+
+    /** The price and the cost (null = none) the database holds now, in whole dong; null when the product is gone. */
+    private static Long[] readPriceAndCost(Connection connection, int productId) throws SQLException {
+        try (PreparedStatement read = connection.prepareStatement("SELECT price, cost FROM products WHERE id = ?")) {
+            read.setInt(1, productId);
+            try (ResultSet rs = read.executeQuery()) {
+                if (!rs.next()) return null;
+                long cost = rs.getLong(2);
+                return new Long[]{rs.getLong(1), rs.wasNull() ? null : cost};
+            }
+        }
+    }
+
+    /**
+     * The audit lines of one product edit (TODO 4.2), on the saving transaction: a changed price, a changed cost, and a stock number
+     * that was typed over. A save that changes none of these writes nothing.
+     */
+    private static void auditEdit(Connection connection, Product product, Long[] old, boolean typedStock, int stockBefore) throws SQLException {
+        if (old == null) return;
+        Long newPrice = com.coffeeshop.coffeeshopmanagement.util.Money.toDong(product.getPrice());
+        Long newCost = com.coffeeshop.coffeeshopmanagement.util.Money.toDongOrNull(product.getCost());
+        String name = product.getName();
+        Integer id = product.getId();
+        if (!java.util.Objects.equals(old[0], newPrice)) {
+            AuditDAO.write(connection, AuditAction.PRODUCT_PRICE, AuditTarget.PRODUCT, id, name, String.valueOf(old[0]), String.valueOf(newPrice), null);
+        }
+        if (!java.util.Objects.equals(old[1], newCost)) {
+            AuditDAO.write(connection, AuditAction.PRODUCT_COST, AuditTarget.PRODUCT, id, name,
+                    old[1] == null ? null : String.valueOf(old[1]), newCost == null ? null : String.valueOf(newCost), null);
+        }
+        if (typedStock && stockBefore != product.getStock()) {
+            AuditDAO.write(connection, AuditAction.PRODUCT_STOCK, AuditTarget.PRODUCT, id, name,
+                    String.valueOf(stockBefore), String.valueOf(product.getStock()), null);
         }
     }
 
@@ -316,7 +443,7 @@ public class ProductDAO {
         List<Product> result = new ArrayList<>();
         try (Connection connection = DatabaseConfig.getConnection();
              PreparedStatement statement = connection.prepareStatement(
-                     SELECT_WITH_CATEGORY + " WHERE p.active = 1 AND p.stock <= COALESCE(p.reorder_level, ?) ORDER BY p.stock ASC, p.name LIMIT ?")) {
+                     SELECT_WITH_CATEGORY + " WHERE p.active = 1 AND p.stock <= COALESCE(p.reorder_level, ?)" + NO_RECIPE + " ORDER BY p.stock ASC, " + DatabaseConfig.dialect().vietnameseOrder("p.name") + " LIMIT ?")) {
             statement.setInt(1, threshold);
             statement.setInt(2, limit);
             try (ResultSet rs = statement.executeQuery()) {
@@ -331,7 +458,7 @@ public class ProductDAO {
     }
 
     public int countLowStock(int threshold) {
-        String sql = "SELECT COUNT(*) FROM products WHERE active = 1 AND stock <= COALESCE(reorder_level, ?)";
+        String sql = "SELECT COUNT(*) FROM products p WHERE p.active = 1 AND p.stock <= COALESCE(p.reorder_level, ?)" + NO_RECIPE;
         try (Connection connection = DatabaseConfig.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setInt(1, threshold);
@@ -434,7 +561,7 @@ public class ProductDAO {
             statement.setNull(4, Types.INTEGER);
         }
         statement.setInt(5, product.getStock());
-        statement.setString(6, product.getDescription());
+        statement.setString(6, com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.nfc(product.getDescription())); // composed accents (TODO 3.18)
         statement.setString(7, product.getImagePath());
         statement.setBoolean(8, product.isActive());
         if (product.getReorderLevel() != null) {
@@ -467,7 +594,10 @@ public class ProductDAO {
         product.setPrice(com.coffeeshop.coffeeshopmanagement.util.Money.fromDong(rs.getLong("price")));
         long costDong = rs.getLong("cost");
         product.setCost(com.coffeeshop.coffeeshopmanagement.util.Money.fromDongOrNull(costDong, rs.wasNull()));
-        product.setStock(rs.getInt("stock"));
+        double servings = rs.getDouble("recipe_servings");
+        boolean hasRecipe = !rs.wasNull();
+        product.setStock(hasRecipe ? (int) Math.min(Math.floor(servings + 1e-9), Integer.MAX_VALUE) : rs.getInt("stock"));
+        product.setRecipeBased(hasRecipe);
         product.setLoadedStock(product.getStock());
         product.setDescription(rs.getString("description"));
         product.setImagePath(rs.getString("image_path"));

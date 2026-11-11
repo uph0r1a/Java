@@ -34,11 +34,11 @@ public class MariaDbBackupTest {
     }
 
     @Test
-    public void theResultFileIsAbsoluteAndThePasswordNeverOnTheCommandLine() {
+    public void theResultFileIsExactlyWhatTheCallerGivesAndThePasswordNeverOnTheCommandLine() {
+        // TODO 3.70: the caller gives a plain name (see MariaDbBackupFolderTest); the command no longer turns it into an absolute path
         DatabaseSettings s = settings("db.type", "mariadb", "db.password", "topsecret");
-        List<String> command = MariaDbBackup.command(s, Path.of("out", "b.sql"));
-        String resultFile = command.stream().filter(a -> a.startsWith("--result-file=")).findFirst().orElseThrow();
-        assertTrue(resultFile, Path.of(resultFile.substring("--result-file=".length())).isAbsolute());
+        List<String> command = MariaDbBackup.command(s, Path.of("b.sql"));
+        assertTrue(command.toString(), command.contains("--result-file=b.sql"));
         for (String argument : command) {
             assertFalse("the password must travel in MYSQL_PWD, not here: " + argument, argument.contains("topsecret"));
         }
@@ -135,7 +135,8 @@ public class MariaDbBackupTest {
     @Test(timeout = 20_000)
     public void aDumpThatNeverEndsIsStoppedAtTheLimit() throws Exception {
         org.junit.Assume.assumeFalse(System.getProperty("os.name").toLowerCase().contains("win"));
-        java.nio.file.Path target = java.nio.file.Files.createTempFile("dump", ".sql");
+        java.nio.file.Path folder = java.nio.file.Files.createTempDirectory("dump-limit");
+        java.nio.file.Path target = folder.resolve("dump.sql");
         long start = System.nanoTime();
         try {
             MariaDbBackup.dumpTo(fake(script("echo starting; sleep 60")), target, 1);
@@ -145,6 +146,9 @@ public class MariaDbBackupTest {
         }
         assertTrue("it returned at the limit, not after the program", (System.nanoTime() - start) / 1_000_000_000L < 15);
         assertFalse("no partial file is left", java.nio.file.Files.exists(target));
+        try (java.util.stream.Stream<java.nio.file.Path> left = java.nio.file.Files.list(folder)) {
+            assertEquals("and nothing else either (the .part file written under a plain name is removed, TODO 3.70)", 0, left.count());
+        }
     }
 
     @Test(timeout = 20_000)
@@ -157,7 +161,10 @@ public class MariaDbBackupTest {
         } catch (java.io.IOException expected) {
             assertTrue(expected.getMessage(), expected.getMessage().contains("mã 2") && expected.getMessage().contains("Access denied"));
         }
-        MariaDbBackup.dumpTo(fake(script("echo done")), target, 10); // no exception
+        assertEquals("a failed run leaves the file that was there as it was", 0, java.nio.file.Files.size(target));
+        // a good run writes the result file, as the real program always does (one that says it is done and writes nothing is an error, TODO 3.70)
+        MariaDbBackup.dumpTo(fake(fakeDump(true, false)), target, 10); // no exception
+        assertTrue(java.nio.file.Files.readString(target).startsWith("-- dump of"));
     }
 
     // ---- TODO 2A.42: the TLS settings of the connection also go to mysqldump ----

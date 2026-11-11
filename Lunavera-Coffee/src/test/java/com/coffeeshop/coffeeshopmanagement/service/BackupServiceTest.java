@@ -698,6 +698,49 @@ public class BackupServiceTest {
         Files.writeString(scratch.resolve("broken.db-wal"), "log bytes");
         assertFalse(BackupService.foldLeftoverLogInto(notADatabase));
         assertTrue("the log file is still there", Files.exists(scratch.resolve("broken.db-wal")));
+        assertEquals("with the bytes it had (SQLite deletes it when the open fails; it is copied aside first and put back, TODO 2.85)",
+                "log bytes", Files.readString(scratch.resolve("broken.db-wal")));
+        assertFalse("and no stray copy is left beside it", Files.exists(scratch.resolve("broken.db-wal.keep")));
+    }
+
+    @Test
+    public void aLogThatWasFoldedLeavesNoCopyBehind() throws Exception {
+        Path live = liveDatabase();
+        Path log = live.resolveSibling(live.getFileName() + "-wal");
+        try (Connection keep = DriverManager.getConnection("jdbc:sqlite:" + live.toAbsolutePath());
+             Statement st = keep.createStatement()) {
+            st.execute("PRAGMA journal_mode = WAL");
+            st.execute("PRAGMA wal_autocheckpoint = 0");
+            st.execute("INSERT INTO categories(name, description, active) VALUES ('fold-marker','',1)");
+            assertTrue(Files.size(log) > 0);
+            assertTrue("the fold works while another connection is still open", BackupService.foldLeftoverLogInto(live));
+        }
+        assertFalse(Files.exists(live.resolveSibling(live.getFileName() + "-wal.keep")));
+        assertEquals(1, count(live, "SELECT COUNT(*) FROM categories WHERE name='fold-marker'"));
+    }
+
+    @Test
+    public void aRestoreOverADamagedDatabaseKeepsItsLogInTheBackupsFolder() throws Exception {
+        Path live = liveDatabase();
+        Path backup = BackupService.createBackup(scratch.resolve("outside").resolve("damaged.zip"));
+        Path log = live.resolveSibling(live.getFileName() + "-wal");
+        byte[] logBytes = "sales that only the log still has".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        Files.deleteIfExists(live.resolveSibling(live.getFileName() + "-shm"));
+        Files.writeString(live, "this is no longer an SQLite file. ".repeat(60)); // the damaged live file
+        Files.write(log, logBytes);
+
+        BackupService.scheduleRestore(backup);
+        RestoreResult result = BackupService.applyPendingRestore();
+        assertEquals(result.message(), RestoreOutcome.RESTORED, result.outcome());
+
+        Path kept;
+        try (Stream<Path> files = Files.list(DataPaths.backupsDir())) {
+            kept = files.filter(p -> p.getFileName().toString().startsWith("lunavera.db-wal.unfolded-")).findFirst()
+                    .orElseThrow(() -> new AssertionError("the log was lost: no lunavera.db-wal.unfolded-* in the backups folder"));
+        }
+        assertArrayEquals("the very bytes of the log", logBytes, Files.readAllBytes(kept));
+        assertFalse("no log is left to be applied to the restored database", Files.exists(log));
+        assertFalse(Files.exists(live.resolveSibling(live.getFileName() + "-wal.keep")));
     }
 
     // ---------------------------------------------------------------- TODO 3.63 / 3.65

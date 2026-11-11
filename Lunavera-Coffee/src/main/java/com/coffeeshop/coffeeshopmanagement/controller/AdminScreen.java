@@ -5,7 +5,6 @@ import com.coffeeshop.coffeeshopmanagement.util.AlertUtil;
 import com.coffeeshop.coffeeshopmanagement.util.Session;
 import com.coffeeshop.coffeeshopmanagement.util.SessionGuard;
 import com.coffeeshop.coffeeshopmanagement.util.SceneNavigator;
-import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.scene.control.Button;
 import javafx.scene.control.TableCell;
@@ -18,76 +17,14 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * What every administrator screen has in common (TODO 6.4): the sidebar navigation, the "is this still an administrator"
+ * What every administrator screen has in common (TODO 6.4): the sidebar navigation (written once in {@link ScreenNavigation}, which this
+ * class extends, TODO 6.54), the "is this still an administrator"
  * check, the edit/delete column of the tables, and the guard that sends an employee away from a management screen. The
  * five screens, each with its own FXML and its own controller, extend it: {@link AdminDashboardController},
  * {@link CategoryController}, {@link ProductController}, {@link AccountController} and {@link StaffController}. The handlers are public and marked
  * {@code @FXML}, so an FXML file can name them on a subclass.
  */
-public abstract class AdminScreen {
-
-    // =================================================================== Navigation (shared by every screen)
-
-    @FXML
-    public void openDashboard(ActionEvent event) {
-        String target = Session.isAdmin() ? "/fxml/admin-trangchu.fxml" : "/fxml/employee-trangchu.fxml";
-        SceneNavigator.switchScene(event, target);
-    }
-
-    @FXML
-    public void openProductManagement(ActionEvent event) {
-        if (!Session.isAdmin()) {
-            AlertUtil.warning(I18n.t("admin.only.title"), I18n.t("admin.only.message"));
-            return;
-        }
-        SceneNavigator.switchScene(event, "/fxml/quanlysanpham.fxml");
-    }
-
-    @FXML
-    public void openOrderManagement(ActionEvent event) {
-        SceneNavigator.switchScene(event, "/fxml/quanlydonhang.fxml");
-    }
-
-    @FXML
-    public void openCustomerManagement(ActionEvent event) {
-        SceneNavigator.switchScene(event, "/fxml/quanlykhachhang.fxml");
-    }
-
-    @FXML
-    public void openCategoryManagement(ActionEvent event) {
-        if (!Session.isAdmin()) {
-            AlertUtil.warning(I18n.t("admin.only.title"), I18n.t("admin.only.message"));
-            return;
-        }
-        SceneNavigator.switchScene(event, "/fxml/quanlydanhmuc.fxml");
-    }
-
-    @FXML
-    public void openAccountManagement(ActionEvent event) {
-        if (!Session.isAdmin()) {
-            AlertUtil.warning(I18n.t("admin.only.title"), I18n.t("admin.only.message"));
-            return;
-        }
-        SceneNavigator.switchScene(event, "/fxml/quanlytaikhoan.fxml");
-    }
-
-    @FXML
-    public void openStaffManagement(ActionEvent event) {
-        if (!Session.isAdmin()) {
-            AlertUtil.warning(I18n.t("admin.only.title"), I18n.t("admin.only.message"));
-            return;
-        }
-        SceneNavigator.switchScene(event, "/fxml/quanlynhanvien.fxml");
-    }
-
-    @FXML
-    public void logout(ActionEvent event) {
-        // An administrator who has not saved a backup by hand for a week is asked once (TODO 5.18).
-        BackupDialogs.offerBeforeLeaving(BackupDialogs.windowOf(event), () -> {
-            Session.clear();
-            SceneNavigator.switchScene(event, "/fxml/dangnhap.fxml");
-        });
-    }
+public abstract class AdminScreen extends ScreenNavigation {
 
     protected boolean requireAdmin() {
         // Re-read the account first: refreshes the role (an admin demoted since login stops

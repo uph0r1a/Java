@@ -14,18 +14,19 @@ import javafx.scene.control.TextInputControl;
  */
 public final class TextLengthLimiter {
 
-    public static final int NAME_MAX = 100;
-    public static final int DESCRIPTION_MAX = 500;
+    public static final int NAME_MAX = TextLimits.NAME_MAX;
+    public static final int DESCRIPTION_MAX = TextLimits.DESCRIPTION_MAX;
     /** Longest phone we accept: +84 and 10 digits is 13; 15 is the E.164 maximum. */
-    public static final int PHONE_MAX = 15;
-    public static final int ADDRESS_MAX = 200;
-    public static final int POSITION_MAX = 60;
-    public static final int EMAIL_MAX = 100;
-    public static final int USERNAME_MAX = 32;
-    public static final int PASSWORD_MAX = 64;
-    public static final int SEARCH_MAX = 100;
+    public static final int PHONE_MAX = TextLimits.PHONE_MAX;
+    public static final int ADDRESS_MAX = TextLimits.ADDRESS_MAX;
+    public static final int POSITION_MAX = TextLimits.POSITION_MAX;
+    public static final int EMAIL_MAX = TextLimits.EMAIL_MAX;
+    public static final int USERNAME_MAX = TextLimits.USERNAME_MAX;
+    public static final int PASSWORD_MAX = TextLimits.PASSWORD_MAX;
+    public static final int SEARCH_MAX = TextLimits.SEARCH_MAX;
     /** Money / quantity inputs: up to 12 characters (digits, plus separators typed by hand). */
-    public static final int NUMBER_MAX = 12;
+    public static final int NUMBER_MAX = TextLimits.NUMBER_MAX;
+    public static final int MONEY_MAX = TextLimits.MONEY_MAX;
 
     private TextLengthLimiter() {
     }
@@ -42,6 +43,6 @@ public final class TextLengthLimiter {
 
     /** The rule {@link #limit} applies to every change, on its own so it can be tested without JavaFX (TODO 6.35): the new text may be at most {@code maxLength} characters. */
     public static boolean accepts(String newText, int maxLength) {
-        return newText == null || newText.length() <= maxLength;
+        return TextLimits.accepts(newText, maxLength);
     }
 }

@@ -180,9 +180,11 @@ public class EmployeeDAO {
     public static boolean hasHistory(Connection connection, int employeeId) throws SQLException {
         String sql = "SELECT CASE WHEN EXISTS (SELECT 1 FROM orders WHERE employee_id = ? OR paid_by = ?) "
                 + "OR EXISTS (SELECT 1 FROM stock_log WHERE employee_id = ?) "
-                + "OR EXISTS (SELECT 1 FROM shift_closes WHERE closed_by = ?) THEN 1 ELSE 0 END";
+                + "OR EXISTS (SELECT 1 FROM shift_closes WHERE closed_by = ?) "
+                + "OR EXISTS (SELECT 1 FROM orders WHERE cancelled_by = ?) "          // TODO 4.2
+                + "OR EXISTS (SELECT 1 FROM audit_log WHERE actor_employee_id = ?) THEN 1 ELSE 0 END";
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
-            for (int i = 1; i <= 4; i++) statement.setInt(i, employeeId);
+            for (int i = 1; i <= 6; i++) statement.setInt(i, employeeId);
             try (ResultSet rs = statement.executeQuery()) {
                 return rs.next() && rs.getInt(1) == 1;
             }
@@ -234,9 +236,9 @@ public class EmployeeDAO {
     private void bind(PreparedStatement statement, Employee employee) throws SQLException {
         statement.setString(1, com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.nfc(employee.getFullName()));
         statement.setString(2, employee.getPhone());
-        statement.setString(3, employee.getEmail());
-        statement.setString(4, employee.getAddress());
-        statement.setString(5, employee.getPosition());
+        statement.setString(3, com.coffeeshop.coffeeshopmanagement.util.ValidationUtil.cleanEmail(employee.getEmail()));
+        statement.setString(4, com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.nfc(employee.getAddress())); // composed accents (TODO 3.18)
+        statement.setString(5, com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.nfc(employee.getPosition()));
         Long salaryDong = com.coffeeshop.coffeeshopmanagement.util.Money.toDongOrNull(employee.getSalary());
         if (salaryDong != null) {
             statement.setLong(6, salaryDong);

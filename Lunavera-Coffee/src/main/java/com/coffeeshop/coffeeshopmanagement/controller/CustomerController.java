@@ -1,9 +1,11 @@
 package com.coffeeshop.coffeeshopmanagement.controller;
 
-import com.coffeeshop.coffeeshopmanagement.dao.CustomerDAO;
+import com.coffeeshop.coffeeshopmanagement.util.AppClock;
 import com.coffeeshop.coffeeshopmanagement.dao.DataAccessException;
 import com.coffeeshop.coffeeshopmanagement.model.Customer;
 import com.coffeeshop.coffeeshopmanagement.util.AlertUtil;
+import com.coffeeshop.coffeeshopmanagement.service.CustomerFormRules;
+import com.coffeeshop.coffeeshopmanagement.service.CustomerService;
 import com.coffeeshop.coffeeshopmanagement.service.CustomerStats;
 import com.coffeeshop.coffeeshopmanagement.service.LoyaltyPolicy;
 import com.coffeeshop.coffeeshopmanagement.util.I18n;
@@ -43,14 +45,12 @@ import java.util.stream.Collectors;
  *
  * The screen lists and searches customers, adds and edits them, and opens a customer's purchase history (double-click or the
  * history button, through {@code OrderHistoryWindow.showForCustomer}). For an administrator it also has "merge duplicate",
- * "make anonymous" and "delete" (TODO 4.8 and 3.4, rule D21, all in {@code CustomerMergeService}): a customer that nothing points
+ * "make anonymous" (TODO 4.8 and 3.4, rule D21, never delete; all in {@code CustomerMergeService}): a customer that nothing points
  * at is deleted, one with orders can only be made anonymous, and two rows of one person are merged.
  */
-public class CustomerController {
+public class CustomerController extends ScreenNavigation {
 
-    private final CustomerDAO customerDAO = new CustomerDAO();
-    private final com.coffeeshop.coffeeshopmanagement.service.CustomerMergeService mergeService =
-            new com.coffeeshop.coffeeshopmanagement.service.CustomerMergeService();
+    private final CustomerService customerService = new CustomerService();
 
     @FXML private Label accountNameLabel;
     @FXML private Label accountRoleLabel;
@@ -107,7 +107,7 @@ public class CustomerController {
 
         customerPaged = new PagedTable<>(customerTable, customerPagerBox, 10)
                 .unsortable(customerIndexColumn, customerActionColumn)
-                .sortKey(customerTierColumn, Customer::getLoyaltyPoints) // rank by points, not by the label text
+                .sortKey(customerTierColumn, Customer::getTierPoints) // rank by the points that decide the tier (earned over time), not by the label text
                 .sortKey(customerVisitsColumn, c -> CustomerStats.of(stats, c.getId()).visits())
                 .sortKey(customerSpentColumn, c -> CustomerStats.of(stats, c.getId()).spent())
                 .sortKey(customerLastVisitColumn, c -> {
@@ -122,7 +122,7 @@ public class CustomerController {
         customerEmailColumn.setCellValueFactory(data -> new SimpleStringProperty(
                 data.getValue().getEmail() != null ? data.getValue().getEmail() : "-"));
         customerLoyaltyColumn.setCellValueFactory(data -> new SimpleIntegerProperty(data.getValue().getLoyaltyPoints()));
-        customerTierColumn.setCellValueFactory(data -> new SimpleStringProperty(LoyaltyPolicy.tierName(data.getValue().getLoyaltyPoints())));
+        customerTierColumn.setCellValueFactory(data -> new SimpleStringProperty(LoyaltyPolicy.tierName(data.getValue().getTierPoints())));
         customerVisitsColumn.setCellValueFactory(data -> new SimpleIntegerProperty(CustomerStats.of(stats, data.getValue().getId()).visits()));
         customerSpentColumn.setCellValueFactory(data -> {
             CustomerStats.Figures f = CustomerStats.of(stats, data.getValue().getId());
@@ -151,9 +151,8 @@ public class CustomerController {
         history.setDisable(true);
         history.setOnAction(e -> openPurchaseHistory());
         customerTable.getSelectionModel().selectedItemProperty().addListener((o, old, selected) -> history.setDisable(selected == null));
-        customerTable.setOnMouseClicked(e -> {
-            if (e.getClickCount() == 2) openPurchaseHistory();
-        });
+        customerTable.setOnMouseClicked(e -> { if (e.getClickCount() == 2) openPurchaseHistory(); });
+        CopyMenus.customers(customerTable, this::openEditDialog, history); // right-click menu (TODO 5.46)
         groupFilter = new javafx.scene.control.ComboBox<>(javafx.collections.FXCollections.observableArrayList(CustomerStats.Filter.values()));
         groupFilter.setPrefHeight(42);
         groupFilter.setValue(CustomerStats.Filter.ALL);
@@ -179,123 +178,8 @@ public class CustomerController {
             export.setPrefHeight(42);
             export.setOnAction(e -> exportCsv());
             bar.getChildren().add(at + 1, export);
-            addMergeButtons(bar, at + 2);
+            new CustomerMergeButtons(customerTable, this::reloadCustomers).addTo(bar, at + 2);
         }
-    }
-
-    /**
-     * \"Gộp khách trùng\", \"Ẩn danh hóa\" and \"Xóa\" for the selected customer (TODO 4.8 and 3.4, rule D21; administrators only,
-     * the rules are checked again in {@code CustomerMergeService}). An anonymous customer can only be looked at.
-     */
-    private void addMergeButtons(javafx.scene.layout.HBox bar, int at) {
-        Button merge = new Button(I18n.t("customers.button.merge"));
-        Button anonymise = new Button(I18n.t("customers.button.anonymise"));
-        Button delete = new Button(I18n.t("customers.button.delete"));
-        delete.getStyleClass().add("danger-button");
-        for (Button b : new Button[]{merge, anonymise, delete}) {
-            b.setPrefHeight(42);
-            b.setDisable(true);
-        }
-        customerTable.getSelectionModel().selectedItemProperty().addListener((o, old, selected) -> {
-            boolean none = selected == null || selected.isAnonymised();
-            merge.setDisable(none);
-            anonymise.setDisable(none);
-            delete.setDisable(selected == null);
-        });
-        merge.setOnAction(e -> handleMerge());
-        anonymise.setOnAction(e -> handleAnonymise());
-        delete.setOnAction(e -> handleDelete());
-        bar.getChildren().addAll(at, java.util.List.of(merge, anonymise, delete));
-    }
-
-    private void handleMerge() {
-        Customer duplicate = customerTable.getSelectionModel().getSelectedItem();
-        if (duplicate == null) {
-            AlertUtil.info(I18n.t("customers.button.merge"), I18n.t("customers.none.selected"));
-            return;
-        }
-        java.util.Optional<Customer> chosen = CustomerPickerDialog.choose(I18n.t("customers.merge.pick.title"),
-                I18n.t("customers.merge.pick.intro", duplicate));
-        if (chosen.isEmpty()) return;
-        Customer keep = chosen.get();
-        if (keep.getId() == duplicate.getId()) {
-            AlertUtil.warning(I18n.t("customers.merge.pick.title"), I18n.t("customers.merge.same"));
-            return;
-        }
-        Async.run(
-                () -> mergeService.impact(duplicate.getId()),
-                impact -> {
-                    if (!AlertUtil.confirm(I18n.t("customers.merge.confirm.title"), I18n.t("customers.merge.confirm",
-                            duplicate, keep, impact.orders(), impact.points()))) {
-                        return;
-                    }
-                    Async.run(
-                            () -> mergeService.merge(keep.getId(), duplicate.getId()),
-                            result -> {
-                                AlertUtil.info(I18n.t("customers.merge.pick.title"), I18n.t("customers.merge.done",
-                                        result.ordersMoved(), result.pointsMoved(), result.keptName()));
-                                reloadCustomers();
-                            },
-                            error -> AlertUtil.error(I18n.t("customers.merge.fail"), error.getMessage()),
-                            customerTable);
-                },
-                error -> AlertUtil.error(I18n.t("customers.merge.fail"), error.getMessage()),
-                customerTable);
-    }
-
-    private void handleAnonymise() {
-        Customer target = customerTable.getSelectionModel().getSelectedItem();
-        if (target == null) {
-            AlertUtil.info(I18n.t("customers.anon.title"), I18n.t("customers.none.selected"));
-            return;
-        }
-        Async.run(
-                () -> mergeService.impact(target.getId()),
-                impact -> {
-                    if (!AlertUtil.confirm(I18n.t("customers.anon.title"),
-                            I18n.t("customers.anon.confirm", target.getFullName(), impact.orders()))) {
-                        return;
-                    }
-                    Async.run(
-                            () -> {
-                                mergeService.anonymise(target.getId());
-                                return Boolean.TRUE;
-                            },
-                            done -> reloadCustomers(),
-                            error -> AlertUtil.error(I18n.t("customers.anon.fail"), error.getMessage()),
-                            customerTable);
-                },
-                error -> AlertUtil.error(I18n.t("customers.anon.fail"), error.getMessage()),
-                customerTable);
-    }
-
-    private void handleDelete() {
-        Customer target = customerTable.getSelectionModel().getSelectedItem();
-        if (target == null) {
-            AlertUtil.info(I18n.t("customers.delete.title"), I18n.t("customers.none.selected"));
-            return;
-        }
-        Async.run(
-                () -> mergeService.impact(target.getId()),
-                impact -> {
-                    if (!impact.deletable()) { // orders, points or a login: the reports would change, so only anonymising is left
-                        AlertUtil.info(I18n.t("customers.delete.title"), I18n.t("customers.delete.used"));
-                        return;
-                    }
-                    if (!AlertUtil.confirm(I18n.t("customers.delete.title"), I18n.t("customers.delete.confirm", target.getFullName()))) {
-                        return;
-                    }
-                    Async.run(
-                            () -> mergeService.delete(target.getId()),
-                            deleted -> {
-                                if (!deleted) AlertUtil.info(I18n.t("customers.delete.title"), I18n.t("customers.delete.used"));
-                                reloadCustomers();
-                            },
-                            error -> AlertUtil.error(I18n.t("customers.delete.fail"), error.getMessage()),
-                            customerTable);
-                },
-                error -> AlertUtil.error(I18n.t("customers.delete.fail"), error.getMessage()),
-                customerTable);
     }
 
     private void openPurchaseHistory() {
@@ -320,8 +204,8 @@ public class CustomerController {
         Async.run(
                 () -> {
                     com.coffeeshop.coffeeshopmanagement.util.Permissions.requireAdmin("export customers");
-                    List<Customer> all = customerDAO.findAll();
-                    java.util.Map<Integer, CustomerStats.Figures> figures = CustomerStats.aggregate(customerDAO.paidOrderRows());
+                    List<Customer> all = customerService.findAll();
+                    java.util.Map<Integer, CustomerStats.Figures> figures = customerService.figures();
                     com.coffeeshop.coffeeshopmanagement.util.ExportCsv.write(file.toPath(),
                             com.coffeeshop.coffeeshopmanagement.util.ExportCsv.customers(all, figures));
                     com.coffeeshop.coffeeshopmanagement.util.SecurityLog.event("exported " + all.size() + " customers to CSV");
@@ -339,7 +223,7 @@ public class CustomerController {
 
     private void reloadCustomers() {
         Async.run(
-                () -> new Loaded(customerDAO.findAll(), CustomerStats.aggregate(customerDAO.paidOrderRows())),
+                () -> new Loaded(customerService.findAll(), customerService.figures()),
                 result -> { allCustomers = result.customers(); stats = result.stats(); applyFilter(); },
                 error -> AlertUtil.error(I18n.t("dashboard.load.title"), I18n.t("customers.load.error", error.getMessage()))
         );
@@ -387,14 +271,14 @@ public class CustomerController {
         TextField phoneField = new TextField(existing != null ? existing.getPhone() : "");
         TextLengthLimiter.limit(phoneField, TextLengthLimiter.PHONE_MAX);
         // The phone is the customer's identity (loyalty points follow it), so only an administrator may change it (TODO 2A.24).
-        final String originalPhone = existing != null && existing.getPhone() != null
-                ? ValidationUtil.normalizePhone(existing.getPhone()) : "";
         if (existing != null && !Session.isAdmin()) {
             phoneField.setDisable(true);
             phoneField.setTooltip(new javafx.scene.control.Tooltip(I18n.t("customers.phone.adminonly")));
         }
         TextField emailField = new TextField(existing != null ? existing.getEmail() : "");
         TextLengthLimiter.limit(emailField, TextLengthLimiter.EMAIL_MAX);
+        javafx.scene.control.DatePicker birthdayField = com.coffeeshop.coffeeshopmanagement.util.DateBoxes.picker(existing != null ? existing.getBirthday() : null);
+        birthdayField.setPromptText(I18n.t("birthday.prompt"));
 
         GridPane grid = new GridPane();
         grid.setHgap(10);
@@ -403,55 +287,26 @@ public class CustomerController {
         grid.addRow(0, new Label(I18n.t("customers.label.name")), nameField);
         grid.addRow(1, new Label(I18n.t("customers.label.phone")), phoneField);
         grid.addRow(2, new Label("Email:"), emailField);
+        grid.addRow(3, new Label(I18n.t("birthday.label")), birthdayField);
         dialog.getDialogPane().setContent(grid);
 
         Button saveButton = (Button) dialog.getDialogPane().lookupButton(saveButtonType);
         saveButton.addEventFilter(ActionEvent.ACTION, event -> {
-            if (ValidationUtil.isBlank(nameField.getText())) {
-                AlertUtil.warning(I18n.t("common.missing.title"), I18n.t("customers.val.name"));
-                event.consume();
-                return;
-            }
-            if (!ValidationUtil.isBlank(phoneField.getText()) && !ValidationUtil.isValidPhone(phoneField.getText())) {
-                AlertUtil.warning(I18n.t("customers.val.phone.title"), I18n.t("customers.val.phone.message"));
-                event.consume();
-                return;
-            }
-            if (!ValidationUtil.isBlank(emailField.getText()) && !ValidationUtil.isValidEmail(emailField.getText())) {
-                AlertUtil.warning(I18n.t("customers.val.email.title"), I18n.t("customers.val.email.message"));
-                event.consume();
-                return;
-            }
-            if (!ValidationUtil.isBlank(phoneField.getText())
-                    && customerDAO.existsByPhone(phoneField.getText().trim(), existing != null ? existing.getId() : 0)) {
-                AlertUtil.warning(I18n.t("customers.val.dup.title"), I18n.t("customers.val.dup.message"));
-                event.consume();
-                return;
-            }
-            String typedPhone = ValidationUtil.isBlank(phoneField.getText()) ? "" : ValidationUtil.normalizePhone(phoneField.getText());
-            boolean phoneChanged = existing != null && !typedPhone.equals(originalPhone);
-            if (phoneChanged && !Session.isAdmin()) {
-                AlertUtil.warning(I18n.t("admin.only.title"), I18n.t("customers.phone.adminonly"));
-                event.consume();
-                return;
-            }
-            if (phoneChanged) {
-                com.coffeeshop.coffeeshopmanagement.util.SecurityLog.event(com.coffeeshop.coffeeshopmanagement.util.SecurityLog.actor()
-                        + " changed the phone of customer id " + existing.getId());
-            }
-            Customer customer = existing != null ? existing : new Customer();
-            customer.setFullName(nameField.getText().trim());
-            customer.setPhone(ValidationUtil.isBlank(phoneField.getText()) ? null : phoneField.getText().trim());
-            customer.setEmail(ValidationUtil.isBlank(emailField.getText()) ? null : emailField.getText().trim());
+            // The rules are in CustomerService.save (TODO 6.21); this only asks it and shows the answer. It stays on the screen
+            // thread because the dialog has to know before it closes whether to stay open.
+            CustomerService.SaveResult result;
             try {
-                if (existing == null) {
-                    customer.setLoyaltyPoints(0);
-                    customerDAO.insert(customer);
-                } else {
-                    customerDAO.update(customer);
-                }
+                result = customerService.save(existing, new CustomerService.Form(nameField.getText(), phoneField.getText(),
+                        emailField.getText(), birthdayField.getValue()), AppClock.today());
             } catch (DataAccessException ex) {
                 AlertUtil.error(I18n.t("customers.save.fail"), ex.getMessage());
+                event.consume();
+                return;
+            }
+            if (!result.ok()) {
+                CustomerFormRules.Problem problem = result.problem();
+                AlertUtil.warning(I18n.t(problem.titleKey()),
+                        problem.messageKey() != null ? I18n.t(problem.messageKey()) : result.detail());
                 event.consume();
             }
         });
@@ -478,65 +333,5 @@ public class CustomerController {
                 setGraphic(empty ? null : editButton);
             }
         };
-    }
-
-    // =================================================================== Navigation
-    // Duplicated from AdminScreen/OrderController rather than shared - see OrderController's
-    // javadoc for the reasoning; this is now the third occurrence, worth extracting to a shared
-    // base class next time a new screen needs the same navigation set.
-
-    @FXML
-    public void openDashboard(ActionEvent event) {
-        String target = Session.isAdmin() ? "/fxml/admin-trangchu.fxml" : "/fxml/employee-trangchu.fxml";
-        SceneNavigator.switchScene(event, target);
-    }
-
-    @FXML
-    public void openProductManagement(ActionEvent event) {
-        if (!Session.isAdmin()) {
-            AlertUtil.warning(I18n.t("admin.only.title"), I18n.t("admin.only.message"));
-            return;
-        }
-        SceneNavigator.switchScene(event, "/fxml/quanlysanpham.fxml");
-    }
-
-    @FXML
-    public void openOrderManagement(ActionEvent event) {
-        SceneNavigator.switchScene(event, "/fxml/quanlydonhang.fxml");
-    }
-
-    @FXML
-    public void openCategoryManagement(ActionEvent event) {
-        if (!Session.isAdmin()) {
-            AlertUtil.warning(I18n.t("admin.only.title"), I18n.t("admin.only.message"));
-            return;
-        }
-        SceneNavigator.switchScene(event, "/fxml/quanlydanhmuc.fxml");
-    }
-
-    @FXML
-    public void openAccountManagement(ActionEvent event) {
-        if (!Session.isAdmin()) {
-            AlertUtil.warning(I18n.t("admin.only.title"), I18n.t("admin.only.message"));
-            return;
-        }
-        SceneNavigator.switchScene(event, "/fxml/quanlytaikhoan.fxml");
-    }
-
-    @FXML
-    public void openStaffManagement(ActionEvent event) {
-        if (!Session.isAdmin()) {
-            AlertUtil.warning(I18n.t("admin.only.title"), I18n.t("admin.only.message"));
-            return;
-        }
-        SceneNavigator.switchScene(event, "/fxml/quanlynhanvien.fxml");
-    }
-
-    @FXML
-    public void logout(ActionEvent event) {
-        BackupDialogs.offerBeforeLeaving(BackupDialogs.windowOf(event), () -> { // TODO 5.18
-            Session.clear();
-            SceneNavigator.switchScene(event, "/fxml/dangnhap.fxml");
-        });
     }
 }

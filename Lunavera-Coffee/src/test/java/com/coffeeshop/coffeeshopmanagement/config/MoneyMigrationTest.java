@@ -136,7 +136,12 @@ public class MoneyMigrationTest {
         Path file = Files.createTempFile("lunavera-old-db-later-columns", ".db");
         try (Connection c = DriverManager.getConnection("jdbc:sqlite:" + file.toAbsolutePath())) {
             buildOldDatabase(c);
-            DatabaseConfig.addLaterColumns(c);   // the first pass of start-up, before the migration
+            // The first pass of start-up, as the program does it (TODO 2.90): every CREATE TABLE IF NOT EXISTS first, which gives an
+            // old file the tables it never had (shift_closes, gift_cards...), then the later columns, then the migration.
+            try (Statement st = c.createStatement()) {
+                for (String ddl : SqliteSchema.TABLES) st.execute(ddl);
+            }
+            DatabaseConfig.addLaterColumns(c);
             assertEquals(1, one(c, "SELECT COUNT(*) FROM pragma_table_info('orders') WHERE name = 'cash_received'"));
 
             MoneyMigration.runIfNeeded(c, 1);

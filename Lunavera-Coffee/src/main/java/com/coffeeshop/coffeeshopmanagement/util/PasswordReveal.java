@@ -82,9 +82,14 @@ public final class PasswordReveal {
     /** Open eye while the password is hidden (click to show); crossed-out eye while it is visible. */
     private static SVGPath icon(boolean passwordShown) {
         SVGPath path = new SVGPath();
-        path.setContent(passwordShown ? EYE + SLASH : EYE);
+        path.setContent(iconContent(passwordShown));
         path.getStyleClass().add("password-eye-icon");
         return path;
+    }
+
+    /** The outline of the eye: open while the password is hidden, with a slash through it while it is shown. */
+    static String iconContent(boolean passwordShown) {
+        return passwordShown ? EYE + SLASH : EYE;
     }
 
     /** Length cap for a password field. Call before {@link #install}, so the revealed copy inherits it. */

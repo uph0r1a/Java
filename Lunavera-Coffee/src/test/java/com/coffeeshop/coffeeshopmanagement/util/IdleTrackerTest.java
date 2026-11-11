@@ -1,9 +1,17 @@
 package com.coffeeshop.coffeeshopmanagement.util;
 
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 
 import static org.junit.Assert.*;
 
@@ -82,15 +90,101 @@ public class IdleTrackerTest {
         assertFalse(real.isIdle(Duration.ofSeconds(5)));
     }
 
+    /** Collects what IdleTracker writes to the log, so a test can see the WARNING (TODO 3.79). */
+    private static final class Capture extends Handler {
+        final List<String> warnings = new ArrayList<>();
+
+        @Override
+        public void publish(LogRecord record) {
+            if (record.getLevel().intValue() >= Level.WARNING.intValue()) warnings.add(record.getMessage());
+        }
+
+        @Override
+        public void flush() {
+        }
+
+        @Override
+        public void close() {
+        }
+    }
+
+    private Capture capture;
+    private Logger logger;
+
+    @Before
+    public void listenToTheLog() {
+        IdleTracker.forgetWarnings();
+        logger = Logger.getLogger(IdleTracker.class.getName());
+        capture = new Capture();
+        logger.addHandler(capture);
+    }
+
+    @After
+    public void stopListening() {
+        logger.removeHandler(capture);
+        IdleTracker.forgetWarnings();
+    }
+
     @Test
     public void theSettingIsReadInMinutes() {
         assertEquals(Duration.ofMinutes(15), IdleTracker.limitFromSetting(null));
         assertEquals(Duration.ofMinutes(15), IdleTracker.limitFromSetting(""));
-        assertEquals(Duration.ofMinutes(15), IdleTracker.limitFromSetting("soon"));
+        assertEquals(Duration.ofMinutes(15), IdleTracker.limitFromSetting("   "));
         assertEquals(Duration.ofMinutes(30), IdleTracker.limitFromSetting("30"));
-        assertEquals(Duration.ofSeconds(30), IdleTracker.limitFromSetting("0.5"));
+        assertEquals(Duration.ofMinutes(30), IdleTracker.limitFromSetting(" 30 "));
         assertEquals(Duration.ofSeconds(90), IdleTracker.limitFromSetting("1,5"));
+        assertEquals(Duration.ofSeconds(90), IdleTracker.limitFromSetting("1.5"));
+        assertEquals(Duration.ofMinutes(1), IdleTracker.limitFromSetting("1"));
+        assertEquals("a day is the longest", Duration.ofMinutes(1440), IdleTracker.limitFromSetting("1440"));
+        assertTrue("a missing or good value writes no warning", capture.warnings.isEmpty());
+    }
+
+    @Test
+    public void aValueThatMakesNoSenseGivesTheDefaultAndAWarningNamingIt() {
+        String[] refused = {"NaN", "-5", "Infinity", "-Infinity", "1e9", "abc", "soon", "0,5", "0.5", "1441", "999999", "5d", "0x10", "1 5", "--1"};
+        for (String value : refused) {
+            capture.warnings.clear();
+            IdleTracker.forgetWarnings();
+            assertEquals("'" + value + "' must not turn the lock off or make it huge", Duration.ofMinutes(15), IdleTracker.limitFromSetting(value));
+            assertEquals("one warning for '" + value + "'", 1, capture.warnings.size());
+            assertTrue("the warning names the refused value " + value, capture.warnings.get(0).contains("\"" + value + "\""));
+        }
+    }
+
+    @Test
+    public void zeroTurnsTheAutoLockOffOnPurposeAndIsLoggedAsAWarning() {
         assertEquals(Duration.ZERO, IdleTracker.limitFromSetting("0"));
-        assertEquals(Duration.ZERO, IdleTracker.limitFromSetting("-5"));
+        assertEquals(1, capture.warnings.size());
+        assertTrue(capture.warnings.get(0).contains("switched off on purpose"));
+        assertEquals(Duration.ZERO, IdleTracker.limitFromSetting("0.0"));
+        assertEquals(Duration.ZERO, IdleTracker.limitFromSetting("00"));
+    }
+
+    @Test
+    public void theSameWarningIsNotWrittenEveryTimeTheLimitIsRead() {
+        for (int i = 0; i < 50; i++) IdleTracker.limitFromSetting("abc"); // the limit is read every ten seconds
+        assertEquals(1, capture.warnings.size());
+        IdleTracker.limitFromSetting("xyz");
+        assertEquals("another bad value is another warning", 2, capture.warnings.size());
+    }
+
+    @Test
+    public void aVeryLongValueIsCutInTheLog() {
+        IdleTracker.limitFromSetting("9".repeat(500));
+        assertEquals(1, capture.warnings.size());
+        assertTrue(capture.warnings.get(0).length() < 250);
+    }
+
+    @Test
+    public void theOwnersSettingFollowsTheSameRules() {
+        assertEquals(Duration.ofMinutes(45), IdleTracker.limit(null, 45));
+        assertEquals(Duration.ofMinutes(1440), IdleTracker.limit(" ", 1440));
+        assertTrue(capture.warnings.isEmpty());
+        assertEquals("0 in Settings is off on purpose", Duration.ZERO, IdleTracker.limit(null, 0));
+        assertEquals(1, capture.warnings.size());
+        assertEquals("a negative value is not 'off'", Duration.ofMinutes(15), IdleTracker.limit(null, -5));
+        assertEquals("a value above a day is not taken", Duration.ofMinutes(15), IdleTracker.limit("", 100_000));
+        assertEquals(3, capture.warnings.size());
+        assertEquals("the override wins, and is checked too", Duration.ofMinutes(15), IdleTracker.limit("NaN", 45));
     }
 }

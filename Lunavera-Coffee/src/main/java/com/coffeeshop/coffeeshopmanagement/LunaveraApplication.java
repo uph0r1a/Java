@@ -31,12 +31,18 @@ public class LunaveraApplication extends Application {
     /** Outcome of a restore that was prepared in the previous run (TODO 2.8); start() tells the person. */
     private BackupService.RestoreResult restoreResult = new BackupService.RestoreResult(BackupService.RestoreOutcome.NOTHING_PENDING, "");
 
+    /** The folder of a shop this computer used before, when the folder now in use is empty (TODO 3.69); asked about in start(). */
+    private java.nio.file.Path shopElsewhere;
+
     @Override
     public void init() {
+        // Before anything is written to the data folder: is the program about to make a second, empty shop? (TODO 3.69)
+        shopElsewhere = com.coffeeshop.coffeeshopmanagement.util.DataPaths.existingShopElsewhere();
         // File logging first, so a problem during DB setup itself (schema creation, migration,
         // seeding) still ends up in data/logs/ and not just a console nobody sees
         // during normal desktop use.
         try {
+            com.coffeeshop.coffeeshopmanagement.util.ShopZone.install(); // before anything is dated (TODO 3.68)
             AppLogging.install();
             com.coffeeshop.coffeeshopmanagement.util.CrashHandler.install(); // unhandled errors reach the log (TODO 2.24)
             // A second copy on the same data folder could overwrite the database under the first (TODO 3.3, 3.33).
@@ -54,21 +60,56 @@ public class LunaveraApplication extends Application {
             }
             // A restore chosen last time must be applied before the database is opened.
             restoreResult = BackupService.applyPendingRestore();
-            // Runs on the JavaFX launcher thread before start(), so the login screen never shows
-            // until the schema exists; on a first run with no accounts the first-run window then asks the owner to create the administrator.
-            DatabaseConfig.initialize();
-            // Daily automatic backup (and pruning), off the start-up path: a failure is only logged.
-            Thread backup = new Thread(BackupService::autoBackupIfDue, "auto-backup");
-            backup.setDaemon(true);
-            backup.start();
-            // MariaDB shops also get an hourly SQLite snapshot (newest 10 kept); a no-op on a SQLite shop.
-            SqliteSnapshotService.start();
+            openDatabase();
         } catch (Throwable e) {
             // A locked or corrupt file, a full disk, a failed migration, a missing sqlite library: remember it and
             // tell the person in start(); letting it escape here meant the window just never appeared.
             LOGGER.log(Level.SEVERE, "The application could not start", e);
             startupError = e;
         }
+    }
+
+    /**
+     * Opens the database and does what must follow at once. Runs on the JavaFX launcher thread before start(), so the login screen
+     * never shows until the schema exists; on a first run with no accounts the first-run window then asks the owner to create the
+     * administrator. Also runs again from start() when the person chose the local file after "no database server" (TODO 5.40).
+     */
+    private void openDatabase() {
+        DatabaseConfig.initialize();
+        // Remember this folder, so a shortcut that starts the program somewhere else finds the same shop (TODO 3.69).
+        if (shopElsewhere == null) com.coffeeshop.coffeeshopmanagement.util.DataPaths.rememberCurrent();
+        // Daily automatic backup (and pruning), off the start-up path: a failure is only logged.
+        BackupService.autoBackupInBackground();
+        // MariaDB shops also get an hourly SQLite snapshot (newest 10 kept); a no-op on a SQLite shop.
+        SqliteSnapshotService.start();
+    }
+
+    /**
+     * First start with no database server and no settings file (TODO 5.40): shows the start-up problem with a button "Use the local
+     * file on this computer". Returns false when the person closed the box (the program then ends; the box already told them what
+     * was wrong). When they pressed the button it writes {@code data/database.properties} with {@code db.type=sqlite}, forgets what
+     * was resolved from the old settings and opens the database again: {@code startupError} is then null, or the new error when
+     * that failed too (the ordinary start-up box shows it).
+     */
+    private boolean offerLocalFile() {
+        String text = StartupProblem.describe(startupError) + "\n\n" + StartupProblem.localFileOffer();
+        if (!AlertUtil.errorWithChoice(StartupProblem.title(), text, I18n.t("startup.local.button"))) {
+            return false;
+        }
+        try {
+            java.nio.file.Path written = com.coffeeshop.coffeeshopmanagement.config.LocalFileChoice.write();
+            LOGGER.info("No database server was found; the local file was chosen and " + written + " written");
+            DatabaseConfig.reset(); // the settings and the address resolved from the missing file are forgotten
+            openDatabase();
+            startupError = null;
+        } catch (java.io.IOException e) {
+            LOGGER.log(Level.SEVERE, "The settings file for the local file could not be written", e);
+            startupError = new IllegalStateException(I18n.t("startup.local.writefail", e.getMessage()), e);
+        } catch (Throwable e) {
+            LOGGER.log(Level.SEVERE, "The local file could not be opened", e);
+            startupError = e;
+        }
+        return true;
     }
 
     /** Asks on the FX thread (init() runs on the launcher thread) and waits for the answer; defaults to "no". */
@@ -108,15 +149,32 @@ public class LunaveraApplication extends Application {
             Platform.exit();
             return;
         }
+        // No settings file and no server: the box also offers the local file instead of only an error (TODO 5.40).
+        if (startupError != null && com.coffeeshop.coffeeshopmanagement.config.LocalFileChoice.applies() && !offerLocalFile()) {
+            Platform.exit();
+            return;
+        }
         if (startupError != null) {
             AlertUtil.errorWithDetails(StartupProblem.title(), StartupProblem.describe(startupError));
             Platform.exit();
             return;
         }
         if (restoreResult.outcome() == BackupService.RestoreOutcome.RESTORED) {
+            // TODO 4.2: written into the restored database, so it is the first line after the restore; nobody is signed in yet
+            com.coffeeshop.coffeeshopmanagement.dao.AuditDAO.recordQuietly(com.coffeeshop.coffeeshopmanagement.model.AuditAction.RESTORE_APPLIED,
+                    com.coffeeshop.coffeeshopmanagement.model.AuditTarget.BACKUP, null, null, null, null, null);
             AlertUtil.info(I18n.t("app.restore.done.title"), restoreResult.message());
         } else if (restoreResult.outcome() == BackupService.RestoreOutcome.FAILED) {
             AlertUtil.error(I18n.t("app.restore.failed.title"), restoreResult.message());
+        }
+        // The program was pointed at an empty folder while a shop exists elsewhere on this computer: ask before a second shop is made.
+        if (shopElsewhere != null && com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig.needsFirstRunSetup()) {
+            if (!AlertUtil.confirm(I18n.t("app.othershop.title"), I18n.t("app.othershop.message", shopElsewhere,
+                    com.coffeeshop.coffeeshopmanagement.util.DataPaths.dataDir()))) {
+                Platform.exit();
+                return;
+            }
+            com.coffeeshop.coffeeshopmanagement.util.DataPaths.rememberCurrent(); // the new shop is the one to find next time
         }
         // No built-in administrator: the owner creates the first one (TODO 2A.5). Exiting closes the program.
         if (com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig.needsFirstRunSetup()
@@ -130,8 +188,11 @@ public class LunaveraApplication extends Application {
         }
         try {
             String clockProblem = com.coffeeshop.coffeeshopmanagement.service.ClockCheck.problem(
-                    java.time.LocalDateTime.now(), new com.coffeeshop.coffeeshopmanagement.dao.OrderDAO().newestActivity());
+                    com.coffeeshop.coffeeshopmanagement.util.AppClock.now(), new com.coffeeshop.coffeeshopmanagement.dao.OrderDAO().newestActivity());
             if (clockProblem != null) AlertUtil.warning(I18n.t("app.clock.title"), clockProblem);
+            String zoneProblem = com.coffeeshop.coffeeshopmanagement.util.ShopZone.mismatchWarning(
+                    java.time.ZoneId.systemDefault(), com.coffeeshop.coffeeshopmanagement.util.AppClock.zone(), java.time.Instant.now());
+            if (zoneProblem != null) AlertUtil.warning(I18n.t("app.zone.title"), zoneProblem);
         } catch (RuntimeException e) {
             LOGGER.log(Level.WARNING, "Clock check failed", e);
         }
@@ -141,11 +202,7 @@ public class LunaveraApplication extends Application {
         if (cloudProblem != null) AlertUtil.warning(I18n.t("app.cloud.title"), cloudProblem);
         // The "daily" backup also runs while the app stays open for days (TODO 2.62): check once an hour.
         javafx.animation.Timeline hourly = new javafx.animation.Timeline(new javafx.animation.KeyFrame(
-                javafx.util.Duration.hours(1), e -> {
-                    Thread t = new Thread(BackupService::autoBackupIfDue, "auto-backup");
-                    t.setDaemon(true);
-                    t.start();
-                }));
+                javafx.util.Duration.hours(1), e -> BackupService.autoBackupInBackground()));
         hourly.setCycleCount(javafx.animation.Animation.INDEFINITE);
         hourly.play();
         SceneNavigator.setScreenDecorator(SidebarExtras::addButtons);
@@ -179,6 +236,8 @@ public class LunaveraApplication extends Application {
     public void stop() {
         // The last autosave must not die with its daemon thread (TODO 3.24); then give the data folder back.
         com.coffeeshop.coffeeshopmanagement.util.Async.flushOrdered(3000);
+        // A till that was open for days makes its backup now, with that last autosave in it (TODO 2.62); waits for it for 20 seconds at most.
+        BackupService.autoBackupBeforeExit(20_000);
         com.coffeeshop.coffeeshopmanagement.util.SingleInstance.release();
     }
 

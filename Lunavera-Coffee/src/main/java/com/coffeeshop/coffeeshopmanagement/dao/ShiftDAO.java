@@ -1,9 +1,13 @@
 package com.coffeeshop.coffeeshopmanagement.dao;
 
+import com.coffeeshop.coffeeshopmanagement.util.BusinessDay;
 import com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig;
 import com.coffeeshop.coffeeshopmanagement.config.SqlStatus;
 import com.coffeeshop.coffeeshopmanagement.model.ShiftClose;
+import com.coffeeshop.coffeeshopmanagement.service.AuditRules;
 import com.coffeeshop.coffeeshopmanagement.service.ShiftCash;
+import com.coffeeshop.coffeeshopmanagement.service.ShiftOpenOrders;
+import com.coffeeshop.coffeeshopmanagement.service.ShiftSheet;
 import com.coffeeshop.coffeeshopmanagement.util.AppClock;
 import com.coffeeshop.coffeeshopmanagement.util.DbTime;
 import com.coffeeshop.coffeeshopmanagement.util.I18n;
@@ -50,6 +54,30 @@ public class ShiftDAO {
             + "THEN COALESCE((SELECT SUM(cp.amount) FROM order_payments cp WHERE cp.order_id = o.id AND cp.method = 'CASH'), 0) "
             + "WHEN (o.payment_method = 'CASH' OR o.payment_method IS NULL) THEN o.total ELSE 0 END)";
 
+    /**
+     * The orders that are still unpaid, tables first by number, then take-away orders, for the warning of the close box (TODO 5.48).
+     * Every signed-in person may close a shift, so every signed-in person may read this, like {@link #summarize}.
+     */
+    public List<ShiftOpenOrders.Open> openOrders() {
+        String sql = "SELECT id, table_number, queue_no, total FROM orders WHERE status = " + SqlStatus.OPEN
+                + " ORDER BY CASE WHEN table_number IS NULL THEN 1 ELSE 0 END, table_number, id";
+        List<ShiftOpenOrders.Open> open = new ArrayList<>();
+        try (Connection connection = DatabaseConfig.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql);
+             ResultSet rs = statement.executeQuery()) {
+            while (rs.next()) {
+                int table = rs.getInt("table_number");
+                Integer tableNumber = rs.wasNull() ? null : table;
+                int queue = rs.getInt("queue_no");
+                Integer queueNo = rs.wasNull() ? null : queue;
+                open.add(new ShiftOpenOrders.Open(rs.getInt("id"), tableNumber, queueNo, Money.fromDong(rs.getLong("total"))));
+            }
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to list the unpaid orders", e);
+        }
+        return open;
+    }
+
     /** The end of the newest closed shift: where the next one starts; empty when no shift was ever closed. */
     public Optional<LocalDateTime> lastCloseEnd() {
         try (Connection connection = DatabaseConfig.getConnection()) {
@@ -66,9 +94,9 @@ public class ShiftDAO {
         }
     }
 
-    /** Where the shift being closed now starts: the end of the previous close, or the start of today. */
+    /** Where the shift being closed now starts: the end of the previous close, or the start of today's shop day (TODO 4.50). */
     public LocalDateTime currentShiftStart() {
-        return lastCloseEnd().orElse(AppClock.today().atStartOfDay());
+        return lastCloseEnd().orElse(BusinessDay.startOf(BusinessDay.today()));
     }
 
     /** The cash that was counted at the previous close: what the drawer starts the next shift with (the cashier may change it). */
@@ -118,9 +146,10 @@ public class ShiftDAO {
     static Summary summarize(Connection connection, LocalDateTime from, LocalDateTime to) throws SQLException {
         // Sales paid in the window minus refunds made in it (TODO 3.13): a refund made after a close belongs to the NEXT shift.
         String sign = "o." + SalesLedger.SIGN;
-        String sql = "SELECT COALESCE(o.paid_by, o.employee_id) AS who, MAX(e.full_name) AS who_name, COALESCE(SUM(" + sign + "), 0) AS orders, "
-                + "COALESCE(SUM(o.total * " + sign + "), 0) AS revenue, "
-                + "COALESCE(SUM(" + CASH_OF_ORDER + " * " + sign + "), 0) AS cash "
+        // A refunded line (TODO 4.37) takes money off this shift, cash only when it was given back in cash, and changes no order count.
+        String sql = "SELECT COALESCE(o.paid_by, o.employee_id) AS who, MAX(e.full_name) AS who_name, COALESCE(SUM(o." + SalesLedger.COUNT + "), 0) AS orders, "
+                + "COALESCE(SUM(o." + SalesLedger.TOTAL + " * " + sign + "), 0) AS revenue, "
+                + "COALESCE(SUM(o." + SalesLedger.CASH + " * " + sign + "), 0) AS cash "
                 + "FROM " + SalesLedger.forWindow() + " LEFT JOIN employees e ON e.id = COALESCE(o.paid_by, o.employee_id) "
                 + "GROUP BY COALESCE(o.paid_by, o.employee_id) ORDER BY revenue DESC, who";
         List<EmployeeShare> shares = new ArrayList<>();
@@ -143,6 +172,9 @@ public class ShiftDAO {
                 }
             }
         }
+        // Gift cards sold for cash in the window (TODO 7): the money is in the drawer though it is no sale, so it counts as cash here
+        // (the per-person shares and the revenue stay sales only).
+        cash += Money.toDong(GiftCardDAO.soldBetween(connection, from, to));
         return new Summary(orders, Money.fromDong(revenue), Money.fromDong(cash), shares);
     }
 
@@ -204,6 +236,9 @@ public class ShiftDAO {
                         id = keys.getInt(1);
                     }
                 }
+                AuditDAO.write(connection, com.coffeeshop.coffeeshopmanagement.model.AuditAction.SHIFT_CLOSED,
+                        com.coffeeshop.coffeeshopmanagement.model.AuditTarget.SHIFT, id, "#" + id, AuditRules.money(expected),
+                        AuditRules.money(countedCash), AuditRules.money(difference)); // TODO 4.2: expected -> counted, detail = the difference
                 connection.commit();
                 com.coffeeshop.coffeeshopmanagement.util.SecurityLog.event("closed a shift: counted " + Money.toDong(countedCash)
                         + ", expected " + Money.toDong(expected) + ", difference " + Money.toDong(difference));
@@ -216,6 +251,77 @@ public class ShiftDAO {
         } catch (SQLException e) {
             throw new DataAccessException("Failed to close the shift", e);
         }
+    }
+
+    /**
+     * The detail behind a closed shift's sheet (TODO 4.53) for the window {@code from <= time < to}: the takings per method of
+     * payment, the refunds made in the window (their sum, how many, and the part given back in cash), the discounts given on the
+     * sales of the window, and the net cash taken for gift cards. Worked out from the same ledger as the shift's own totals
+     * ({@link SalesLedger#forWindow()}), so a refund made after the close is in the NEXT shift, not in this one, and a reprint of an
+     * old sheet shows the same figures as the first print. Any signed-in person may read it: the cashier prints the sheet right
+     * after closing.
+     */
+    public ShiftSheet.Extras sheetExtras(LocalDateTime from, LocalDateTime to) {
+        String sign = "o." + SalesLedger.SIGN;
+        String sql = "SELECT COALESCE(SUM(CASE WHEN " + sign + " < 0 THEN o." + SalesLedger.TOTAL + " ELSE 0 END), 0) AS refunds, "
+                + "COALESCE(SUM(CASE WHEN " + sign + " < 0 THEN 1 ELSE 0 END), 0) AS refund_count, "
+                + "COALESCE(SUM(CASE WHEN " + sign + " < 0 THEN o." + SalesLedger.CASH + " ELSE 0 END), 0) AS refunds_cash, "
+                + "COALESCE(SUM(o.discount * o." + SalesLedger.COUNT + "), 0) AS discounts "
+                + "FROM " + SalesLedger.forWindow();
+        long refunds;
+        int refundCount;
+        long refundsCash;
+        long discounts;
+        BigDecimal giftCards;
+        List<ShiftSheet.DiscountShare> people;
+        try (Connection connection = DatabaseConfig.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            SalesLedger.bindWindow(statement, 1, DbTime.write(from), DbTime.write(to));
+            try (ResultSet rs = statement.executeQuery()) {
+                rs.next();
+                refunds = rs.getLong("refunds");
+                refundCount = rs.getInt("refund_count");
+                refundsCash = rs.getLong("refunds_cash");
+                discounts = rs.getLong("discounts");
+            }
+            giftCards = GiftCardDAO.soldBetween(connection, from, to);
+            people = discountsByPerson(connection, from, to);
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to total the shift sheet", e);
+        }
+        List<ShiftSheet.Method> methods = new ArrayList<>();
+        for (ReportDAO.PaymentSplit part : new ReportDAO().paymentSplit(from, to)) {
+            methods.add(new ShiftSheet.Method(part.method(), part.orders(), part.revenue()));
+        }
+        return new ShiftSheet.Extras(Money.fromDong(refunds), refundCount, Money.fromDong(refundsCash),
+                Money.fromDong(discounts), giftCards, methods, people);
+    }
+
+    /**
+     * The discounts of the window per person (TODO 4.53): the cashier who took the payment of each order (the one the shift totals
+     * of 4.6 name too; an order with no cashier is the employee who opened it), the orders of theirs that had a discount, and the
+     * discounts' sum, net of refunds like the rest of the sheet. Someone whose discounts cancel out (all refunded) is left out;
+     * the biggest comes first.
+     */
+    private static List<ShiftSheet.DiscountShare> discountsByPerson(Connection connection, LocalDateTime from, LocalDateTime to)
+            throws SQLException {
+        String who = "COALESCE(o.paid_by, o.employee_id)";
+        String sql = "SELECT MAX(e.full_name) AS who_name, "
+                + "COALESCE(SUM(CASE WHEN o.discount > 0 THEN o." + SalesLedger.COUNT + " ELSE 0 END), 0) AS orders, "
+                + "COALESCE(SUM(o.discount * o." + SalesLedger.COUNT + "), 0) AS amount "
+                + "FROM " + SalesLedger.forWindow() + " LEFT JOIN employees e ON e.id = " + who + " "
+                + "GROUP BY " + who + " HAVING COALESCE(SUM(o.discount * o." + SalesLedger.COUNT + "), 0) <> 0 "
+                + "ORDER BY amount DESC, " + who;
+        List<ShiftSheet.DiscountShare> people = new ArrayList<>();
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            SalesLedger.bindWindow(statement, 1, DbTime.write(from), DbTime.write(to));
+            try (ResultSet rs = statement.executeQuery()) {
+                while (rs.next()) {
+                    people.add(new ShiftSheet.DiscountShare(rs.getString("who_name"), rs.getInt("orders"), Money.fromDong(rs.getLong("amount"))));
+                }
+            }
+        }
+        return people;
     }
 
     /** The newest closed shifts first, at most {@code limit} (administrators only). */

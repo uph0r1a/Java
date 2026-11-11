@@ -1,7 +1,7 @@
 package com.coffeeshop.coffeeshopmanagement.controller;
 
+import com.coffeeshop.coffeeshopmanagement.service.TableService;
 import com.coffeeshop.coffeeshopmanagement.util.I18n;
-import com.coffeeshop.coffeeshopmanagement.dao.TableDAO;
 import com.coffeeshop.coffeeshopmanagement.model.DiningTable;
 import com.coffeeshop.coffeeshopmanagement.service.DashboardStatsService;
 import com.coffeeshop.coffeeshopmanagement.service.DashboardStatsService.DashboardStats;
@@ -41,11 +41,12 @@ import java.util.Map;
 public class AdminDashboardController extends AdminScreen {
 
     private final DashboardStatsService dashboardStatsService = new DashboardStatsService();
-    private final TableDAO tableDAO = new TableDAO();
+    private final TableService tableService = new TableService();
 
     // ---------------------------------------------------------------- Dashboard (admin-trangchu.fxml)
     @FXML private Label dashboardProductCountLabel;
     @FXML private Label dashboardLowStockNoteLabel;
+    @FXML private Label dashboardLowIngredientLabel;
     @FXML private Label todayOrderLabel;
     @FXML private Label dashboardGreetingLabel;
     @FXML private Label dashboardAccountNameLabel;
@@ -95,7 +96,7 @@ public class AdminDashboardController extends AdminScreen {
         }
         if (phpMyAdminBox != null) {
             // The button only makes sense when the data lives in a MariaDB/MySQL server.
-            boolean show = !com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig.isSqlite() && Session.isAdmin();
+            boolean show = !com.coffeeshop.coffeeshopmanagement.service.DatabaseInfo.isSqlite() && Session.isAdmin();
             phpMyAdminBox.setVisible(show);
             phpMyAdminBox.setManaged(show);
         }
@@ -152,7 +153,7 @@ public class AdminDashboardController extends AdminScreen {
     public void handleSecondBackupFolder() {
         if (!requireAdmin()) return;
         java.nio.file.Path current = com.coffeeshop.coffeeshopmanagement.service.SecondBackupFolder.configured();
-        Dialog<ButtonType> dialog = new Dialog<>();
+        Dialog<ButtonType> dialog = com.coffeeshop.coffeeshopmanagement.util.AlertUtil.configured(new Dialog<>());
         dialog.setTitle(I18n.t("backup2.title"));
         dialog.setHeaderText(I18n.t("backup2.intro"));
         Label where = new Label(current == null ? I18n.t("backup2.state.notset") : I18n.t("backup2.current", current));
@@ -224,8 +225,10 @@ public class AdminDashboardController extends AdminScreen {
         Button cancel = new Button(I18n.t("admin.restore.cancel.title"));
         cancel.setOnAction(e -> {
             if (AlertUtil.confirm(I18n.t("admin.restore.cancel.title"), I18n.t("admin.restore.cancel.message"))) {
-                BackupService.cancelPendingRestore();
-                refreshPendingRestoreBanner();
+                Async.run(() -> { // TODO 6.14: a file operation, in the background
+                    BackupService.cancelPendingRestore();
+                    return Boolean.TRUE;
+                }, done -> refreshPendingRestoreBanner(), error -> refreshPendingRestoreBanner());
             }
         });
         pendingRestoreBanner = new javafx.scene.layout.VBox(6, pendingRestoreText, cancel);
@@ -246,7 +249,7 @@ public class AdminDashboardController extends AdminScreen {
                         return null;
                     }
                     List<Integer> numbers = new ArrayList<>();
-                    new com.coffeeshop.coffeeshopmanagement.dao.TableDAO().findAll().forEach(t -> numbers.add(t.getTableNumber()));
+                    tableService.findAll().forEach(t -> numbers.add(t.getTableNumber()));
                     return numbers;
                 },
                 numbers -> {
@@ -291,17 +294,18 @@ public class AdminDashboardController extends AdminScreen {
 
     private void refreshPendingRestoreBanner() {
         if (pendingRestoreBanner == null) return;
-        java.util.Optional<java.time.LocalDateTime> since = BackupService.pendingSince();
-        pendingRestoreBanner.setVisible(since.isPresent());
-        pendingRestoreBanner.setManaged(since.isPresent());
-        since.ifPresent(t -> pendingRestoreText.setText(I18n.t("admin.restore.pending", t.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy")))));
+        Async.run(() -> BackupService.pendingSince(), since -> {
+            pendingRestoreBanner.setVisible(since.isPresent());
+            pendingRestoreBanner.setManaged(since.isPresent());
+            since.ifPresent(t -> pendingRestoreText.setText(I18n.t("admin.restore.pending", t.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy")))));
+        }, error -> { });
     }
 
     @FXML
     public void handleRestoreData() {
         if (!requireAdmin()) return;
-        if (!com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig.isSqlite()) {
-            AlertUtil.info(I18n.t("admin.restore.title"), BackupService.mariaDbRestoreHelp());
+        if (!com.coffeeshop.coffeeshopmanagement.service.DatabaseInfo.isSqlite()) {
+            MariaDbRestoreDialogs.start(restoreButton); // TODO 1.8: restores at once, after a safety copy
             return;
         }
         FileChooser chooser = new FileChooser();
@@ -314,48 +318,7 @@ public class AdminDashboardController extends AdminScreen {
         }
         java.io.File file = chooser.showOpenDialog(backupButton.getScene().getWindow());
         if (file == null) return;
-        // A backup locked with a passphrase (TODO 2A.4) asks for it first; a plain one passes null.
-        final char[] passphrase;
-        if (BackupService.isEncryptedBackup(file.toPath())) {
-            java.util.Optional<char[]> asked = BackupPassphraseDialog.askToOpen(file.getName());
-            if (asked.isEmpty()) return;
-            passphrase = asked.get();
-        } else {
-            passphrase = null;
-        }
-        // Check the file and show what it holds before anything is asked or parked (TODO 5.22).
-        Async.run(
-                () -> BackupService.inspect(file.toPath(), passphrase),
-                summary -> {
-                    if (!AlertUtil.confirm(I18n.t("admin.restore.title"),
-                            I18n.t("admin.restore.confirm", file.getName(), summary.describe()))) {
-                        return;
-                    }
-                    Async.run(
-                            () -> {
-                                try {
-                                    BackupService.scheduleRestore(file.toPath(), passphrase);
-                                    return file;
-                                } finally {
-                                    if (passphrase != null) java.util.Arrays.fill(passphrase, '\0');
-                                }
-                            },
-                            picked -> {
-                                refreshPendingRestoreBanner();
-                                if (AlertUtil.confirm(I18n.t("admin.restore.ready.title"),
-                                        I18n.t("admin.restore.ready.message"))) {
-                                    javafx.application.Platform.exit();
-                                } else {
-                                    AlertUtil.info(I18n.t("admin.restore.waiting.title"),
-                                            I18n.t("admin.restore.waiting.message"));
-                                }
-                            },
-                            error -> AlertUtil.error(I18n.t("admin.restore.fail"), error.getMessage()),
-                            restoreButton);
-                },
-                error -> AlertUtil.error(I18n.t("admin.restore.fail"), error.getMessage()),
-                restoreButton // a second click must not start a second look at the file (TODO 2.75)
-        );
+        RestoreFlow.start(file, restoreButton, this::refreshPendingRestoreBanner); // the passphrase, the look at the file and the parking (TODO 2A.4, 5.22)
     }
 
     @FXML
@@ -363,58 +326,14 @@ public class AdminDashboardController extends AdminScreen {
         ReportWindow.show();
     }
 
-    /** Admin only (TODO 2A.17 / 4.26): pick the bank-transfer QR picture and type the account holder and bank. */
+    /**
+     * Admin only (TODO 2A.17 / 4.26): the window to pick the bank-transfer QR picture, see it next to the account holder and bank, and
+     * save. Nothing is stored before Save ({@link TransferQrDialog}).
+     */
     @FXML
     public void handleSetTransferQr() {
         if (!requireAdmin()) return;
-        javafx.scene.control.TextArea info = new javafx.scene.control.TextArea();
-        info.setPromptText(I18n.t("admin.qr.holder.prompt"));
-        info.setPrefRowCount(3);
-        var current = com.coffeeshop.coffeeshopmanagement.util.TransferQrGuard.dataPicture();
-        current.ifPresent(p -> info.setText(com.coffeeshop.coffeeshopmanagement.util.TransferQrGuard.accountInfo(p)));
-        javafx.scene.control.Dialog<javafx.scene.control.ButtonType> dialog = new javafx.scene.control.Dialog<>();
-        dialog.setTitle(I18n.t("admin.qr.title"));
-        dialog.setHeaderText(I18n.t("admin.qr.intro"));
-        dialog.getDialogPane().setContent(info);
-        javafx.scene.control.ButtonType choose = new javafx.scene.control.ButtonType(I18n.t("common.pickimage"),
-                javafx.scene.control.ButtonBar.ButtonData.OK_DONE);
-        // A second way out (TODO 5.32): fix the holder or the bank without choosing the picture again.
-        javafx.scene.control.ButtonType textOnly = new javafx.scene.control.ButtonType(I18n.t("admin.qr.textonly"),
-                javafx.scene.control.ButtonBar.ButtonData.APPLY);
-        dialog.getDialogPane().getButtonTypes().addAll(choose, textOnly, javafx.scene.control.ButtonType.CANCEL);
-        javafx.scene.Node textOnlyButton = dialog.getDialogPane().lookupButton(textOnly);
-        if (textOnlyButton != null) textOnlyButton.setDisable(current.isEmpty()); // no picture yet: nothing to keep
-        java.nio.file.Path source;
-        while (true) {
-            javafx.scene.control.ButtonType answer = dialog.showAndWait().orElse(javafx.scene.control.ButtonType.CANCEL);
-            if (answer == textOnly) {
-                String typed = info.getText();
-                Async.run(() -> {
-                            com.coffeeshop.coffeeshopmanagement.util.TransferQrGuard.replaceInfo(
-                                    com.coffeeshop.coffeeshopmanagement.util.DataPaths.dataDir(), typed);
-                            return Boolean.TRUE;
-                        },
-                        saved -> AlertUtil.info(I18n.t("common.saved"), I18n.t("admin.qr.textonly.saved")),
-                        error -> AlertUtil.warning(I18n.t("admin.qr.fail"), String.valueOf(error.getMessage())));
-                return;
-            }
-            if (answer != choose) return;
-            FileChooser chooser = new FileChooser();
-            chooser.setTitle(I18n.t("admin.qr.choose"));
-            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter(I18n.t("common.image.filter"), "*.png", "*.jpg", "*.jpeg"));
-            java.io.File file = chooser.showOpenDialog(null);
-            if (file != null) {
-                source = file.toPath();
-                break;
-            }
-            // The file chooser was cancelled: back to the dialog with the typed text still in it, not a lost text.
-        }
-        String text = info.getText();
-        java.nio.file.Path chosen = source; // the loop above assigns it, so a lambda may not capture it directly
-        Async.run(() -> com.coffeeshop.coffeeshopmanagement.util.TransferQrGuard.replace(
-                        com.coffeeshop.coffeeshopmanagement.util.DataPaths.dataDir(), chosen, text),
-                stored -> AlertUtil.info(I18n.t("common.saved"), I18n.t("admin.qr.saved")),
-                error -> AlertUtil.warning(I18n.t("admin.qr.fail"), String.valueOf(error.getMessage())));
+        TransferQrDialog.show();
     }
 
     // =================================================================== Security log (TODO 4.44)
@@ -451,7 +370,7 @@ public class AdminDashboardController extends AdminScreen {
         table.getColumns().add(text);
         table.setPlaceholder(new Label(I18n.t("admin.seclog.empty")));
         table.setPrefSize(900, 420);
-        Dialog<ButtonType> dialog = new Dialog<>();
+        Dialog<ButtonType> dialog = com.coffeeshop.coffeeshopmanagement.util.AlertUtil.configured(new Dialog<>());
         dialog.setTitle(I18n.t("admin.seclog.title"));
         dialog.setHeaderText(I18n.t("admin.seclog.intro", entries.size()));
         dialog.getDialogPane().setContent(table);
@@ -488,15 +407,17 @@ public class AdminDashboardController extends AdminScreen {
         TableManagerDialog.show(this::loadHomeTableGrid);
     }
 
+    @FXML // ingredients and recipes (TODO 4.41)
+    public void handleManageIngredients() {
+        if (requireAdmin()) IngredientDialog.show(this::loadDashboardStats);
+    }
+
     /** The owner's settings window (TODO 4.7): shop name, address, phone, tables, low-stock level, bank details. */
     @FXML
     public void handleOpenSettings() {
         if (!requireAdmin()) return;
         SettingsDialog.show(this::loadHomeTableGrid, this::handleSetTransferQr, () -> {
-            javafx.stage.Window window = staleOrderLabel.getScene() == null ? null : staleOrderLabel.getScene().getWindow();
-            if (window instanceof javafx.stage.Stage stage) {
-                stage.setTitle(com.coffeeshop.coffeeshopmanagement.config.ShopSettings.cachedName());
-            }
+            DashboardWidgets.retitle(staleOrderLabel);
             loadDashboardStats(); // the low-stock count and list follow the new level
         });
     }
@@ -529,7 +450,7 @@ public class AdminDashboardController extends AdminScreen {
         files.setEditable(false);
         files.setPrefRowCount(12);
         files.setPrefColumnCount(48);
-        Dialog<ButtonType> dialog = new Dialog<>();
+        Dialog<ButtonType> dialog = com.coffeeshop.coffeeshopmanagement.util.AlertUtil.configured(new Dialog<>());
         dialog.setTitle(I18n.t("admin.pics.title"));
         dialog.setHeaderText(I18n.t("admin.pics.header", report.unused().size(),
                 com.coffeeshop.coffeeshopmanagement.util.FileSizeText.format(report.totalBytes())));
@@ -560,7 +481,7 @@ public class AdminDashboardController extends AdminScreen {
         boolean ok = AlertUtil.confirm(I18n.t("admin.php.title"),
                 I18n.t("admin.php.message"));
         if (!ok) return;
-        String url = com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig.phpMyAdminUrl();
+        String url = com.coffeeshop.coffeeshopmanagement.service.DatabaseInfo.phpMyAdminUrl();
         javafx.application.HostServices services = com.coffeeshop.coffeeshopmanagement.LunaveraApplication.hostServices();
         try {
             if (services == null) {
@@ -594,7 +515,7 @@ public class AdminDashboardController extends AdminScreen {
 
     private void applyDashboardStats(DashboardStats stats) {
         if (todayOrderLabel != null) todayOrderLabel.setText(String.valueOf(stats.todayOrders()));
-        if (todayRevenueLabel != null) todayRevenueLabel.setText(CurrencyUtil.format(stats.todayRevenue()));
+        if (todayRevenueLabel != null) DashboardWidgets.showRevenue(todayRevenueLabel, stats.todayRevenue(), stats.todayByMethod()); // TODO 4.30
         if (todayCustomerLabel != null) todayCustomerLabel.setText(String.valueOf(stats.todayCustomers()));
         if (paidOrderLabel != null) paidOrderLabel.setText(String.valueOf(stats.paidOrders()));
         if (openOrderLabel != null) openOrderLabel.setText(String.valueOf(stats.openOrders()));
@@ -620,11 +541,8 @@ public class AdminDashboardController extends AdminScreen {
         if (dashboardProductCountLabel != null) {
             dashboardProductCountLabel.setText(String.valueOf(stats.totalProducts()));
         }
-        if (dashboardLowStockNoteLabel != null) {
-            dashboardLowStockNoteLabel.setText(stats.lowStockCount() == 0
-                    ? I18n.t("stats.lowstock.none")
-                    : I18n.t("stats.lowstock.some", stats.lowStockCount()));
-        }
+        DashboardWidgets.setLowStockNote(dashboardLowStockNoteLabel, stats.lowStockCount());
+        DashboardWidgets.showLowIngredients(dashboardLowIngredientLabel, null); // TODO 4.41
         if (todayOrdersContainer != null) {
             DashboardWidgets.fillTodayOrders(todayOrdersContainer, stats.todayOrdersList());
         }
@@ -634,8 +552,8 @@ public class AdminDashboardController extends AdminScreen {
     private void loadHomeTableGrid() {
         if (homeTableGrid == null) return;
         Async.run(
-                tableDAO::findAll,
-                tables -> DashboardWidgets.fillTableGrid(homeTableGrid, tables, this::handleHomeTableClick),
+                () -> java.util.Map.entry(tableService.findAll(), ReservationPanel.badgesOrNone()),
+                loaded -> DashboardWidgets.fillTableGrid(homeTableGrid, loaded.getKey(), loaded.getValue(), this::handleHomeTableClick),
                 error -> AlertUtil.error(I18n.t("common.error.title"), I18n.t("dashboard.load.tables", error.getMessage()))
         );
     }

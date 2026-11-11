@@ -32,6 +32,10 @@ public final class SceneNavigator {
 
     /** The screen last put into each window, so a language change can load the same screen again (TODO 1.7). */
     private static final Map<Stage, String> SHOWN = new WeakHashMap<>();
+    /** The controller of that screen when it implements {@link ScreenWork}; guarded by the same lock as {@link #SHOWN}. */
+    private static final Map<Stage, ScreenWork> WORK = new WeakHashMap<>();
+    /** The receipt windows ({@link #loadAndShowNewWindow}): they are English whatever the language, so a change leaves them open. */
+    private static final java.util.Set<Stage> RECEIPT_WINDOWS = java.util.Collections.newSetFromMap(new WeakHashMap<>());
 
     /**
      * Every screen is loaded here with the current language's text: {@code %key} in an FXML file is looked up in
@@ -50,13 +54,42 @@ public final class SceneNavigator {
      * Loads the screen this window is showing once more, in the language now in use. Anything typed into it and not
      * saved is lost, so a screen that holds work in progress must not offer a language switch without asking first.
      */
-    public static void reloadCurrent(Stage stage) {
+    public static <T> T reloadCurrent(Stage stage) {
         String path;
         synchronized (SHOWN) {
             path = SHOWN.get(stage);
         }
-        if (path != null) {
-            switchScene(stage, path);
+        return path == null ? null : switchSceneAndGetController(stage, path);
+    }
+
+    /** The controller of the screen this window shows, when that screen can hold unsaved work (TODO 1.7); otherwise null. */
+    public static ScreenWork workOf(Stage stage) {
+        synchronized (SHOWN) {
+            return WORK.get(stage);
+        }
+    }
+
+    private static void rememberWork(Stage stage, Object controller) {
+        synchronized (SHOWN) {
+            if (controller instanceof ScreenWork work) {
+                WORK.put(stage, work);
+            } else {
+                WORK.remove(stage);
+            }
+        }
+    }
+
+    /**
+     * After a language change: closes the windows the main window opened (history, reports, audit log). Their text was filled in
+     * in the old language and they hold nothing the person typed; opening one again shows it in the new language. The receipt
+     * window stays: it is always English, and it may be in the middle of printing.
+     */
+    public static void closeLanguageBoundWindows(Stage main) {
+        for (javafx.stage.Window window : new java.util.ArrayList<>(javafx.stage.Window.getWindows())) {
+            if (window != main && window.isShowing() && window instanceof Stage stage && stage.getOwner() == main
+                    && !RECEIPT_WINDOWS.contains(stage)) {
+                stage.hide();
+            }
         }
     }
 
@@ -183,7 +216,9 @@ public final class SceneNavigator {
             Parent root = loader.load();
             showScreen(stage, root);
             remember(stage, fxmlPath);
-            return loader.getController();
+            T controller = loader.getController();
+            rememberWork(stage, controller);
+            return controller;
         } catch (IOException e) {
             LOGGER.log(Level.SEVERE, "Failed to load screen: " + fxmlPath, e);
             AlertUtil.error(I18n.t("nav.error.title"), I18n.t("nav.error.screen"));
@@ -204,6 +239,7 @@ public final class SceneNavigator {
             FXMLLoader loader = newLoader(fxmlPath, bundle);
             Parent root = loader.load();
             Stage stage = newOwnedStage();
+            RECEIPT_WINDOWS.add(stage);
             stage.setTitle(title);
         com.coffeeshop.coffeeshopmanagement.util.AppIcon.apply(stage);
             stage.setScene(new Scene(root));

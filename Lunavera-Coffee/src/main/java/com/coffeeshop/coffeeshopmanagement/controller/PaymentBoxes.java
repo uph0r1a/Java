@@ -12,6 +12,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 
 import java.util.Optional;
@@ -94,7 +95,10 @@ final class PaymentBoxes {
         if (activeOpenOrder != null && activeOpenOrder.getId() > 0) {
             Label note = new Label(I18n.t("pos.qr.note", com.coffeeshop.coffeeshopmanagement.util.OrderNumber.transferNote(activeOpenOrder.getId())));
             note.setStyle("-fx-font-weight: bold;");
-            box.getChildren().add(note);
+            int noteOrderId = activeOpenOrder.getId();
+            HBox noteRow = new HBox(8, note, CopyMenus.button(() -> com.coffeeshop.coffeeshopmanagement.util.CopyText.transferNote(noteOrderId))); // TODO 5.46
+            noteRow.setAlignment(Pos.CENTER);
+            box.getChildren().add(noteRow);
         }
         box.getChildren().addAll(new Label(I18n.t("pos.pay.transfer.ref")), transferRefField, transferReceivedBox);
         box.setAlignment(Pos.CENTER);

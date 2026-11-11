@@ -24,6 +24,13 @@ public class SqlDialectTest {
     }
 
     @Test
+    public void vietnameseOrderingIsSpelledPerDatabase() {
+        assertEquals("c.full_name COLLATE VN_ORDER", SqlDialect.SQLITE.vietnameseOrder("c.full_name"));
+        assertEquals("c.full_name COLLATE utf8mb4_unicode_ci", SqlDialect.MARIADB.vietnameseOrder("c.full_name"));
+        assertEquals("an expression works too", "COALESCE(a, b) COLLATE VN_ORDER", SqlDialect.SQLITE.vietnameseOrder("COALESCE(a, b)"));
+    }
+
+    @Test
     public void caseInsensitiveOrderingIsSpelledPerDatabase() {
         assertEquals("e.full_name COLLATE NOCASE", SqlDialect.SQLITE.caseInsensitive("e.full_name"));
         assertEquals("e.full_name COLLATE utf8mb4_unicode_ci", SqlDialect.MARIADB.caseInsensitive("e.full_name"));

@@ -1,12 +1,13 @@
 package com.coffeeshop.coffeeshopmanagement.controller;
 
-import com.coffeeshop.coffeeshopmanagement.dao.DataAccessException;
-import com.coffeeshop.coffeeshopmanagement.dao.ProductDAO;
-import com.coffeeshop.coffeeshopmanagement.dao.StockLogDAO;
+import com.coffeeshop.coffeeshopmanagement.service.IngredientService;
+import com.coffeeshop.coffeeshopmanagement.service.ProductService;
+import com.coffeeshop.coffeeshopmanagement.service.StockService;
 import com.coffeeshop.coffeeshopmanagement.model.Product;
 import com.coffeeshop.coffeeshopmanagement.model.StockLogEntry;
 import com.coffeeshop.coffeeshopmanagement.service.StockRules;
 import com.coffeeshop.coffeeshopmanagement.util.AlertUtil;
+import com.coffeeshop.coffeeshopmanagement.util.Async;
 import com.coffeeshop.coffeeshopmanagement.util.CurrencyUtil;
 import com.coffeeshop.coffeeshopmanagement.util.I18n;
 import com.coffeeshop.coffeeshopmanagement.util.MoneyParser;
@@ -39,7 +40,7 @@ import java.util.List;
  * a switch above it turns the same form into "Hao hụt" (TODO 4.33): goods thrown away or broken (product, how many, a required
  * reason), which lowers the stock. The bottom half is the log of the newest lines, receipts, waste and hand-typed stock numbers
  * alike, with who and when. Administrators only:
- * the buttons that open it are on the product screen, and {@link StockLogDAO} refuses anyone else.
+ * the buttons that open it are on the product screen, and {@link StockService} refuses anyone else.
  */
 public final class StockLogDialog {
 
@@ -54,8 +55,9 @@ public final class StockLogDialog {
      * @param onChanged called after a receipt was saved, so the caller can reload its product list
      */
     public static void show(List<Product> products, Runnable onChanged) {
-        StockLogDAO stockLogDAO = new StockLogDAO();
-        ProductDAO productDAO = new ProductDAO();
+        StockService stock = new StockService();
+        ProductService productService = new ProductService();
+        IngredientService ingredients = new IngredientService();
 
         Dialog<ButtonType> dialog = new Dialog<>();
         dialog.setTitle(I18n.t("stock.title"));
@@ -123,7 +125,22 @@ public final class StockLogDialog {
         form.addRow(row++, supplierLabel, supplierField);
         form.addRow(row++, noteLabel, noteField);
         form.addRow(row++, reasonLabel, reasonBox);
-        form.add(receiveButton, 1, row++);
+        Button historyButton = new Button(I18n.t("stock.history.button"));
+        historyButton.setOnAction(e -> {
+            Product chosen = productBox.getValue();
+            if (chosen == null) {
+                status.setText(I18n.t("stock.val.product"));
+                return;
+            }
+            // TODO 6.14: whether the stock is counted by recipe is read off the screen thread; the history opens when the answer is here
+            final int chosenId = chosen.getId();
+            final String chosenName = com.coffeeshop.coffeeshopmanagement.config.SeedNames.product(chosen.getName());
+            Async.run(() -> !ingredients.recipeOf(chosenId).isEmpty(),
+                    byRecipe -> StockHistoryDialog.showProduct(chosenId, chosenName, byRecipe ? I18n.t("stock.history.recipe") : null),
+                    error -> status.setText(error.getMessage()),
+                    historyButton);
+        });
+        form.add(new HBox(10, receiveButton, historyButton), 1, row++);
         GridPane.setHgrow(productBox, Priority.ALWAYS);
         // Cost, supplier and note belong to receiving; the reason belongs to waste. The hidden ones take no room.
         java.util.List<javafx.scene.Node> receiveOnly = java.util.List.of(costLabel, costField, supplierLabel, supplierField, noteLabel, noteField);
@@ -163,18 +180,15 @@ public final class StockLogDialog {
         table.getColumns().add(column(I18n.t("stock.col.supplier"), 120, e -> e.supplier() == null ? "" : e.supplier()));
         table.getColumns().add(column(I18n.t("stock.col.by"), 110, e -> e.employeeName() == null ? "" : e.employeeName()));
         table.getColumns().add(column(I18n.t("stock.col.note"), 150, e -> e.note() == null ? "" : e.note()));
-        Runnable reload = () -> {
-            try {
-                table.getItems().setAll(stockLogDAO.findRecent(null, SHOWN_LINES));
-            } catch (DataAccessException ex) {
-                AlertUtil.error(I18n.t("stock.title"), ex.getMessage());
-            }
-        };
+        // TODO 6.14: the log is read off the screen thread
+        Runnable reload = () -> Async.run(() -> stock.findRecent(null, SHOWN_LINES),
+                found -> table.getItems().setAll(found),
+                error -> AlertUtil.error(I18n.t("stock.title"), error.getMessage()));
         reload.run();
 
         // the choice list shows the stock in its text: after a save, refresh the product with the number the database holds now
-        java.util.function.Function<Product, Product> refreshProduct = product -> {
-            Product fresh = productDAO.findById(product.getId()).orElse(product);
+        // (the product itself is read again in the background step that saves; this only puts it in the list, on the screen thread)
+        java.util.function.BiFunction<Product, Product, Product> refreshProduct = (product, fresh) -> {
             int at = productBox.getItems().indexOf(product);
             if (at >= 0) productBox.getItems().set(at, fresh);
             productBox.setValue(fresh);
@@ -198,23 +212,26 @@ public final class StockLogDialog {
                     status.setText(I18n.t("stock.waste.val.reason"));
                     return;
                 }
-                try {
-                    int after = stockLogDAO.writeOff(product.getId(), quantity, reason);
-                    String shownName = com.coffeeshop.coffeeshopmanagement.config.SeedNames.product(product.getName());
-                    Product fresh = refreshProduct.apply(product);
-                    status.setText(fresh.getCost() == null
-                            ? I18n.t("stock.waste.saved.nocost", shownName, quantity, after)
-                            : I18n.t("stock.waste.saved", shownName, quantity, after,
-                                    CurrencyUtil.format(fresh.getCost().multiply(BigDecimal.valueOf(quantity)))));
-                    quantityField.clear();
-                    reasonBox.setValue(null);
-                    reasonBox.getEditor().clear();
-                    reload.run();
-                    if (onChanged != null) onChanged.run();
-                    quantityField.requestFocus();
-                } catch (DataAccessException ex) {
-                    status.setText(ex.getMessage());
-                }
+                final int productId = product.getId();
+                Async.run(() -> new Written(stock.writeOff(productId, quantity, reason),
+                                productService.findById(productId).orElse(product)),
+                        written -> {
+                            int after = written.after();
+                            String shownName = com.coffeeshop.coffeeshopmanagement.config.SeedNames.product(product.getName());
+                            Product fresh = refreshProduct.apply(product, written.fresh());
+                            status.setText(fresh.getCost() == null
+                                    ? I18n.t("stock.waste.saved.nocost", shownName, quantity, after)
+                                    : I18n.t("stock.waste.saved", shownName, quantity, after,
+                                            CurrencyUtil.format(fresh.getCost().multiply(BigDecimal.valueOf(quantity)))));
+                            quantityField.clear();
+                            reasonBox.setValue(null);
+                            reasonBox.getEditor().clear();
+                            reload.run();
+                            if (onChanged != null) onChanged.run();
+                            quantityField.requestFocus();
+                        },
+                        error -> status.setText(error.getMessage()),
+                        receiveButton);
                 return;
             }
             BigDecimal cost = null;
@@ -225,20 +242,33 @@ public final class StockLogDialog {
                     return;
                 }
             }
-            try {
-                int after = stockLogDAO.receive(product.getId(), quantity, cost, supplierField.getText(), noteField.getText());
-                status.setText(I18n.t("stock.saved", com.coffeeshop.coffeeshopmanagement.config.SeedNames.product(product.getName()),
-                        quantity, after));
-                quantityField.clear();
-                costField.clear();
-                noteField.clear();
-                refreshProduct.apply(product);
-                reload.run();
-                if (onChanged != null) onChanged.run();
-                quantityField.requestFocus();
-            } catch (DataAccessException ex) {
-                status.setText(ex.getMessage());
-            }
+            final BigDecimal price = cost;
+            final int productId = product.getId();
+            final String supplier = supplierField.getText();
+            final String note = noteField.getText();
+            // two background steps with the question to the cashier between them, on the screen thread: read the product as it is now,
+            // ask what to do with its cost, then save the receipt and read the product again
+            Async.run(() -> productService.findById(productId).orElse(product),
+                    current -> {
+                        com.coffeeshop.coffeeshopmanagement.service.ReceiptCost.Mode costMode = askCostMode(current, quantity, price);
+                        Async.run(() -> new Written(stock.receive(productId, quantity, price, supplier, note, costMode),
+                                        productService.findById(productId).orElse(product)),
+                                written -> {
+                                    status.setText(I18n.t("stock.saved", com.coffeeshop.coffeeshopmanagement.config.SeedNames.product(product.getName()),
+                                            quantity, written.after()));
+                                    quantityField.clear();
+                                    costField.clear();
+                                    noteField.clear();
+                                    refreshProduct.apply(product, written.fresh());
+                                    reload.run();
+                                    if (onChanged != null) onChanged.run();
+                                    quantityField.requestFocus();
+                                },
+                                error -> status.setText(error.getMessage()),
+                                receiveButton);
+                    },
+                    error -> status.setText(error.getMessage()),
+                    receiveButton);
         });
 
         VBox content = new VBox(12, form, status, new Label(I18n.t("stock.log.heading")), table);
@@ -246,6 +276,38 @@ public final class StockLogDialog {
         content.setPrefWidth(980);
         dialog.getDialogPane().setContent(content);
         dialog.showAndWait();
+    }
+
+    /** What a saved line brings back to the screen: the stock after it, and the product as the database holds it now. */
+    private record Written(int after, Product fresh) {
+    }
+
+    /**
+     * When goods arrive at a price different from the product's cost (TODO 4.52), asks what to do with the cost: keep it (the default
+     * and what closing the box does), set it to the new price, or use the average of the stock in hand and what arrived.
+     */
+    private static com.coffeeshop.coffeeshopmanagement.service.ReceiptCost.Mode askCostMode(Product product, int quantity, BigDecimal price) {
+        var Mode = com.coffeeshop.coffeeshopmanagement.service.ReceiptCost.Mode.class;
+        if (!com.coffeeshop.coffeeshopmanagement.service.ReceiptCost.differs(product.getCost(), price) || quantity <= 0) {
+            return com.coffeeshop.coffeeshopmanagement.service.ReceiptCost.Mode.KEEP;
+        }
+        String name = com.coffeeshop.coffeeshopmanagement.config.SeedNames.product(product.getName());
+        String old = product.getCost() == null ? I18n.t("stock.cost.none") : CurrencyUtil.format(product.getCost());
+        BigDecimal average = com.coffeeshop.coffeeshopmanagement.service.ReceiptCost.average(product.getStock(), product.getCost(), quantity, price);
+        javafx.scene.control.ButtonType keep = new javafx.scene.control.ButtonType(I18n.t("stock.cost.keep"), javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE);
+        javafx.scene.control.ButtonType set = new javafx.scene.control.ButtonType(I18n.t("stock.cost.set", CurrencyUtil.format(price)), javafx.scene.control.ButtonBar.ButtonData.YES);
+        javafx.scene.control.ButtonType avg = new javafx.scene.control.ButtonType(I18n.t("stock.cost.average", CurrencyUtil.format(average)), javafx.scene.control.ButtonBar.ButtonData.OTHER);
+        javafx.scene.control.Alert alert = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.CONFIRMATION,
+                I18n.t("stock.cost.ask", name, old, CurrencyUtil.format(price)), keep, set, avg);
+        alert.setTitle(I18n.t("stock.title"));
+        alert.setHeaderText(null);
+        AlertUtil.configure(alert);
+        AlertUtil.setDefaultButton(alert, keep); // Enter = keep: a habitual Enter must not change the cost
+        AlertUtil.setCancelButton(alert, keep);
+        javafx.scene.control.ButtonType chosen = alert.showAndWait().orElse(keep);
+        return chosen == set ? com.coffeeshop.coffeeshopmanagement.service.ReceiptCost.Mode.REPLACE
+                : chosen == avg ? com.coffeeshop.coffeeshopmanagement.service.ReceiptCost.Mode.AVERAGE
+                : com.coffeeshop.coffeeshopmanagement.service.ReceiptCost.Mode.KEEP;
     }
 
     private static TableColumn<StockLogEntry, String> column(String title, double width,

@@ -5,6 +5,7 @@ import com.coffeeshop.coffeeshopmanagement.model.Category;
 import com.coffeeshop.coffeeshopmanagement.model.Order;
 import com.coffeeshop.coffeeshopmanagement.model.OrderItem;
 import com.coffeeshop.coffeeshopmanagement.model.OrderStatus;
+import com.coffeeshop.coffeeshopmanagement.model.PaymentLine;
 import com.coffeeshop.coffeeshopmanagement.model.PaymentMethod;
 import com.coffeeshop.coffeeshopmanagement.model.Product;
 import com.coffeeshop.coffeeshopmanagement.util.AppClock;
@@ -241,5 +242,88 @@ public class SplitPaymentTest {
         } catch (DataAccessException expected) {
             // nothing saved
         }
+    }
+
+    // ------------------------------------------------------------------ any number of methods (D4, as the owner answered)
+
+    private Order paidWith(String total, PaymentMethod main, List<PaymentLine> lines, LocalDateTime at) {
+        Order order = new Order();
+        order.setOrderDate(at);
+        order.setStatus(OrderStatus.PAID);
+        order.setSubtotal(new BigDecimal(total));
+        order.setDiscount(BigDecimal.ZERO);
+        order.setTotal(new BigDecimal(total));
+        order.setPaymentMethod(main);
+        order.setPaidAt(at);
+        order.setPaymentLines(lines);
+        return orderDAO.insert(order, List.of(line(total)));
+    }
+
+    private static PaymentLine pay(PaymentMethod method, String amount) {
+        return new PaymentLine(method, new BigDecimal(amount));
+    }
+
+    @Test
+    public void anOrderCanBePaidWithThreeOrMoreMethods() throws Exception {
+        Order saved = paidWith("100000", PaymentMethod.TRANSFER,
+                List.of(pay(PaymentMethod.CASH, "20000"), pay(PaymentMethod.CARD, "30000"), pay(PaymentMethod.MOMO, "10000"),
+                        pay(PaymentMethod.TRANSFER, "40000")), dayStart.plusHours(1));
+        assertEquals(Map.of("CASH", 20000L, "CARD", 30000L, "MOMO", 10000L, "TRANSFER", 40000L), lines(saved.getId()));
+        Order read = orderDAO.findById(saved.getId()).orElseThrow();
+        assertEquals(4, read.getPaymentLines().size());
+        assertEquals("the method the cashier chose as the main one is the one stored", PaymentMethod.TRANSFER, read.getPaymentMethod());
+        assertEquals(0, new BigDecimal("20000").compareTo(read.getCashPart()));
+        String names = PaymentText.of(read);
+        for (PaymentMethod m : new PaymentMethod[]{PaymentMethod.CASH, PaymentMethod.CARD, PaymentMethod.MOMO, PaymentMethod.TRANSFER}) {
+            assertTrue(names, names.contains(m.label()));
+        }
+        assertTrue(ReceiptText.paymentOf(read).contains("30"));
+    }
+
+    @Test
+    public void twoMethodsThatAreNeitherCashCanBeSplitToo() throws Exception {
+        Order saved = paidWith("60000", PaymentMethod.CARD, List.of(pay(PaymentMethod.CARD, "25000"), pay(PaymentMethod.TRANSFER, "35000")),
+                dayStart.plusHours(1));
+        assertEquals(Map.of("CARD", 25000L, "TRANSFER", 35000L), lines(saved.getId()));
+        Order read = orderDAO.findById(saved.getId()).orElseThrow();
+        assertTrue(read.isSplitPayment());
+        assertNull("no cash line, no cash part", read.getCashPart());
+        assertEquals(PaymentMethod.CARD, read.getPaymentMethod());
+    }
+
+    @Test
+    public void severalLinesThatDoNotAddUpOrRepeatAMethodAreRefused() {
+        List<List<PaymentLine>> bad = List.of(
+                List.of(pay(PaymentMethod.CASH, "10000"), pay(PaymentMethod.CARD, "10000"), pay(PaymentMethod.MOMO, "10000")),   // 30000 of 60000
+                List.of(pay(PaymentMethod.CARD, "30000"), pay(PaymentMethod.CARD, "30000")),                                      // a method twice
+                List.of(pay(PaymentMethod.CASH, "60000"), pay(PaymentMethod.CARD, "0")),                                          // a zero line
+                List.of(pay(PaymentMethod.CASH, "70000"), pay(PaymentMethod.CARD, "-10000")),                                     // a negative line
+                List.of(pay(PaymentMethod.CASH, "30000.5"), pay(PaymentMethod.CARD, "29999.5")),                                  // not whole dong
+                List.of(pay(PaymentMethod.CARD, "60000")));                                                                       // one line is not a split
+        for (List<PaymentLine> lines : bad) {
+            try {
+                Order order = paidWith("60000", PaymentMethod.CARD, lines, dayStart.plusHours(1));
+                if (lines.size() == 1) { // one line is simply an ordinary payment
+                    assertTrue(orderDAO.findById(order.getId()).orElseThrow().getPaymentLines().isEmpty());
+                    continue;
+                }
+                fail("refused: " + lines);
+            } catch (DataAccessException expected) {
+                assertFalse(expected.getMessage().isBlank());
+            }
+        }
+    }
+
+    @Test
+    public void theReportAndTheShiftCountEachMethodOfAManyMethodOrder() throws Exception {
+        paidWith("100000", PaymentMethod.TRANSFER,
+                List.of(pay(PaymentMethod.CASH, "20000"), pay(PaymentMethod.CARD, "30000"), pay(PaymentMethod.TRANSFER, "50000")), dayStart.plusHours(1));
+        Map<PaymentMethod, ReportDAO.PaymentSplit> byMethod = reports.paymentSplit(dayStart.toLocalDate(), dayStart.toLocalDate()).stream()
+                .collect(Collectors.toMap(ReportDAO.PaymentSplit::method, x -> x));
+        assertEquals(0, new BigDecimal("20000").compareTo(byMethod.get(PaymentMethod.CASH).revenue()));
+        assertEquals(0, new BigDecimal("30000").compareTo(byMethod.get(PaymentMethod.CARD).revenue()));
+        assertEquals(0, new BigDecimal("50000").compareTo(byMethod.get(PaymentMethod.TRANSFER).revenue()));
+        ShiftDAO.Summary summary = shifts.summarize(dayStart, dayStart.plusHours(10));
+        assertEquals("the drawer holds the cash line only", 0, new BigDecimal("20000").compareTo(summary.cashSales()));
     }
 }

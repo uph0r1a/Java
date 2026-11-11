@@ -1,6 +1,9 @@
 package com.coffeeshop.coffeeshopmanagement.util;
 
 import com.coffeeshop.coffeeshopmanagement.config.AppFlags;
+import com.coffeeshop.coffeeshopmanagement.dao.AuditDAO;
+import com.coffeeshop.coffeeshopmanagement.model.AuditAction;
+import com.coffeeshop.coffeeshopmanagement.model.AuditTarget;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -48,7 +51,26 @@ public final class TransferQrGuard {
         Optional<String> info();
 
         void save(String pictureFingerprint, String infoFingerprint);
+
+        /**
+         * Saves, and writes the audit line {@code change} describes in the same transaction (TODO 2A.44). A store that keeps nothing
+         * in the database (the one tests use) just saves.
+         */
+        default void save(String pictureFingerprint, String infoFingerprint, Change change) {
+            save(pictureFingerprint, infoFingerprint);
+        }
     }
+
+    /** What an administrator did to the transfer QR, for the audit line: {@code kind} is {@link #PICTURE}, {@link #INFO} or {@link #ACCEPTED}. */
+    record Change(String kind, String oldText, String newText) {
+    }
+
+    /** The picture was chosen again (and the account text saved with it). */
+    static final String PICTURE = "PICTURE";
+    /** Only the account holder / bank text was changed. */
+    static final String INFO = "INFO";
+    /** The picture and text in the folder were confirmed as right, nothing was changed. */
+    static final String ACCEPTED = "ACCEPTED";
 
     /** Names of the two flags ({@code prefix + 64 hex digits}, under the 100-character limit of the flag column). */
     static final String PICTURE_PREFIX = "transferqr.pic=";
@@ -69,7 +91,19 @@ public final class TransferQrGuard {
         public void save(String pictureFingerprint, String infoFingerprint) {
             AppFlags.replaceValues(java.util.Map.of(PICTURE_PREFIX, pictureFingerprint, INFO_PREFIX, infoFingerprint));
         }
+
+        /** The fingerprints and the audit line are saved together or not at all: a changed bank QR always leaves its line (TODO 2A.44). */
+        @Override
+        public void save(String pictureFingerprint, String infoFingerprint, Change change) {
+            AppFlags.replaceValues(java.util.Map.of(PICTURE_PREFIX, pictureFingerprint, INFO_PREFIX, infoFingerprint),
+                    connection -> AuditDAO.write(connection, AuditAction.TRANSFER_QR_CHANGED, AuditTarget.SETTING, null, AUDIT_LABEL,
+                            change.oldText(), change.newText(),
+                            change.kind() + "|" + pictureFingerprint.substring(0, Math.min(12, pictureFingerprint.length()))));
+        }
     };
+
+    /** The label of the audit line (the same in every language; the screen shows the name of the setting from this). */
+    public static final String AUDIT_LABEL = com.coffeeshop.coffeeshopmanagement.model.AuditSetting.TRANSFER_QR;
 
     /** The file older versions used for the accepted fingerprint; read once to adopt it, never written again. */
     static final String HASH_FILE = TransferQr.BASE_NAME + ".sha256";
@@ -145,7 +179,7 @@ public final class TransferQrGuard {
         String current = fingerprint(picture);
         if (UNREADABLE.equals(current)) throw new IOException(I18n.t("qr.read.fail"));
         try {
-            store.save(current, infoFingerprint(picture));
+            store.save(current, infoFingerprint(picture), new Change(ACCEPTED, null, null));
         } catch (RuntimeException e) {
             throw new IOException(I18n.t("pos.qr.accept.fail.message"), e);
         }
@@ -160,7 +194,7 @@ public final class TransferQrGuard {
             if (!Files.isRegularFile(info) || Files.size(info) > 10_000) return "";
             List<String> lines = Files.readAllLines(info, StandardCharsets.UTF_8);
             String text = String.join("\n", lines.stream().limit(4).toList()).trim();
-            return text.length() > MAX_INFO_CHARS ? text.substring(0, MAX_INFO_CHARS) : text;
+            return TextClip.clip(text, MAX_INFO_CHARS);
         } catch (IOException | RuntimeException e) {
             return "";
         }
@@ -209,6 +243,7 @@ public final class TransferQrGuard {
         String problem = problemWith(source);
         if (problem != null) throw new IOException(problem);
         Files.createDirectories(folder);
+        String oldText = TransferQr.findInFolder(folder).map(TransferQrGuard::accountInfo).orElse(""); // before the old files go
         Path target = folder.resolve(targetName(source));
         Path partial = folder.resolve(target.getFileName() + ".part");
         Files.copy(source, partial, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
@@ -218,7 +253,7 @@ public final class TransferQrGuard {
         Files.move(partial, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
         String text = writeInfo(folder, accountText);
         try {
-            store.save(fingerprint(target), infoFingerprint(target));
+            store.save(fingerprint(target), infoFingerprint(target), new Change(PICTURE, oldText, text));
         } catch (RuntimeException e) {
             throw new IOException(I18n.t("pos.qr.accept.fail.message"), e);
         }
@@ -229,9 +264,9 @@ public final class TransferQrGuard {
     }
 
     /** The account text as it is stored: no carriage returns, no outer blank space, at most {@link #MAX_INFO_CHARS} characters. */
-    private static String cleanInfo(String accountText) {
+    static String cleanInfo(String accountText) {
         String text = accountText == null ? "" : accountText.replace("\r", "").strip();
-        return text.length() > MAX_INFO_CHARS ? text.substring(0, MAX_INFO_CHARS) : text;
+        return TextClip.clip(text, MAX_INFO_CHARS);
     }
 
     /** Writes (or, for an empty text, removes) {@code qr-transfer.info} in {@code folder} and returns the cleaned text. */
@@ -268,9 +303,10 @@ public final class TransferQrGuard {
         if (accepted.isEmpty() || !accepted.get().equalsIgnoreCase(current)) {
             throw new IOException(I18n.t("admin.qr.textonly.notaccepted"));
         }
+        String oldText = accountInfo(picture);
         String text = writeInfo(folder, accountText);
         try {
-            store.save(current, infoFingerprint(picture));
+            store.save(current, infoFingerprint(picture), new Change(INFO, oldText, text));
         } catch (RuntimeException e) {
             throw new IOException(I18n.t("pos.qr.accept.fail.message"), e);
         }

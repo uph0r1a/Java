@@ -68,6 +68,10 @@ public final class ThermalReceipt {
             root.getChildren().add(centered(detail, size, false, width)); // address, phone, tax code (TODO 4.7, 4.22)
         }
         root.getChildren().add(centered(ReceiptText.t("receipt.title"), size, true, width));
+        String copy = ReceiptText.copyMark(order); // TODO 3.72: a reprint says so
+        if (copy != null) {
+            root.getChildren().add(centered(copy, size, true, width));
+        }
         if (order.getStatus() == OrderStatus.CANCELLED) {
             root.getChildren().add(centered(ReceiptText.t("receipt.cancelled"), size, true, width));
         }
@@ -76,7 +80,7 @@ public final class ThermalReceipt {
         root.getChildren().add(line(ReceiptText.t("receipt.line.orderid", order.getId()), size, false, width));
         root.getChildren().add(line(ReceiptText.t("receipt.line.time", shown == null ? "-" : shown.format(TIME)), size, false, width));
         root.getChildren().add(line(ReceiptText.t("receipt.line.employee", employeeName == null ? "-" : employeeName), size, false, width));
-        root.getChildren().add(line(ReceiptText.table(order.getTableNumber()), size, false, width));
+        root.getChildren().add(line(ReceiptText.tableOf(order), size, false, width));
         root.getChildren().add(line(ReceiptText.t("receipt.line.customer", customerName == null ? ReceiptText.t("receipt.guest") : customerName), size, false, width));
         Integer earned = com.coffeeshop.coffeeshopmanagement.service.LoyaltyPolicy.pointsEarnedBy(order);
         if (earned != null) {
@@ -90,12 +94,20 @@ public final class ThermalReceipt {
 
         for (OrderItem item : items) {
             root.getChildren().add(line(ReceiptText.productName(item.getProductName()), size, true, width));
+            String options = com.coffeeshop.coffeeshopmanagement.service.LineOptions.describe(item); // TODO 4.47: "L, +Extra shot"
+            if (options != null) {
+                root.getChildren().add(line("  " + options, size - 1, false, width));
+            }
             String note = com.coffeeshop.coffeeshopmanagement.service.OrderNote.clean(item.getNote()); // TODO 4.9
             if (note != null) {
                 root.getChildren().add(line("  - " + note, size - 1, false, width));
             }
             root.getChildren().add(pair(item.getQuantity() + " x " + CurrencyUtil.format(item.getUnitPrice()),
                     CurrencyUtil.format(item.getLineTotal()), size, false, width));
+            String promo = ReceiptText.promoLine(item); // TODO 4.55: the automatic promotion this line got
+            if (promo != null) {
+                root.getChildren().add(line("  " + promo, size - 1, false, width));
+            }
         }
         root.getChildren().add(rule(width));
         root.getChildren().add(pair(ReceiptText.t("receipt.subtotal"), CurrencyUtil.format(order.getSubtotal()), size, false, width));
@@ -133,7 +145,7 @@ public final class ThermalReceipt {
         root.layout();
     }
 
-    private static Text text(String value, double size, boolean bold, double width, TextAlignment alignment) {
+    static Text text(String value, double size, boolean bold, double width, TextAlignment alignment) {
         Text t = new Text(value);
         t.setFont(Font.font(AppStyle.FONT_FAMILY, bold ? FontWeight.BOLD : FontWeight.NORMAL, size));
         t.setFill(Color.BLACK);
@@ -142,16 +154,16 @@ public final class ThermalReceipt {
         return t;
     }
 
-    private static Text line(String value, double size, boolean bold, double width) {
+    static Text line(String value, double size, boolean bold, double width) {
         return text(value, size, bold, width, TextAlignment.LEFT);
     }
 
-    private static Text centered(String value, double size, boolean bold, double width) {
+    static Text centered(String value, double size, boolean bold, double width) {
         return text(value, size, bold, width, TextAlignment.CENTER);
     }
 
-    /** Left text and right-aligned amount on one row; the amount keeps its room, the left text wraps in the rest. */
-    private static HBox pair(String left, String right, double size, boolean bold, double width) {
+    /** Left text and right-aligned amount on one row (also used by {@link ShiftSheetPage}); the amount keeps its room, the left text wraps in the rest. */
+    static HBox pair(String left, String right, double size, boolean bold, double width) {
         Text r = text(right, size, bold, 0, TextAlignment.RIGHT);
         double rightWidth = r.getLayoutBounds().getWidth();
         Text l = text(left, size, bold, Math.max(20, width - rightWidth - 6), TextAlignment.LEFT);
@@ -164,7 +176,7 @@ public final class ThermalReceipt {
         return row;
     }
 
-    private static Region rule(double width) {
+    static Region rule(double width) {
         Region r = new Region();
         r.setPrefSize(width, 1);
         r.setMinHeight(1);

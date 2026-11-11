@@ -1,0 +1,94 @@
+/*
+ * GENERATED FILE - do not edit by hand (TODO 5.44, the large text).
+ * The large sizes of quanlysanpham.css, rule by rule.
+ * Added by AppStyle to a window while the large text is chosen. Regenerate with service/LargeTextSheet.main after a
+ * change to any style sheet; LargeTextSheetTest fails when a file here is out of date.
+ */
+
+.page-title {
+    -fx-font-size: 25px !important;
+}
+
+.page-description {
+    -fx-font-size: 14px !important;
+}
+
+.header-icon {
+    -fx-font-size: 19px !important;
+}
+
+.admin-name {
+    -fx-font-size: 15px !important;
+}
+
+.admin-role {
+    -fx-font-size: 12px !important;
+}
+
+.profile-icon {
+    -fx-font-size: 17px !important;
+}
+
+.category-button {
+    -fx-font-size: 14px !important;
+}
+
+.card-title {
+    -fx-font-size: 16px !important;
+}
+
+.category-list-button {
+    -fx-font-size: 14px !important;
+}
+
+.category-list-button .label {
+    -fx-font-size: 14px !important;
+}
+
+.add-category-button {
+    -fx-font-size: 13px !important;
+}
+
+.search-field {
+    -fx-font-size: 13px !important;
+}
+
+.filter-combo {
+    -fx-font-size: 13px !important;
+}
+
+.filter-combo .list-cell {
+    -fx-font-size: 13px !important;
+}
+
+.primary-button {
+    -fx-font-size: 14px !important;
+}
+
+.product-table .column-header .label {
+    -fx-font-size: 13px !important;
+}
+
+.product-table .table-cell {
+    -fx-font-size: 13px !important;
+}
+
+.product-table .placeholder .label {
+    -fx-font-size: 14px !important;
+}
+
+.empty-label {
+    -fx-font-size: 14px !important;
+}
+
+.table-footer {
+    -fx-font-size: 13px !important;
+}
+
+.page-button {
+    -fx-font-size: 13px !important;
+}
+
+.category-count {
+    -fx-font-size: 13px !important;
+}

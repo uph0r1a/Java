@@ -1,5 +1,9 @@
 package com.coffeeshop.coffeeshopmanagement.dao;
 
+import com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig;
+import com.coffeeshop.coffeeshopmanagement.config.SqlDialect;
+import com.coffeeshop.coffeeshopmanagement.util.BusinessDay;
+
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.time.LocalDate;
@@ -26,8 +30,12 @@ import java.util.List;
  * MariaDB reads the text as midnight of that day. The upper bound is "before the next day", so an order at 23:59:59 is in and
  * one at 00:00:00 the next day is out.
  *
- * <p>Use this class in the {@code WHERE} only. The day shown or grouped by ({@code SELECT} and {@code GROUP BY}) still uses
- * {@link OrderDAO#EFFECTIVE_DAY}: that is a value to show, not a condition to look up.
+ * <p>Use this class in the {@code WHERE} only. The day shown or grouped by ({@code SELECT} and {@code GROUP BY}) uses
+ * {@link #shown}: that is a value to show, not a condition to look up.
+ *
+ * <p>The shop's day (TODO 4.50): when the owner has set a day start, say 04:00, "the day 2026-10-10" is the time from
+ * {@code 2026-10-10T04:00} to before {@code 2026-10-11T04:00}, and the bounds are those full times ({@link BusinessDay#boundText})
+ * instead of plain dates. With no day start set (00:00) they are the plain dates, as above, and nothing changes.
  */
 final class EffectiveDay {
 
@@ -74,10 +82,10 @@ final class EffectiveDay {
         List<String> values = new ArrayList<>(4);
         for (int half = 0; half < 2; half++) {
             if (from != null) {
-                values.add(from.toString());
+                values.add(BusinessDay.boundText(from));
             }
             if (to != null) {
-                values.add(to.plusDays(1).toString()); // "before the next day" keeps the whole last day
+                values.add(BusinessDay.boundText(to.plusDays(1))); // "before the next day" keeps the whole last day
             }
         }
         return values;
@@ -89,5 +97,24 @@ final class EffectiveDay {
             statement.setString(index++, value);
         }
         return index;
+    }
+
+    /**
+     * The shop's day of a time column, to SHOW or GROUP BY: the date of the time minus the day start (TODO 4.50), written for the
+     * database in use. With no day start set it is plain {@code DATE(column)}, the calendar day.
+     */
+    static String shown(String column) {
+        return shown(column, DatabaseConfig.dialect());
+    }
+
+    /** {@link #shown(String)} for a given database (tests check both without a server). */
+    static String shown(String column, SqlDialect dialect) {
+        int minutes = BusinessDay.startMinutes();
+        if (minutes == 0) {
+            return "DATE(" + column + ")";
+        }
+        return dialect == SqlDialect.SQLITE
+                ? "DATE(" + column + ", '-" + minutes + " minutes')"
+                : "DATE(" + column + " - INTERVAL " + minutes + " MINUTE)";
     }
 }

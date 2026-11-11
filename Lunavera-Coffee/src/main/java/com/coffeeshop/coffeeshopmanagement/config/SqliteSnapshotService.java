@@ -212,7 +212,7 @@ public final class SqliteSnapshotService {
                 create.execute(SqlDialect.SQLITE.createFlagsTable());
             }
             for (String[] column : SqliteSchema.LATER_COLUMNS) {
-                DatabaseConfig.addColumnIfMissing(snapshot, column[0], column[1], column[2]);
+                DatabaseConfig.addLaterColumn(snapshot, column);
             }
             snapshot.setAutoCommit(false);
             for (SqliteToMariaDbImporter.TableSpec table : SqliteToMariaDbImporter.TABLES) {

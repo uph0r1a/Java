@@ -43,7 +43,7 @@ public final class DatePresets {
             Preset preset = presets[i];
             Button b = new Button(preset.label());
             b.setOnAction(e -> {
-                LocalDate[] range = preset.range(AppClock.today());
+                LocalDate[] range = preset.range(BusinessDay.today());
                 from.setValue(range[0]);
                 to.setValue(range[1]);
                 afterChange.run();

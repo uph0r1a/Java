@@ -1,1333 +1,23 @@
 # Lunavera Coffee — Progress
 
-> **READ THIS FIRST (Session 28): the redesigned-UI branch is now the main branch.** Everything
-> below this note is history written against the *previous* UI; screen/controller names in older
-> sessions may differ. See "Session 28" right below for what the merge changed.
+One section per work session, newest at the bottom. **This file keeps only the last 20 sessions**; older ones are word for word in `docs/history/` (TODO 6.86). When this file passes about 30 sessions again, move the oldest ones the same way and add a row to the index.
+
+## Where the older sessions are
+
+| File | Session numbers inside (numbers repeat across merged branches) | Sections | Lines |
+|---|---|---|---|
+| `docs/history/progress-undated-early.md` | 1-35, 39-43, 45, 47-56 | 52 | 1,456 |
+| `docs/history/progress-2026-10.md` | 55, 57-90, 93-132, 134-137, 139, 141-144 | 111 | 982 |
+| `docs/history/progress-2026-11.md` | 145-168 | 52 | 339 |
+
+Each file starts with a list of its sections. Session numbers in `COMPLETE.md`, in `TODO.md` and in code comments ("see `progress.md`, Session 7") point into these files: look the number up in the table above, then in that file's list. The files are cut by position, not by number: the sessions kept here are the last 20 headed "Session" in the old file, from "Session 169 - TODO 4.58, accountant-style revenue book ex" on.
 
 ## Release status (updated 2026-10-24, Session 108)
-- **Reading order:** sessions 41 and older are listed newest-first right below; **sessions 42 and later are appended at the bottom of the file** (Session 107 is the last).
+- **Reading order:** this file holds this block, the architecture notes, "Next recommended step" and the **last 20 session sections, oldest first; add a new session at the bottom**. Every older session is in `docs/history/` (see the index above; TODO 6.86).
 - **Last restore tested on the shop's real files:** not yet (see `docs/RELEASE.md` step 3). Write the date here when done.
 - **Last `mvn clean test` seen by the owner:** write the date and the number here. The project holds 1091 `@Test` methods in 164 classes (SQLite-only tests are skipped on MariaDB). Session 60 ran the 98 test files that need no JavaFX once with a stand-in runner, when there were 578 tests: 542 passed, 2 skipped, 1 failed (TODO 3.42); the 9 JavaFX/AWT test files (36 tests) were not run. The 33 tests added by Session 66 are not in that run.
 - **State of the work:** `TODO.md` has 268 ticked and 73 open numbered items; everything open that needs a person (Windows, printer, phone scan, MariaDB server, restore test) is in its section 0. The open code work is listed under "Next recommended step" (below, near the end of the file).
-- Older notes below still use the pre-rename names `org.example.controller` and `HelloApplication`; they are now `com.coffeeshop.coffeeshopmanagement.controller` and `LunaveraApplication` (TODO 6.17).
-
-## Session 41 notes — bugs 2.6 to 2.10
-- **2.6/2.7** `config/SchemaMigrations` (schema version 2 = indexes; unique customer phone re-checked every start, skipped with a log
-  warning while duplicates exist). `CustomerDAO` turns a UNIQUE violation into a plain message.
-- **2.8** `service/BackupService`: zip backups (db + images + qr), automatic daily backup in a background thread started from
-  `HelloApplication.init`, pruning of `auto-*.zip` only, restore parked as `data/restore-pending.*` and applied by
-  `applyPendingRestore()` before the database is opened (it saves `before-restore-*.zip` first; failures rename the pending file so
-  they are not retried). Dashboard got "Khôi phục dữ liệu". Zip-slip safe.
-- **2.9** `util/IdleLogout` + `IdleTracker` (15 min default, `-Dlunavera.idleMinutes`), `SessionGuard.idleLogout`.
-- **2.10** The staff detail fields were never filled by anything; now in the account dialog and the detail panel; `util/MoneyParser`.
-- Tests: 235 here (SchemaMigrationsTest 6, BackupServiceTest 12, IdleTrackerTest 5, MoneyParserTest 4, EmployeeDetailsTest 2).
-- Verified on screen (Xvfb + openbox): dashboard buttons, account detail panel, account dialog, idle logout.
-
-## Session 40 notes — bugs 2.1 to 2.5
-- **2.1** `DataCleanup` (class, call, `DataCleanupTest`) removed.
-- **2.2** Default password: `PasswordChangeDialog` (forced = no way out except "Đăng xuất"; voluntary = sidebar button "Đổi mật khẩu"),
-  rules in `PasswordChangeService`; the sidebar button is added to every screen by `SidebarExtras` through `SceneNavigator.setScreenDecorator`.
-- **2.3** `DiscountPolicy` (admin unlimited, employee 10% - owner to confirm, reason always required), `orders.discount_reason` column
-  (`addColumnIfMissing`), saved by `OrderDAO.insert` and `payExistingOrder`. Not shown anywhere yet (TODO 2.37).
-- **2.4** `ScreenFit` (wrapper + `ScreenFitMath`): fixed layouts are scaled to the window, window resizable and fitted to the display.
-  Scenes must be created with an explicit size (`ScreenFit.newScene`), or a scene made from the root keeps 1600x1000 inside a smaller window.
-  Verified under Xvfb + openbox at 1366x768. Stopgap; real fix is flexible layouts (TODO 2.38).
-- **2.5** `HelloApplication.init` catches start-up errors; `start` shows `StartupProblem` text and exits.
-- Tests: 205 here (DiscountPolicyTest 10, DiscountReasonDaoTest 4, PasswordChangeServiceTest 7, StartupProblemTest 4, ScreenFitTest 5; DataCleanupTest removed), also green in 5 different orders.
-
-## Session 39 notes — test isolation fix, 1.5 decision, one bundled font (TODO 1.6)
-- **Gap:** sessions 36-38 (1.2 images, 1.3 data folder, 1.4 transfer QR) are in TODO.md but have no entry here.
-- **Tests wrote into the real database (bug 2.36):** `AddColumnIfMissingTest` loaded `DatabaseConfig` before the temp
-  folder existed, so the suite used `<cwd>/data/lunavera.db`. Fixed (see TODO 2.36); `TestDatabaseSupport.ensureReady()`
-  now refuses to run if the live DB is the real one; surefire is also pointed at `target/test-data` (unverified, no Maven here).
-- **1.5 decision (owner, 2026-10-11): migrate to MariaDB/MySQL with phpMyAdmin.** I had started option A (a SQLite guide
-  with tested recipes); stopped and discarded at the owner's request. Plan is in TODO 1.5, nothing built.
-- **1.6 font:** Be Vietnam Pro (regular, italic, bold) in `resources/fonts/`, `util/AppStyle` loads it and adds
-  `css/app.css` to every window's scene (screens, dialogs, alerts, menus), all per-rule `-fx-font-family` removed from the
-  7 style sheets, weights 600/500 -> bold/normal. Checked with real JavaFX under a virtual screen; Windows not verified,
-  and the icon symbols rely on font fallback there (section 0 check). `FontBundleTest` added; 176 tests pass here.
-- Files: `util/AppStyle.java`, `HelloApplication.java`, `css/*.css`, `fonts/`, `pom.xml`, `TestDatabaseSupport`, `AddColumnIfMissingTest`, `AppLoggingTest`, `FontBundleTest`.
-
-## Session 35 notes — receipt QR text is plain ASCII (TODO 1.1)
-- **Why:** scanning the receipt QR showed jumbled text. `QrCode` stores the text as UTF-8 bytes with no character-set
-  marker, and some phone scanners read those bytes as Latin-1. The old text `Hóa đơn #12 / Tổng: 1.250.000đ` then shows
-  as `HÃ³a Ä‘Æ¡n #12 / Tá»•ng: 1.250.000Ä‘` (reproduced by decoding the old QR image and re-reading its bytes as Latin-1).
-- **Change:** `ReceiptQr.payload` is now ASCII only: `Lunavera Coffee` / `Hoa don #12` / `Tong: 1.250.000 VND` /
-  `14:03 10/10/2026`. The amount is formatted by `ReceiptQr.amount` (dots between thousands, no locale, no `đ`).
-  Still a plain summary, not a payment request. No change to `QrCode` (an ECI marker is not needed for ASCII).
-- **Tests (+3, 135 total):** payload is ASCII only and one byte per character, the amount format (0, 999, 1.000,
-  25.000, 1.250.000, no total), and the payload is the same under German and Vietnamese default locales.
-- **Verified:** rendered the new and old QR with the app's own `QrCode`, decoded both with OpenCV: the new one reads back
-  exactly and its bytes are identical in UTF-8 and Latin-1.
-- **Not verified:** a real phone scan (I have none). Please scan a receipt on the phone that showed the jumbled text;
-  the QR on a receipt that was already printed keeps the old text.
-
-## Session 34 notes — dev-checks converted to tests and deleted
-
-`dev-checks/` (four hand-run programs outside Maven) is gone; its checks now run in `mvn test`:
-`MoneyMigrationTest` (old REAL-column database built by hand, migrated to integer dong; values, NULL cost,
-links, backup file, second run is a no-op), `MenuSeederTest` (33 products, 4 categories, images and prices; a
-deleted item stays deleted after a "restart", simulated by a second connection to the same file because the
-seeder's own persistent flag is what matters), `SessionGuardTest` (locked, deleted, promoted and demoted
-accounts against a real database). `AppLoggingCheck` was already covered by `AppLoggingTest`, which now also
-checks the message really is in the file. `TestDatabaseSupport` is public so the `config` tests can use it.
-`pom.xml` comment updated. Tests: 132 pass. **Not verified:** `mvn clean test` on this change.
-Note: earlier sessions below still mention `dev-checks/`; that folder no longer exists.
-
-## Session 33 notes — quality of life, items 6-9 (step 4 of the cleanup list)
-
-- **Item 6:** the first-run log line no longer prints the default admin password.
-- **Item 7:** the order-history search escapes `%`, `_` and `\` (`LIKE ? ESCAPE '\'`), so they match literally
-  instead of matching every order. Tested.
-- **Item 8:** `orders.table_number` is now part of the `CREATE TABLE orders` statement. Databases made before
-  it existed get it through `DatabaseConfig.addColumnIfMissing`, which checks `PRAGMA table_info` instead of
-  catching the error. I did not bump `user_version`: every existing database already goes through that check on
-  start-up, so a version number would add nothing. Tested on an old-shaped table.
-- **Item 9:** `LoginBackgroung.png` is now `LoginBackground.png`, and `dangnhap.fxml` points to it.
-  **Check the login screen background still appears** (a missing image would not fail the build).
-- Tests: 124 pass (4 new). The author tested steps 4.1-4.9 by hand on 2026-10-10 and reported all working,
-  which closes the cleanup list (steps 1-4). `mvn clean test` has not been re-run since 100 tests (step 3).
-
-## Session 32 notes — quality of life, items 1-5 (step 4 of the cleanup list)
-
-- **Login (item 4):** wrong username and wrong password now give the same message ("Tên đăng nhập hoặc mật
-  khẩu không chính xác."); a locked account is only reported to someone who knows its password; an unknown
-  username costs the same time as a real one. New `LoginThrottle`: 5 wrong tries in a row for a username
-  block it for 30 s (then 60, 120... up to 5 min); it is a delay, not a permanent lock, kept in memory and
-  shared by every login screen. `LoginStatus` is now SUCCESS / INVALID_CREDENTIALS / INACTIVE / TOO_MANY_ATTEMPTS.
-- **POS customer line (item 5):** under the phone field the POS shows "Khách cũ: name · N điểm" for a known
-  phone, or "Khách mới: ..." for a valid unknown phone. Also fixed while there: editing the phone away from
-  the attached customer's number used to leave that customer attached (the order could be paid under the
-  previous person); it now detaches. Late lookup results for a number that is no longer typed are ignored.
-- **Customer find-or-create (item 1):** moved out of the controller into `CustomerService` (same lock, same
-  rules: never renames, invalid phone means walk-in) so it can be tested, including 12 threads racing on one phone.
-- **Receipt QR (item 3):** now a readable summary (shop, order number, total, time) instead of
-  `LUNAVERA|HD12|...`. Decided NOT to put a VietQR payment code on it: the receipt is for an order that is
-  already paid, so a payment QR could be paid twice. A real VietQR belongs in the payment dialog and needs
-  the shop's bank details and a transfer payment method; listed in TODO.md as an idea. Verified: an independent
-  decoder (OpenCV) reads the new payload back exactly, including Vietnamese text and line breaks.
-- **Tests (item 1):** 20 new (120 total): `LoginThrottleTest`, `AuthenticationServiceTest`, `CustomerServiceTest`,
-  `ReceiptQrTest`; the cleanup (`DataCleanupTest`) and pay-with-new-customer tests came with step 3. Not covered
-  (UI only, need a JavaFX toolkit): category dropdown sync and the table-toggle confirm.
-- **Docs (item 2):** `TODO.md` rewritten to match the code (it still mentioned things long done).
-
-**Not verified:** the POS and login screens (no JavaFX display here); `mvn` was not run on this change.
-
-## Session 31 notes — bugs fixed (step 3 of the cleanup list)
-
-- **Payment (bugs 2, 3, 7):** `OrderDAO.payExistingOrder(orderId, customerId, ...)` now links the customer
-  typed at the till to the order in the same transaction (so they get their loyalty points), only pays an
-  order that is still `OPEN` (a second payment or a cancelled order throws and changes nothing), and frees
-  the table inside that same transaction. The POS creates/finds the customer in the background task, not
-  on the UI thread. `TableDAO.setEmpty` is now one transaction (free table + cancel OPEN order) and throws
-  instead of swallowing errors.
-- **Autosave (bug 6):** autosaves and the payment run through `Async.runOrdered` (one background thread, in
-  submission order), so an older cart cannot overwrite a newer one or arrive after payment;
-  `saveOrUpdateOpenOrder` leaves an order alone if it is no longer `OPEN`. A failed autosave is logged and
-  the cashier is warned once.
-- **Customers (bugs 4, 5):** phone numbers are stored and searched in one form (`ValidationUtil.normalizePhone`:
-  `+84901111222`, `84901111222`, `0901 111 222` all become `0901111222`). The POS no longer renames an
-  existing customer; the name field shows the stored name instead.
-- **Cleanup (bugs 8, 14):** `DataCleanup` writes `~/.lunavera-coffee/backups/before-cleanup-<time>.db` first
-  (and skips the cleanup if that fails); a category that still holds products is kept.
-- **Other (bugs 9, 10, 11, 13):** lookup/load failures are logged (order load shows an error); the login
-  employee lookup runs off the UI thread; order-start logic lives in one method, `startOrderForTable`
-  (which also ignores a second click while one is in flight); "(Tầng 1)" removed from the POS.
-- Bug 1 confirmed by the user's own `mvn clean test` (2026-10-10): 100 tests, 0 failures, BUILD SUCCESS, JUnit 4
-  provider auto-detected. Bug 12 (Linux dialog workaround) closed: the user reports it was solved earlier and
-  still works.
-
-Verified: compiles; 100 tests pass (11 new, covering all of the above except the UI wiring).
-**Not verified:** `mvn javafx:run` and the POS screens themselves (customer at payment, autosave warning, login) were not run -
-no JavaFX display here; `mvn` was not run.
-
-## Session 30 notes — unused dependencies removed (step 2 of the cleanup list)
-
-Removed from `pom.xml` (and from `module-info.java` where listed there): `junit-jupiter-api` /
-`junit-jupiter-engine` (all tests are JUnit 4; with the JUnit 5 engine present and no vintage engine,
-Maven's `mvn test` may have discovered 0 tests), `kotlin-stdlib`, `kotlin-test`, `kotlin-maven-plugin`
-(there are no `.kt` files) plus `requires kotlin.stdlib`, `tilesfx`, `fxgl`, `javafx-web`, `javafx-media`,
-`javafx-swing`, `controlsfx`, `formsfx-core`, `validatorfx`, `ikonli-javafx`, `bootstrapfx-core` plus their
-six `requires` lines, and the `junit.version` / `kotlin.version` properties. What remains: `javafx-controls`,
-`javafx-fxml`, `sqlite-jdbc`, `slf4j-api`, `junit` 4.13.2 (test). The compiler plugin's explicit
-`compile` / `testCompile` executions were left as they are.
-
-Verified: the sources compile as a real module (`module-info.java` with only `javafx.controls`,
-`javafx.fxml`, `java.sql`, sqlite and slf4j on the module path) and 89 tests pass. **Not verified:**
-`mvn clean test` and `mvn javafx:run` were not run (no Maven Central access here) - run both once, and
-check that `mvn test` reports 89 tests.
-
-## Session 29 notes — dead-code removal (step 1 of the cleanup list)
-
-Removed code that nothing calls (checked against all source, FXML and tests, and by compiling):
-- `AdminController`: the old alias handlers (`openHome`, `handleHome`, `handleProducts`, `handleOrders`,
-  `handleCategories`, `handleAccounts`, `handleLogout`, `handleNavigation`), plus `openInventoryManagement`
-  and `openEmployeeManagement`. `EmployeeController`: `openProductManagement`, `openCategoryManagement`,
-  `openAccountManagement`, `openInventoryManagement`. `CustomerController` / `OrderController`:
-  `openInventoryManagement`, `openEmployeeManagement`; `OrderController.handleAddProductToCart`.
-- Orphan `@FXML` fields with no `fx:id` (`rememberCheckBox`, `signInButton`, `customerLabel`, the dashboard
-  `recentOrders*` / admin `lowStockList`, `addProductButton`) and their always-null guarded code; about 20
-  declared-but-unused button/axis fields.
-- Cascade: `DashboardWidgets.fillRecentOrders`, `OrderDAO.findRecent` and the `recentOrders` entry of the
-  dashboard stats (a database query that ran on every dashboard load for a list nobody showed).
-- `ProductDAO.adjustStock` (bypassed the transactional stock guard), `findByCategory`, `countByCategory`;
-  `UserDAO.countByRole`; `TableDAO.findByNumber`; `Pager.nextPage/previousPage`; `DiningTable.setCapacity`,
-  `setCurrentOrderId`; the write-only `OrderItem.orderId`; unused imports.
-- Tests adjusted: the `findByCategory` test was deleted, `PagerTest`/`TableDAOTest`/`UserDAOTest` use the
-  remaining API. 89 tests pass.
-
-**Kept on purpose:** `handleHomeTableClick`, `openEditCategoryDialog`, `openEditProductDialog` and
-`openEditDialog` (called through `this::method` references - an earlier scan wrongly marked them dead;
-the compiler caught it); `Role.CUSTOMER` (still used by login, accounts screen and dialog);
-`DiningTable.getCurrentOrderId` and `QrCode.getVersion/getMask` (only tests call them);
-`dev-checks/` (the only checks for `MoneyMigration`, `SessionGuard` and `MenuSeeder` - convert them to
-tests before deleting); unverified CSS rules.
-
-## Session 28 notes — redesigned-UI branch became the main branch
-
-The user supplied a parallel branch with a new UI/UX and asked for it to be the base from now on.
-Its backend was ~identical to ours (57 identical files incl. `MenuSeeder`, `MoneyMigration`), so the
-merge was "new branch + the small things only we had".
-
-**Taken from the new branch (replaces ours):** all FXML/CSS/controllers, the POS (product catalog
-grid, 12 dining tables built from the DB, manual table toggle, inline walk-in customer name/phone,
-order-history button), and its table model: orders persist as `OPEN` as soon as a table is served;
-`TableDAO` computes status from an OPEN order or a stored `OCCUPIED`; `dining_tables.current_order_id`
-is a real FK. Our own `DiningTableSeeder`, old `TableDAO` and old `TableDAOTest` were dropped.
-
-**Ported onto it:**
-- Dining-table seeding gated by an `app_flags` flag (`dining_tables_v1`) instead of "if table is empty",
-  so emptying the table never re-seeds it.
-- Dialog Enter/Esc (`AlertUtil.setDefaultButton/setCancelButton`, also Esc = "Không" on confirms) on the
-  category, account, product, customer and payment dialogs.
-- `TextLengthLimiter` on name/description/username fields and the POS walk-in name/phone fields.
-- Dashboard low-stock note shows the real count again (the new branch had a generic label).
-- **Bug fixed in the new POS:** toggling an occupied table to "inactive" silently cancelled its OPEN
-  order (`TableDAO.setEmpty`) and left a stale cart. Now asks for confirmation and reloads the order panel.
-- Tests: `TableDAOTest` rewritten for the new `TableDAO`; `AppLoggingTest` ported.
-
-**Hotfix right after the merge:** the app failed to start on a database that already had dining tables
-but no `dining_tables_v1` flag (`UNIQUE constraint failed: dining_tables.table_number`). The seed insert is
-now `INSERT OR IGNORE`, so an existing database just gets the flag (and any missing tables). Verified by
-re-running `initialize()` on a DB with the flag removed and only 6 of 12 tables left.
-
-**Verified (really compiled with javac against JavaFX 11 jars, not just read):** 74 JUnit tests pass;
-dev-checks AppLoggingCheck, MenuSeederCheck, MoneyMigrationCheck, SessionGuardCheck pass; every FXML
-`onAction` has a controller handler and every referenced `fx:id` has an `@FXML` field (the only
-unreferenced ids are decorative root nodes). **NOT verified:** nothing was run with `mvn javafx:run`
-(no JavaFX runtime/display here) - the new screens and the table-toggle confirm still need a human check.
-`dev-checks/DiningTableSeederCheck.java` was dropped (it targeted the old seeder).
-
-
-This file tracks the *actual* implementation status (as verified by reading the code),
-not what the UI merely displays. Status legend: ✅ Completed 🟡 Partial ⬜ Not started
-⚠️ Known issue/decision.
-
-## Session 27 notes — merging the dine-in-table branch into the money/schema-versioning branch
-
-**The user had two branches that had diverged from the same point** and asked for them merged:
-this one (Sessions 25-26: money as INTEGER dong, schema versioning, file logging, a product
-stock column) and a separate one that had built real dine-in table tracking plus dialog
-Enter/Esc hints and input length limits, independently, on top of an earlier snapshot of this
-same codebase. Adopted this branch (the money/schema work) as the base - it's the harder,
-riskier, more foundational change - and merged the other branch's work on top, rather than the
-reverse.
-
-**Brought over, unchanged (the other branch never touched anything money/schema-related):**
-`DiningTable`, `TableStatus`, `TableDAO`, `DiningTableSeeder`, `TextLengthLimiter`,
-`TableDAOTest`, `dev-checks/DiningTableSeederCheck.java`. `AlertUtil.java`, `OrderController.java`,
-and `CustomerController.java` were replaced wholesale with the other branch's versions - diffed
-first to confirm this branch had made zero independent changes to any of the three (confirmed:
-every differing line was something the other branch added, nothing this branch would lose).
-
-**Real merges, not wholesale swaps:**
-- `Order.java` / `OrderDAO.java`: added the `tableNumber` field and `table_number` column
-  support on top of this branch's `Money`-based insert/map (binds as a plain nullable int via
-  the existing `setNullableInt` helper - this column was never money, nothing about it changes
-  for the INTEGER-dong migration).
-- `AdminController.java`: added the other branch's dialog Enter/Esc hints
-  (`AlertUtil.setDefaultButton`/`setCancelButton`) and input length limits (`TextLengthLimiter`)
-  to all three of its dialogs. **Did not** bring over its stock-column implementation - this
-  branch's Session 26 had already built one independently (simpler: inline `setStyle` on a
-  `Number`-typed column vs. the other branch's CSS-class-based two-tier version) and the two
-  can't coexist on the same column. Keeping this branch's version since it was already
-  tested here; noted the other implementation is not lost, just not used.
-- `DatabaseConfig.java`, the delicate one: added `dining_tables` (a plain, version-independent
-  `CREATE TABLE IF NOT EXISTS` - it's a brand-new table, nothing to migrate) and
-  `orders.table_number`. ⚠️ **Deliberately did not fold `table_number` into
-  `MoneyMigration`/`CURRENT_SCHEMA_VERSION`**, despite that class's own docstring describing
-  exactly that as the intended pattern for future schema changes: a single additive, nullable
-  column doesn't need the rename-and-recreate dance a changed column *type* needs, and touching
-  the already-verified `MoneyMigration` for an unrelated feature seemed like more risk than
-  benefit. Instead, a small `addTableNumberColumnIfMissing()` (checks `PRAGMA table_info`,
-  `ALTER TABLE ... ADD COLUMN` if missing) runs unconditionally every startup, after the
-  preexisting/fresh branch. This correctly covers all three real starting states: a brand-new
-  database (already has the column from the DDL, so this is a no-op), a true v0 database (column
-  added right after `MoneyMigration` recreates `orders`), and - the one that actually matters
-  most, since it's almost certainly the user's real current database - one already upgraded to
-  v1 money before dining tables existed, which `MoneyMigration` itself would otherwise skip
-  entirely (it only acts on `version < CURRENT_SCHEMA_VERSION`).
-- `quanlydonhang.css`: added back the `.occupied-badge` rule the dining-table branch needed
-  (this branch never touched this file, so no real conflict, just a missing addition).
-- Added `AppLoggingTest.java` (adapted from the other branch's `LoggingConfigTest.java`, same
-  "shared static temp home, never cleaned up mid-run" pattern as `TestDatabaseSupport` - see its
-  own javadoc): this branch's file-logging had a two-process dev-check but no fast
-  `mvn test`-runnable unit coverage. Genuinely new coverage, not a duplicate.
-- Also fixed a stale class-level comment on `OrderDAO` while in the file for an unrelated
-  change: it said "order creation (POS checkout) is not wired to any screen yet", which has not
-  been true since Session 7.
-
-**Verified far more thoroughly than usual, given the size of this merge** - every regression
-check available was run for real, not just the standard full test suite:
-- Whole project recompiled clean (83 classes).
-- Full test suite: **74 tests, 0 failures** (unchanged count from both parent branches - nothing
-  was lost, nothing silently duplicated).
-- **`MoneyMigrationCheck` re-run** (builds a real v0-schema fixture database and runs it through
-  the actual migration) - all its existing assertions still pass, **and its log output shows
-  `addTableNumberColumnIfMissing` firing immediately after `migrateV0ToV1` recreates `orders`**,
-  exactly the scenario the design above was reasoning about in the abstract - seeing it actually
-  happen in that order, against a real fixture, is real confirmation, not just correct-sounding
-  logic.
-- `DiningTableSeederCheck`, `MenuSeederCheck`, `AppLoggingCheck`, `SessionGuardCheck` - all
-  re-run as two-process (real restart) or single-process checks; all pass.
-- **Not run through `mvn javafx:run`.** Given the number of moving parts touched here, a full
-  manual pass is worth more than usual this time: log in, confirm the default admin still
-  works; open Product Management and confirm prices/stock display correctly (money migration);
-  start an order on a table and confirm it shows occupied, pay it, confirm the table empties;
-  type something invalid into a dialog and confirm Enter doesn't submit it, Esc closes it, and
-  an overly long name is rejected outright rather than accepted and truncated.
-
-## Session 26 notes — file logging + product table stock column
-
-Continued down the quality-of-life backlog after items 6/7.
-
-- ✅ **File logging**: `util/AppLogging.install()` adds a rotating `FileHandler`
-  (`~/.lunavera-coffee/logs/app-%u-%g.log`, 1MB x 3 files) to the root `java.util.logging`
-  logger - on top of, not instead of, the console output every part of the app already uses, so
-  nothing else needed to change. Called first thing in `HelloApplication.init()`, before
-  `DatabaseConfig.initialize()`, so even a problem during DB setup/migration lands in the file.
-  Falls back to console-only (never crashes startup) if the log directory can't be created.
-- ✅ **Product table stock column**: was previously only visible by opening a product to edit it.
-  Reuses `ProductDAO.LOW_STOCK_THRESHOLD` (already the dashboard widgets' own definition of
-  "low") to bold/redden the cell when stock is at or below it - one shared definition of "low
-  stock", not a second one invented for the table.
-- **Verified for real**: compiled clean, fx:id/onAction cross-check clean, full 68-test suite
-  still passes. Wrote `dev-checks/AppLoggingCheck.java` (installs logging, logs a message,
-  confirms it's actually readable from the file on disk - not just that `install()` didn't
-  throw) - passes. Re-ran `SessionGuardCheck`, `MoneyMigrationCheck`, and `MenuSeederCheck`
-  (both phases) as regression checks on top of that - all clean.
-- **Not run through `mvn javafx:run` by a human.** To test: launch the app, do a few things,
-  check `~/.lunavera-coffee/logs/` for a log file with real content; open Product Management and
-  confirm the new "Tồn kho" column shows stock, with low-stock items highlighted in red.
-
-## Session 25 notes — money as INTEGER dong + schema versioning (items 6/7, together)
-
-Did the one item explicitly saved for its own dedicated session, exactly as asked: started with
-a backup plan, treated the migration itself with real-data verification rather than reasoning
-about it, and caught a genuine bug doing so.
-
-- ✅ **Schema versioning**: `PRAGMA user_version` (0 = original/pre-versioning schema, 1 =
-  current). `DatabaseConfig.initialize()` now distinguishes a *brand-new* database (created this
-  call - gets the current schema directly, version set immediately, no migration needed) from a
-  *pre-existing* one (checked via "does the `users` table already exist", since `user_version`
-  itself defaults to 0 for both cases and can't tell them apart on its own) - only the latter
-  ever runs a migration. Future schema changes slot in as `if (version == N) { migrateNToNPlus1
-  (...); version = N+1; }` steps in `MoneyMigration.runIfNeeded`, each small and independently
-  testable, rather than one big jump.
-- ✅ **Money as INTEGER dong**: `employees.salary`, `products.price`/`cost`,
-  `orders.subtotal`/`discount`/`total`, `order_items.unit_price`/`line_total` are now `INTEGER`
-  (whole dong), not `REAL`. Vietnamese dong has no fractional subunit in real use and every
-  amount this app has ever written is already whole, so this is exact and lossless for
-  legitimate data. New `util/Money` (`toDong`/`fromDong`/nullable variants) is the one place
-  that converts at the JDBC boundary - `EmployeeDAO`, `ProductDAO`, `OrderDAO`, `ReportDAO`,
-  `MenuSeeder` updated to use it instead of `setBigDecimal`/`getBigDecimal`. **The Java-level
-  type is still `BigDecimal` everywhere else** (models, controllers, `LoyaltyPolicy`, the POS's
-  own calculations) - this was a storage-layer change only, not a ripple through the app.
-- ✅ **`config/MoneyMigration`**: for a pre-existing database, takes its own automatic timestamped
-  backup first (`~/.lunavera-coffee/backups/pre-migration-v1-<timestamp>.db`, via the existing
-  `VACUUM INTO`-based `backupTo`) - on top of, not instead of, the user's own manual "Sao lưu dữ
-  liệu" backups - then recreates each of the four tables (rename old -> create new with INTEGER
-  columns -> copy data with `CAST(ROUND(x) AS INTEGER)` as a safety net against stray
-  floating-point noise, never because fractional dong are expected -> drop old), all in one
-  transaction. A crash partway through rolls back completely - no half-migrated schema silently
-  marked done.
-- **Real bug caught and fixed by testing this against actual data, not just reading it twice:**
-  first attempt set `PRAGMA foreign_keys = OFF` *after* `connection.setAutoCommit(false)` - SQLite
-  only honors a change to that pragma when no transaction is already open, so it was silently a
-  no-op, and the migration failed with a foreign-key constraint error on the very first table.
-  Moved both `foreign_keys=OFF` and `legacy_alter_table=ON` before the transaction starts; fixed,
-  then re-verified.
-- **Verified for real, specifically the migration path** (the existing 68 tests all use brand-new
-  temp databases, so none of them ever touch `MoneyMigration` at all - confirmed by the fact that
-  the pragma-ordering bug above didn't make any of them fail): wrote
-  `dev-checks/MoneyMigrationCheck.java`, which builds a database by hand with the *exact* old
-  schema (REAL columns) and sample data - including a deliberately noisy float price
-  (25000.00000000004) - then runs `DatabaseConfig.initialize()` against it and checks: schema
-  version becomes 1; every row survives migration under its original id; the noisy price becomes
-  exactly 25000; a `NULL` cost stays `NULL` (not coerced to 0); the automatic backup file exists;
-  a second `initialize()` call in the same process is a safe no-op. **16/16 passed.** Also re-ran
-  the full 68-test suite and `SessionGuardCheck`/`MenuSeederCheck` as regression checks (all
-  clean) and the fx:id/onAction cross-check across all 10 FXML files (clean, though nothing here
-  touched any FXML).
-- **Not run through `mvn` by a human.** To test on a real pre-existing database: back it up
-  manually first regardless (belt and suspenders), launch the updated app, and check Product
-  Management/Reports/the receipt still show the right prices - then check
-  `~/.lunavera-coffee/backups/` for the new automatic pre-migration copy.
-
-## Session 24 notes — starter menu from menu.zip (one-time, deletion-safe)
-
-Read the uploaded project state first (Session 23's order-history paging + doc correction,
-confirmed via progress.md) - no code changes needed there, matched its own notes exactly.
-
-Then: seeded the shop's real menu (33 items, 4 categories, real photos from "menu.zip") as
-actual products - **the explicit design requirement was that this must never "come back" for a
-shop that deletes some or all of it**, which rules out the obvious-looking "seed if the products
-table is empty" approach (delete everything -> table's empty again -> that check fires again).
-
-- ✅ `config/MenuSeedData` (the 33-item table: category, Vietnamese display name, bundled image
-  file, a placeholder price) + `config/MenuSeeder` (the one-time import, called from
-  `DatabaseConfig.initialize()`). Gated by a small `app_flags(name)` table - checked *before*
-  anything else, and the flag row is written in the *same transaction* as the seeded
-  categories/products, so a crash partway through leaves nothing seeded and no flag set either
-  (retries cleanly next launch, never half-seeds and calls it done).
-- ✅ Images bundled under `src/main/resources/seed-menu/` (33 files, ASCII-safe names - Vietnamese
-  filenames with diacritics/spaces/em-dashes risk classpath-resource-loading encoding issues, so
-  I transliterated the *file names* only; the real Vietnamese names are just DB text in
-  `products.name`, which has no such restriction). Seeding copies each into the normal managed
-  images directory via the existing `ImageStorage.directory()`/copy pattern - after seeding,
-  there is nothing special about these products; they're edited/deleted exactly like any other.
-- ⚠️ **Decision:** categories reuse an existing one by name if the shop already created it by
-  hand (`findOrCreateCategory`), rather than risking a duplicate or failing on the UNIQUE
-  constraint.
-- ⚠️ **Decision (menu.zip had no prices):** placeholder prices, round numbers per category
-  (25.000-52.000đ, roughly real Vietnamese cafe pricing) - documented in `MenuSeeder`'s javadoc
-  as needing shop review. Starting stock is a flat 20/item for the same reason.
-- **Verified for real, including the actual requirement, not just the happy path:** compiled
-  clean; wrote `dev-checks/MenuSeederCheck.java` and ran it as **two genuinely separate `java`
-  processes** against the same database (a single JVM can't test this - `DatabaseConfig`'s
-  "already initialized" flag would just skip the second call and mask whether the *persistent*
-  flag logic in `MenuSeeder` actually works). Phase 1: seed, confirm 33 products/4
-  categories/every item has an image+price, delete "Cafe đen". Phase 2 (fresh process): confirm
-  count stayed at 32 and "Cafe đen" is still gone - the exact scenario asked for. Also re-ran the
-  full test suite (68 tests) and `SessionGuardCheck` (12/12) as regression checks - both clean.
-- **Not run through `mvn javafx:run` by a human.** To test: fresh install (or delete
-  `~/.lunavera-coffee/lunavera.db`), launch, open Product Management -> 33 products across 4
-  categories with real photos. Delete a couple, quit the app fully, relaunch -> confirm they
-  stay deleted. Prices/stock are placeholders - review before real use.
-
-Per the user's explicit direction, **did not touch items 6/7** (money as `REAL`, no schema
-versioning) - left for their own dedicated session, starting with a database backup.
-
-## Session 23 notes — order-history paging, and catching up on undocumented work
-
-**Verified Session 22 first, and found its own docs were behind its own code:** its notes said
-"50 tests… UserDAO/OrderDAO left for next time", but `UserDAOTest` (7 tests) and `OrderDAOTest`
-(7 tests, covering the highest-value gap - `insert()`'s stock+loyalty transaction including the
-insufficient-stock rollback, and `cancelPaidOrder()`'s reversal) were already sitting in the
-upload, real and passing - 64 tests, not 50. Read both files in full before trusting them (they
-were solid), then corrected TODO.md/this file's own record before adding anything, rather than
-redoing work that was already done or leaving the docs permanently wrong about it.
-
-Then took the actual next item: **order-history paging beyond 500.** The old
-`OrderDAO.findHistory(int limit)` loaded up to 500 rows into memory once and did every filter
-(search/status/date-range) client-side over that fixed set - so a date range further back than
-the most recent 500 orders silently showed nothing even when matching orders existed further
-back, and the window never had a real page boundary. Replaced with `findHistoryPage(filter,
-pageSize, offset)` + `countHistory(filter)`, both built from one shared `HistoryFilter` record
-and a small `FilterSql` helper that turns it into the same WHERE clause + bind parameters for
-both methods (so the count and the page can never silently drift apart into checking different
-things). `OrderHistoryWindow` now shows 50 rows/page with prev/next controls, re-queries SQL on
-every filter change (any change resets to page 1 - the old page number may not even exist in the
-narrower result set), and fetches the count and the page together in one background `Async.run`
-call rather than two separate ones (so a concurrent cancel landing between them can't produce a
-page/count that don't agree). No more upper bound on total history size.
-
-- **Verified for real, same approach as recent sessions**: recompiled the whole project (71
-  classes now, +3 for `HistoryFilter`/`FilterSql`/the window's `HistoryPage`) against real
-  JavaFX/sqlite/slf4j jars - clean. Added 4 new `OrderDAOTest` cases exercising the new SQL
-  directly (page/count agreement and ordering, status filter excludes the other status, keyword
-  matches by order id and by customer name, date range excludes a real order when the range is
-  set to only "yesterday"), compiled and ran the **whole suite for real**: 68 tests, 0 failures
-  (was 64; +4 here, matching what was actually added).
-- **Not run through `mvn javafx:run`.** To test: open Lịch sử đơn hàng from the POS header,
-  confirm paging controls appear once there are more than 50 orders, and that a date-range
-  filter set far in the past still correctly shows nothing (or something, if real data exists
-  there) rather than always showing nothing beyond a fixed row cap.
-
-## Session 22 notes — reproduced real verification here + DAO tests
-
-**This sandbox can do the same real verification the last two sessions did** - confirmed
-`archive.ubuntu.com`/GitHub are reachable from here too. Before writing anything: recompiled
-the whole merged project (`apt-get download` for JavaFX 11 + slf4j jars, sqlite-jdbc 3.46.1.3
-from its GitHub release, `java -m jdk.compiler/com.sun.tools.javac.Main` since this sandbox's
-JDK has no `javac` launcher but does have the module) - clean, same lone unchecked-cast note as
-always. Ran the existing 34 tests for real (`org.junit.runner.JUnitCore`) - pass. Re-ran
-`dev-checks/SessionGuardCheck.java` against a fresh temp DB - 12/12. So Session 21's own
-verification checks out independently, not just by reading its notes.
-
-Then took the top item off TODO.md's suggested batch:
-
-- ✅ **DAO tests**: `CategoryDAOTest` (7), `CustomerDAOTest` (4), `ProductDAOTest` (5) - real
-  tests against a real temp SQLite database, not mocks. `UserDAO`/`OrderDAO` left for next time
-  (noted why in TODO.md).
-- **The interesting part - a real testability constraint, not just "write some tests":**
-  `DatabaseConfig.DB_URL` is `static final`, resolved once from `user.home` the moment the class
-  loads. `dev-checks/SessionGuardCheck` sidesteps this by being its own `java` process per run
-  (`-Duser.home` on the command line, before the JVM even starts). A JUnit suite can't do that -
-  all test classes share one JVM - so if each DAO test class pointed `user.home` at its *own*
-  temp dir, only whichever class happened to run first would actually take effect; the rest
-  would silently share its database instead of getting one each. Added
-  `dao/TestDatabaseSupport` (test-scope, package-private) as the one shared bootstrap every DAO
-  test class calls from `@BeforeClass` - one temp directory, set up exactly once, for the whole
-  run. Consequence: tests never assert on absolute table state (no `findAll().size() == 1`) -
-  each test creates its own uniquely-named row(s) and asserts only about those.
-- Added `CustomerDAO.findById` - didn't exist; the test needed it, and it's an obviously
-  reasonable gap to close for a DAO that otherwise had every other single-record lookup pattern.
-- **Verified for real**: compiled the 3 new test files against the just-recompiled main classes
-  (0 errors), then ran all 9 test classes together - **50 tests, 0 failures** - then re-ran
-  `SessionGuardCheck` again as a regression check on the `CustomerDAO` change (unrelated code
-  path, but cheap to confirm) - still 12/12.
-- **Not run through `mvn test` or `mvn javafx:run` by a human.** To run for real:
-  `mvn test` should print `Tests run: 50, Failures: 0` (the JUnit 5 dependency already sitting
-  in `pom.xml` from the original project scaffold is unused - all tests are JUnit 4 style; a
-  harmless pre-existing oddity, not something this session touched).
-
-## Session 21 notes — relative image paths, busy_timeout, and real automated tests
-
-User confirmed Session 20's SessionGuard/item-9 tests all passed, so continued straight into
-TODO.md's "suggested next batch": relative image paths, `busy_timeout`, then automated tests
-(reordered slightly - did the two small fixes first since tests could then cover one of them).
-
-- ✅ **Item 10a finished**: product images stored an absolute path (worked, but not portable -
-  copying the database to another machine/user broke every image). New `util/ImageStorage`
-  centralizes storage: `storeNewFile` now returns a bare file name to store on the product,
-  `resolve` turns a stored value back into a real `File` (still understands an old absolute
-  path already sitting in an existing database, so upgrading doesn't orphan anyone's pictures),
-  `deleteQuietly` replaces the old copy of the same logic that lived in `AdminController`. The
-  image cell factory, the picker, and product delete all go through it now instead of each
-  having their own inline path handling.
-- ✅ **Item 12 finished**: `PRAGMA busy_timeout = 5000` in `DatabaseConfig.getConnection()` -
-  without it, two connections writing at once (e.g. the 30s `SessionGuard` background check
-  landing mid-payment) got an immediate "database is locked" `SQLException` instead of one of
-  them just waiting briefly.
-- ✅ **Real automated tests, replacing the "no JUnit in the pom yet" gap.** Added JUnit 4 (test
-  scope) to `pom.xml` - chosen over JUnit 5 for one dependency and zero test-engine setup,
-  matching the project's "avoid unnecessary complexity" style; Surefire picks up `src/test/java`
-  with no extra config needed. Wrote real tests for every pure-logic class that had none:
-  `LoyaltyPolicyTest`, `PasswordUtilTest`, `ValidationUtilTest`, `CurrencyUtilTest`, `PagerTest`,
-  and `ImageStorageTest` (new this session - uses a real temp directory via a `user.home`
-  system-property swap in `@Before`/`@After`, not mocks). 34 tests total, each asserting a real
-  behavior the app depends on (e.g. `PasswordUtilTest` checks hashing actually fails closed on a
-  corrupted stored value rather than throwing; `PagerTest` checks a shrinking list pulls an
-  out-of-range current page back in, the real "admin deletes rows while on page 3" scenario).
-  `dev-checks/SessionGuardCheck.java` is kept separate rather than folded in: it needs a real
-  SQLite database and is closer to an integration check than a unit test.
-- **Verified for real, not just read - same approach as recent sessions, now covers tests too.**
-  Compiled the whole project (68 classes now, +1 for `ImageStorage`) against real JavaFX 11 +
-  sqlite-jdbc + slf4j jars pulled from `archive.ubuntu.com`/GitHub releases, exactly as before.
-  This session additionally pulled a real `junit4` + `hamcrest` from the same Ubuntu mirror,
-  compiled all 6 test classes against them, and **ran them with the real JUnit runner**:
-  `java -cp <classes>:<jars> org.junit.runner.JUnitCore <test classes>` → all 34 pass. Re-ran
-  the existing `SessionGuardCheck` against the freshly recompiled classes too, to make sure the
-  `busy_timeout`/`ImageStorage` changes hadn't broken anything it covers - still 12/12. This is
-  the strongest verification so far in this project (real compilation + real test execution
-  against real dependencies), but it is still not `mvn javafx:run` - nothing GUI-side runs here,
-  and this was all done with JavaFX 11 jars rather than the project's real 21 (all that's
-  available via `apt-get download` without a login) - a language/API difference at that gap is
-  possible even though the code compiled clean.
-- **Not run through `mvn javafx:run` or `mvn test` by a human yet.** To test: add a product
-  image, close and reopen the dialog to confirm it still shows, then check the file sitting in
-  `~/.lunavera-coffee/images/` is named like `<timestamp>_<original name>.png` rather than a
-  full path; `mvn test` should print `Tests run: 34, Failures: 0` (plus whatever count Maven
-  reports for its own default-generated tests, if any).
-
-## Session 20 notes — merged a second parallel audit branch, upgraded item 4, closed item 9
-
-**Reconciliation:** the upload this session started from was a different, more advanced branch
-than the one I'd been working on — it already had TODO items 1 (admin lock-out guard), 2 (atomic
-stock check in the order transaction), 3 (`DefaultPasswordPrompt`), 5 (dashboard excludes
-cancelled orders), 8 (duplicate-customer phone check) and 10a (image cleanup on replace/delete)
-done, none of which my branch had. My branch's own item 4 was a fuller `SessionGuard` (background
-watcher, payment-time and admin-action checks, role refresh) versus this branch's simpler
-"checked on next navigation only" version, and my branch had item 9 (hidden the dead-end
-register link) which this one didn't. Adopted this upload as the base and layered my two pieces
-on top, rather than redoing either branch's independent work:
-
-- **Item 4 upgraded**: replaced `SceneNavigator`'s inline `isCurrentAccountActive()` check with
-  `util/SessionGuard`, which does the same navigation-time check plus a 30s background
-  `Timeline`, a check before `OrderController.handlePayment` opens the payment dialog (a locked
-  account can't complete a sale mid-cart), a check inside `AdminController.requireAdmin()`, and
-  refreshes `Session`'s role on every check (a promotion/demotion takes effect without
-  re-login). Added `UserDAO.findById`; `Session`'s two fields are now `volatile` (read by the
-  background check off the FX thread).
-- **Item 9 closed**: hid the register prompt on `dangnhap.fxml` the same reversible way
-  (`visible="false" managed="false"`, `dangky.fxml`/`RegisterController` untouched) - this
-  branch's own `onLoginSuccess` already declined CUSTOMER logins, so the link was exactly the
-  dead end the other branch's note described.
-- **Verified for real, not just read**: `archive.ubuntu.com` is reachable from this sandbox, so
-  `apt-get download openjfx libopenjfx-java libopenjfx-jni libslf4j-java` + `dpkg -x` gives real
-  JavaFX (11 - older than the project's 21, but enough to type-check) and slf4j jars, sqlite-jdbc
-  3.46.1.3 comes from its GitHub release page, and the runtime already contains the compiler
-  module, so `java -m jdk.compiler/com.sun.tools.javac.Main` compiles the **whole project as it
-  now stands** (67 classes, clean apart from the pre-existing unchecked-cast note in
-  `AdminController`). `dev-checks/SessionGuardCheck.java` then runs the real merged `SessionGuard`
-  + `UserDAO` against a temp SQLite DB (`-Duser.home=<empty dir>`, never touches
-  `~/.lunavera-coffee`): 12/12 pass, including promote/demote refreshing the session role and a
-  deleted ("ghost id") account being rejected. This does not replace `mvn javafx:run` - nothing
-  GUI-side (the alert, the redirect, the 30s timer, the POS cart being discarded) runs headless.
-- **Not run through `mvn javafx:run`.** To test: log in as an employee, have an admin lock that
-  account in Quản lý tài khoản — within ~30s, or on the employee's next click/attempted payment,
-  they should see the message and land back on login. Promote/demote a logged-in account and
-  confirm admin-only buttons follow on the next click, no re-login needed. Confirm the login
-  screen no longer shows the register row.
-
-## Session 19 notes — third batch of audit fixes (see `TODO.md`)
-
-- ✅ **Locked users caught centrally:** `SceneNavigator.switchScene` now re-checks the logged-in
-  account's status (one indexed `UserDAO` lookup) before loading any screen except the login
-  screen itself; if it's no longer ACTIVE, clears the session, shows a message, and loads the
-  login screen instead of the requested one. Covers navigation from any sidebar button/logout on
-  every screen (all of them route through this one method) - the one gap is someone sitting idle
-  on a single screen without clicking anything, which is unchanged and accepted as low-risk.
-- ✅ **Orphaned product images:** picking a new image in the edit dialog now deletes the old file
-  after the new one copies successfully; hard-deleting a product now deletes its image file too.
-  Both go through a new `deleteImageFileQuietly` helper that never throws - a missing/locked file
-  shouldn't block saving or deleting the product record itself.
-- ✅ **Order history date filter:** `OrderHistoryWindow` gained from/to `DatePicker`s + a clear
-  button, filtering the already-loaded rows by `order_date`'s calendar day (inclusive both ends).
-  No DAO change - still the same 500-row cap, so a date range entirely outside those 500 shows
-  nothing even if older matching orders exist. Proper date-range paging is still a TODO.
-- **Not run through `mvn`.** To test: (a) lock an account (as admin, from another account) then
-  try any button on that locked user's currently-open screen -> bounced to login with a message.
-  (b) Edit a product's image twice in a row, then check `~/.lunavera-coffee/images/` only has the
-  latest file; delete that product and confirm the file is gone too. (c) In order history, set a
-  date range that includes/excludes known orders and confirm the count/rows update; clear it.
-
-## Session 18 notes — second batch of audit fixes (see `TODO.md`)
-
-- ✅ **Default password prompt:** logging in with the seeded `Admin@123` now opens a "change
-  password" dialog straight after the dashboard appears (`DefaultPasswordPrompt`); it validates
-  strength/match and refuses the default itself. "Để sau" is allowed, and it returns on every such
-  login. Detection uses the password typed at login (no extra hashing).
-- ✅ **Open-cart guard:** leaving the POS via any sidebar button/logout, or closing the window,
-  asks first if the cart has items; "yes" clears the cart so the prompt doesn't repeat. The close
-  handler is removed when leaving so it can't fire on other screens.
-- ✅ **Duplicate phone:** `CustomerDAO.existsByPhone`; checked in the customer dialog (excluding the
-  customer being edited) and in self-registration. No unique DB index on purpose.
-- ✅ **Backup:** "⤓ Sao lưu dữ liệu" on the admin dashboard writes a consistent copy of the database
-  via `VACUUM INTO` (`DatabaseConfig.backupTo`), admin-only. Restoring is manual (documented in the
-  success message).
-- **Not run through `mvn`.** To test: (a) fresh DB or reset admin password, log in as `admin` /
-  `Admin@123` -> prompt appears; weak/mismatched/default passwords are refused; after changing,
-  log out/in with the new one and no prompt. (b) POS: add items, click a sidebar button -> confirm;
-  "Không" stays, "Có" leaves; also try the window's X. (c) Add two customers with the same phone
-  -> second refused; edit a customer keeping its own phone -> allowed; register with a used phone ->
-  refused. (d) Backup: save a .db, open it with any SQLite viewer and check the tables/rows.
-
-## Session 17 notes — first batch of audit fixes (see `TODO.md`)
-
-Created `TODO.md` from the Session 16 audit and started on it (checked items there):
-- ✅ Last-admin guard (role change / deactivate in the account dialog, and lock button).
-- ✅ Negative stock: `OrderDAO.insert` now does `UPDATE products SET stock = stock - ? WHERE id = ?
-  AND stock >= ?` for every line inside the order's transaction and fails the whole sale with a
-  readable message if a line can't be covered. `OrderController` no longer calls `adjustStock` after
-  the insert (that two-step flow could save an order and crash before deducting stock); on a failed
-  payment it reloads products. `ProductDAO.adjustStock` is still used elsewhere - unchanged.
-- ✅ Dashboard "orders today"/"customers today" exclude cancelled orders.
-- ✅ Enter submits login/register; confirm dialogs say Có/Không; receipt caption "Nhân viên:".
-- **Not run through `mvn`.** To test: (a) as the only admin try changing your role to Employee and
-  unchecking active -> both refused; with a second admin it's allowed. (b) Put 3 of a product in the
-  cart, then in Product Management set its stock to 1 and pay -> clear "không đủ tồn kho" error, no
-  order saved, stock unchanged; a normal sale still deducts stock. (c) Cancel an order and confirm
-  "orders today" drops. (d) Press Enter on login; open any delete confirmation and check Có/Không.
-
-## Session 16 notes — read-only audit (no code changed)
-
-User confirmed all six Session 15 report tests pass, and asked for a scan for bugs/quality-of-life
-items *without changing the project*. Only this note was added. Findings (verified by reading
-the code unless marked "unverified"), most important first:
-
-### Likely bugs / risks
-1. **Admin lock-out (real):** the account dialog lets an admin change *their own* role to
-   Employee, and locking is only blocked for one's own account - nothing stops demoting/locking
-   the **last remaining admin**. Fix: refuse role change/lock/deactivate when it would leave zero
-   active admins (`UserDAO.countByRole` already exists).
-2. **Stock can go negative:** the POS checks stock only when adding/incrementing a cart line
-   against the list loaded at screen open; `ProductDAO.adjustStock` is a bare
-   `stock = stock + ?` with no floor, and `OrderDAO.insert` doesn't re-check. If stock was edited
-   elsewhere after the POS loaded, a sale can drive it below 0 (the brief says "never silently
-   allow negative"). Fix: re-check/decrement inside the order transaction
-   (`UPDATE ... SET stock = stock - ? WHERE id = ? AND stock >= ?`, fail the sale if 0 rows).
-3. **Default `admin` / `Admin@123` never forced to change** - password change works now
-   (Session 11) but nothing prompts it on first login.
-4. **Locked/deactivated users stay logged in** until they log out (status is only checked at
-   login). Low risk on a single-till desktop app.
-5. **Dashboard "orders today" counts cancelled and open orders too** (`countToday()` has no
-   status filter) while revenue counts PAID only - the two numbers can disagree.
-6. **Money stored as `REAL`** (price, total, ...). Fine for whole-dong amounts today, but sums of
-   REAL can carry float noise; long-term migrate to integer dong or TEXT decimals.
-7. **No schema versioning** (`PRAGMA user_version`): any future column change has no migration
-   path for the existing `~/.lunavera-coffee/lunavera.db`.
-8. **Duplicate customers:** no phone-uniqueness check in Customer add/edit or self-registration.
-9. **Self-registered CUSTOMER accounts are a dead end:** they can register but login only shows
-   "not supported yet". Either hide the register link, or build a customer screen.
-10. **Product image files are copied to `~/.lunavera-coffee/images/` and never deleted**
-    (orphans after edit/delete), and the *absolute* path is stored, so moving the data folder
-    breaks images.
-11. **Open cart is lost silently** if the window is closed (no close-request guard) or on
-    logout - the brief lists "application closing during an unfinished order".
-12. Unverified: `busy_timeout` isn't set explicitly; async DB threads + FX-thread writes could in
-    theory hit "database is locked" (sqlite-jdbc's default timeout probably hides it).
-
-### Quality of life
-- **Enter key doesn't log in** (password field has no `onAction`); same for the register form.
-- Confirm dialogs use `ButtonType.YES/NO` -> shows "Yes/No" on an English OS, mixed with
-  Vietnamese text. Use custom "Có"/"Không" buttons in `AlertUtil.confirm`.
-- Register screen's show/hide-password buttons only pop an "unsupported" dialog; login has none.
-  Implement real toggle (TextField bound to the PasswordField).
-- **Receipt caption bug (confirmed):** `donthanhtoan.fxml` captions that row "Bàn:" but
-  `HoaDonController.setInvoiceData` fills it with the *employee name* - the receipt reads
-  "Bàn: <employee>". Change the caption to "Nhân viên:" (one-word FXML fix), or pass the real
-  table number if it should stay.
-- Order history is capped at 500 newest with no date filter; add date range + paging.
-- No **backup/restore** of the SQLite file; a "Sao lưu dữ liệu" button (copy the .db) is cheap.
-- No file logging (only console) - hard to debug a shop's machine after the fact.
-- Product/customer tables: no column sorting affordances or page-size choice; stock column
-  missing from the product table (low stock only visible on the dashboard).
-- Dialogs: no Enter-to-save / Esc-to-cancel hints; long text isn't length-limited.
-- **No automated tests at all** (brief section 25). Cheapest wins: unit tests for
-  `LoyaltyPolicy`, `PasswordUtil`, `ValidationUtil`, and DAO tests on a temp SQLite file.
-- Still-open optional features: forgot-password, receipt QR code, real table/seating.
-
-Suggested order if time is short: 1 (lock-out), 2 (negative stock), Enter-to-login, Yes/No
-labels, 5 (orders-today), 11 (cart guard), then backup button.
-
-## Session 15 notes — admin sales report (with CSV export)
-
-User confirmed all four Session 14 tests pass (history window, receipt re-open, admin cancel
-with stock/points/dashboard updates, employee's cancel button disabled).
-
-Next gap against the original brief ("view sales/statistics", "daily sales, reports", "popular
-products"): the dashboards only show today + a 7-day chart, with no way to look at any other
-period or see best sellers. Added:
-
-- ✅ **"▤ Báo cáo doanh thu" button** on the admin dashboard (`admin-trangchu.fxml`,
-  `AdminController.handleShowReports`) opening `ReportWindow` (admin-only; re-checked in code,
-  not just by only putting the button on the admin dashboard). Pick a from/to date (defaults:
-  1st of this month -> today) and see: paid orders, revenue, average order value, discounts
-  given, cancelled orders; **best sellers** (top 20 by units, with revenue); **revenue per day**.
-- ✅ **"Xuất CSV"** exports exactly what's on screen (the last loaded range, not whatever the
-  pickers were edited to since) as UTF-8 *with BOM* so Excel shows the Vietnamese text
-  correctly.
-- New: `dao/ReportDAO` (read-only aggregates, three queries, records for results),
-  `org.example.controller.ReportWindow`.
-- ⚠️ **Decision:** only PAID orders count as sales; a cancelled order (Session 14) is a
-  refunded sale, so it's excluded from revenue/best sellers and only counted separately under
-  "Đơn đã hủy". Its date is the original sale date (`paid_at`), not the cancellation date -
-  there's no cancelled-at column.
-- ⚠️ **Decision:** best sellers group by the product name *snapshotted on the order item*, so
-  a renamed product's old sales stay under its old name (matches how invoices already work).
-- Also fixed (same "never bound to the session" gap as Sessions 1/10): both dashboards' header
-  still literally said "Chào mừng, Admin!"/"Employee" whoever was logged in - now shows the
-  real display name (`dashboardGreetingLabel`, `dashboardAccountNameLabel`).
-- **Verified statically** (all 10 FXML vs their controllers, balance, duplicate fields); **not
-  run through `mvn`**. To test: pay a few orders on different products (ideally some with a
-  discount), open the report on the admin dashboard: totals should equal the sum of the paid
-  orders in Lịch sử đơn hàng, best sellers should match what you sold, cancelling one order
-  (Session 14) and pressing "Xem báo cáo" again should drop it from revenue and bump "Đơn đã
-  hủy"; export the CSV and open it in Excel; try from > to (should warn, not crash); log in as
-  an employee - there is no report button on their dashboard.
-
-## Session 14 notes — order/invoice history + cancel (refund) order
-
-Read the merged upload first (Sessions 12–13 were built in parallel chats): re-ran the full
-fx:id/onAction cross-check of all 10 FXML files against their own `fx:controller`, brace/paren
-balance on every Java file, duplicate-field check, and read the Session 13 dashboard code
-(`DashboardWidgets`, `findLowStock`, `findRecent`, `DashboardStats`). Clean - only decorative
-layout ids are unmatched, same as before.
-
-Then closed a real gap against the original brief ("see order in order history", "invoice
-history", "cancelling an order"): nothing could list past orders, re-open an old receipt, or
-cancel a sale. Added:
-
-- ✅ **"▤ Lịch sử đơn hàng" button** in the POS screen header (`quanlydonhang.fxml`,
-  `OrderController.handleShowOrderHistory`) opening `OrderHistoryWindow`: newest 500 orders
-  with time, employee, customer ("Khách lẻ" if none), payment method, total, status; search by
-  order id/employee/customer; status filter; **"Xem hóa đơn"** (or double-click) re-opens the
-  original receipt via the existing `HoaDonController` with the *order's own* employee and
-  customer names (not the current login's).
-- ✅ **Cancel (refund) a paid order - admin only** (button disabled for employees, and
-  re-checked in code): `OrderDAO.cancelPaidOrder()` runs in one transaction - puts stock back,
-  takes back the loyalty points that order earned (never below 0), sets status `CANCELLED`
-  (dashboard revenue already counts only PAID, and recent-orders already flags "Đã hủy"). The
-  order and its items are kept, so history stays intact. Refuses anything not currently PAID.
-- ⚠️ **Decision:** the history is a plain *non-modal* window built in code, not a new FXML
-  screen - it needs no sidebar, and non-modal avoids the Linux dialog-modality trouble from
-  Sessions 4-5. Its only prompts (confirm/errors) go through `AlertUtil` like everywhere else.
-- ⚠️ **Decision:** cancel = full refund of the whole order (no partial refunds, no editing a
-  paid order). Cancelling doesn't reverse a customer's *tier* separately - the tier is derived
-  from points, so it follows automatically.
-- New: `OrderDAO.findHistory(limit)` + `OrderDAO.OrderSummary` (single JOIN, no per-row lookups),
-  `OrderDAO.cancelPaidOrder(id)`, `org.example.controller.OrderHistoryWindow`.
-- **Not run through `mvn`** (no build tools in the authoring sandbox). To test: pay 2 orders
-  (one with a customer attached, e.g. 120.000đ = +12 points, stock -N); open Lịch sử đơn hàng;
-  double-click an order and check the receipt matches; as admin cancel the customer order and
-  confirm: status "Đã hủy", stock restored in Product Management, points back down by 12,
-  dashboard revenue/recent orders updated; log in as an employee and confirm the cancel
-  button stays disabled.
-
-## Session 13 notes — removed the last fake data from both dashboards
-
-User confirmed Session 12's three test items all work (dialogs stay open with input intact,
-password change + re-login, loyalty points/tier after a paid order with a customer).
-
-The original brief says dashboards must show only real data ("do not invent fake statistics"),
-but both dashboards still carried mockup content from Session 1: a hardcoded 12-table occupancy
-grid (with made-up "Có khách" tables while the stat card above it said 0), and four hardcoded
-low-stock rows ("Cà phê Arabica – còn 3/10" etc.) that had nothing to do with the real product
-table. Replaced with real data, same look (existing `inventory-*` CSS classes reused, no CSS
-edits), on both `admin-trangchu.fxml` and `employee-trangchu.fxml`:
-
-- ✅ **Low-stock card** - real active products at or below `ProductDAO.LOW_STOCK_THRESHOLD`
-  (10), lowest first, max 5 rows, with "Hết hàng"/"Sắp hết"(≤5)/"Thấp" badges and an honest
-  empty state ("Tất cả sản phẩm đều đủ hàng"). ⚠️ One shop-wide threshold: there is no
-  per-product minimum-stock column, and adding one wasn't worth a schema migration yet. Its
-  "Xem kho →" button now reads "Xem sản phẩm →" and opens Product Management (where stock is
-  actually edited) instead of the "not built" info dialog.
-- ✅ **"Trạng thái bàn" card → "Đơn hàng gần đây"** - the 5 newest orders (id, time, payment
-  method, total; "Đã hủy" flagged). Real table occupancy can't be reported truthfully (no
-  table entity, and orders are paid immediately at the POS, never left open), so rather than
-  keep faking it the card now shows something real. This also gives the dashboard the "recent
-  orders" item the original brief listed.
-- ✅ **"TỔNG SỐ BÀN" stat card → "SẢN PHẨM"** - real product count (`ProductDAO.countAll()`,
-  includes inactive ones) with a "Cần nhập thêm: N sản phẩm" note from the same low-stock query.
-- New: `ProductDAO.findLowStock()/countLowStock()`, `OrderDAO.findRecent()`, three new fields
-  on `DashboardStats`, and `util/DashboardWidgets` (builds the rows once; both dashboard
-  controllers call it instead of duplicating UI code). fx:ids renamed to match their new
-  meaning (`dashboardProductCountLabel`, `dashboardLowStockNoteLabel`, `recentOrdersNoteLabel`,
-  `recentOrdersList`, `lowStockList`) - the old `table*` names would have been actively
-  misleading. `tableGrid` on the POS screen is unchanged: that one is deliberately decorative
-  table *selection*, not a claim about occupancy.
-- **Verified statically**: fx:id/onAction cross-check of every FXML against its own
-  `fx:controller` (clean for everything touched; the only unmatched ids project-wide are
-  unreferenced decorative layout nodes on the login/register/account screens, untouched),
-  brace/paren balance and duplicate-field checks on all controllers. **Not run through
-  `mvn javafx:run`.** To test: with a fresh DB the dashboard should say "Chưa có đơn" and list
-  low stock honestly; set a product's stock to 3 in Product Management and see it appear with
-  "Sắp hết"; pay an order and see it appear under recent orders on both dashboards.
-
-## Session 12 notes — fixed the "dialogs lose typed input" bug everywhere it existed
-
-Verified Sessions 9–11's work first (per the recurring pattern of checking before building):
-read the new `CustomerController`, `LoyaltyPolicy`, and the `OrderDAO`/`UserDAO`/`CustomerDAO`
-diffs in full, confirmed the loyalty-points update happens inside the same transaction/
-connection as the order insert (so it can't be granted for a save that fails), confirmed the
-account edit dialog validates the new password *before* writing anything else. All clean.
-
-Then did the concrete item Session 11 flagged as "worth doing next": the event-filter fix for
-the known dialog limitation, applied to all five dialogs that had it - category, account,
-product (`AdminController`), customer (`CustomerController`), and the POS payment dialog
-(`OrderController`, found while doing this - not explicitly called out in the Backlog list, but
-same `setResultConverter` pattern, and arguably the worst case of the five to get wrong: it's
-the one asking for a *typed number* right before completing a sale, not just a re-selectable
-combo box).
-
-Also fixed two stale sections further down this file (the "Architecture notes" and "Next
-recommended step" - both still described the pre-Session-7/10 state: said `AdminController`
-was shared by 6 screens when it's 4, and listed the Session 11 items as still-to-do when they
-were already done).
-
-**Not yet run through `mvn javafx:run`** - please test per the updated "Next recommended step"
-below, in particular: type something invalid into each of the five dialogs and confirm it now
-stays open with your input intact (previously: category/account/product/customer dialogs and
-the POS payment dialog would all silently close and discard everything typed on any validation
-failure).
-
-## Session 11 notes — backlog polish + two real gaps found
-
-User confirmed Customer Management (add/search by name and phone/edit) works. Worked the
-Backlog list:
-
-- ✅ `reloadCategories()` / `reloadAccounts()` now load via `Async.run(...)` like every other
-  screen (previously the last two synchronous DB loads on the FX thread).
-- ✅ Account dialog's role dropdown now shows Vietnamese labels ("Quản trị viên"/"Nhân viên")
-  via a `StringConverter` instead of raw enum names.
-- ⚠️→✅ **Real bug found:** the edit-account dialog's password field said "leave blank to keep
-  current password", implying typing one changes it - but the edit path ignored the field
-  entirely, so no password could ever be changed (including the default `admin` / `Admin@123`
-  seeded account, which Session 1 said to change "after first login" with no way to do so).
-  Fixed: added `UserDAO.updatePasswordHash()`; edit now validates (same rule as creation,
-  checked *before* any other field is saved so a bad password can't cause a partial save) and
-  hashes/stores a new password when the field is non-blank.
-- ⚠️→✅ **Real gap found:** nothing ever awarded loyalty points, so the Customer screen's
-  "Hạng thành viên" tier column could never change from "Thành viên mới". Added
-  `service/LoyaltyPolicy` (1 point per full 10.000đ of the final total - one place to change
-  the rule) and `OrderDAO.insert()` now awards points inside the same transaction as the order
-  for PAID orders with an attached customer, so points can't be granted for an order that
-  failed to save.
-- ⬜ Not done, deliberately: `LoginController.onLoginSuccess()`'s single sync
-  `employeeDAO.findById` (trivial), forgot-password, table/seating, QR code (all out of scope
-  unless requested).
-- ⚠️ **Known limitation noticed, not fixed:** all `Dialog` forms (category/account/product/
-  customer) use `setResultConverter` + `showAndWait()`, so a validation failure shows its
-  warning and then the dialog closes, losing what was typed. Proper fix is an event filter on
-  the Save button that consumes the event on invalid input (recipe is in the Session 6 "Step 0"
-  notes). Worth doing next, across all four dialogs at once.
-- **Verified statically** (brace balance, fx:id/onAction bindings, duplicate fields); not run
-  through `mvn`. To test: pay an order with a customer attached (e.g. a 120.000đ order = +12
-  points), check the points on the Customer screen; reach 100 points to see "Bạc"; edit an
-  account, type a new password, log out and log in with it.
-
-## Session 10 notes — Customer Management built (Step 3 done)
-
-User confirmed the POS flow (Session 7/9) works end-to-end. Built Step 3 per the plan.
-
-- ✅ `quanlykhachhang.fxml` had a fully laid-out table (7 columns, including "Điểm tích lũy"
-  and "Hạng thành viên") and search/add UI already sitting there unwired since Session 1 — just
-  needed `fx:id`s added, not built from scratch. Also gave the header's "Admin" labels real
-  `fx:id`s and bound them to `Session` (every other screen already did this; this one was
-  missed originally).
-- ⚠️ **Decision: own `CustomerController`, not a 7th `AdminController` screen** — same
-  reasoning as `OrderController` (see its javadoc): fresh screen, no reason to add collision
-  risk to an already-large shared class. This is the third occurrence of the ~8-method
-  navigation-duplication tradeoff (Admin→Order→Customer) — noted in the new controller's
-  javadoc as the point to extract a shared base class if a fourth screen ever needs splitting
-  out.
-- ✅ Real CRUD via `CustomerDAO`: search by name/phone, add, edit. Added `CustomerDAO.update()`
-  (didn't exist before — only `insert`/`findAll`/`countAll` did).
-- ⚠️ **Decision: no delete, no order-history view.** A customer may be referenced by past
-  orders (`orders.customer_id`) or a self-registered login account — safely handling either
-  is bigger than this screen needs to unblock, so it's left out rather than half-built. Order
-  history would need a new `OrderDAO` query that doesn't exist yet.
-- ⚠️ **Decision: "Hạng thành viên" (membership tier) is a computed display value, not a
-  stored field** — simple thresholds on real `loyaltyPoints` (≥500 Vàng, ≥100 Bạc, else
-  "Thành viên mới"), transparent and derived, never fabricated. Not configurable by the shop
-  yet; revisit if that's wanted.
-- **Verified**: brace/paren balance, fx:id/onAction cross-check on the new controller+FXML
-  pair, and — since this changed which controller a shared FXML points to — re-ran the same
-  cross-check across **all 10 FXML files against their own actual `fx:controller`** project-
-  wide. Zero mismatches anywhere.
-- **Not yet run through `mvn javafx:run`** — please build/test: add a customer, search by
-  partial name and by phone, edit one, and confirm the loyalty tier column updates correctly
-  at the 100/500 point boundaries.
-
-**With this, all three Step 1–3 features from the Session 6 plan are built.** Per the original
-task brief, the project is now functionally at "complete workflow" status: login → role-based
-dashboard → manage categories/products/accounts/customers → run a full POS sale → receipt.
-Remaining work is entirely in the "Backlog" section further down this file (polish items) plus
-whatever testing this session's Customer Management surfaces.
-
-## Session 9 notes — verified Session 7's Order/POS build, no bugs found
-
-Asked to build 25–50% of Step 2 (Order Management/POS). On reading the uploaded state first
-(as instructed), found Session 7 had already built it in full — a complete, working POS flow
-in a new dedicated `OrderController` (table select → start order → search/add to cart →
-adjust quantities → attach customer → pay with discount/change calc → persist via `OrderDAO` →
-decrement stock → open the receipt). Rather than duplicate that work blind, spent this session
-verifying it thoroughly instead — same standard as every prior session, just applied to code I
-didn't write myself:
-
-- Read `OrderController.java` in full (635 lines) and the rewritten `quanlydonhang.fxml` (569
-  lines). The logic holds up: stock is checked against the DB-loaded snapshot (not decremented
-  in-memory until actual payment, which is correct), the payment dialog's discount/cash/change
-  validation is complete, `Async.run(...)` is used correctly for the save+stock-decrement, and
-  the "print invoice" honesty check (refuses to fabricate a receipt for an unpaid order) works
-  as described.
-- Ran the full fx:id/onAction cross-check — this time against **every FXML file matched to its
-  own declared `fx:controller`** (all 10 screens across 6 controller classes: AdminController,
-  OrderController, EmployeeController, LoginController, RegisterController, HoaDonController),
-  not just the one new screen. **Zero mismatches anywhere** — this also re-confirms the
-  Session 8 Product Management reconciliation didn't regress anything on the other 5
-  `AdminController` screens.
-- Checked brace/paren balance and duplicate field/method names on `AdminController.java`
-  (now 1216 lines, most churned-on file across all the parallel sessions) and
-  `OrderController.java` — both clean.
-- Spot-checked the specific bug fix Session 8 described (`applyCategoryFilter()`'s null guard
-  for `categoryTable`) — present and correctly reasoned, matches its own description exactly.
-- Confirmed the two small model additions (`Customer.toString()`, `Product.toString()`, for
-  `ChoiceDialog` display) are clean and appropriately documented as UI-display-only.
-
-**No code changes this session** — genuinely nothing to fix. **Still not run through
-`mvn javafx:run` by a human** (per Session 7's own note) — this is the one thing my own
-verification can't cover: static cross-checking catches wiring bugs (wrong method called, null
-field) but not runtime logic bugs that only surface by actually clicking through a stateful
-multi-step flow like this one. Please test the actual POS screen next — pick a table, add a
-few products, try adjusting quantities up past available stock, attach a customer, pay with
-cash (try entering less than the total first, then enough), confirm the receipt window opens
-and shows correct data, and confirm stock actually decreased in Product Management afterward.
-
-## Session 8 notes — reconciling a second parallel Product Management implementation
-
-**Housekeeping again, and this is going to keep happening across separate chats/machines:**
-the zip uploaded to start this session was, once again, missing work already delivered - this
-time it was missing all of Session 7's Order Management, and it turned out to contain a
-*different, independently-written* Product Management implementation (also labeled "Session 7"
-in its own progress.md - numbering collides with the entry below because two separate sessions
-each picked up from the same Session 6 handoff without knowing about each other).
-
-That independent implementation was **actually better than mine** in real ways, and - this
-matters more than anything I can verify myself - **was confirmed working by the user against
-the real `mvn javafx:run` build, including clicking through add/edit/delete and the image
-picker.** Rather than keep my own unverified version out of pride, adopted theirs as the new
-base:
-- Real image picker (`FileChooser` → copies into `~/.lunavera-coffee/images/`) - I'd deferred
-  this; they built it, including the table's image column actually loading it.
-- Real guarded hard-delete (`ProductDAO.countOrderReferences()` blocks deleting a product with
-  order history and offers to deactivate instead) rather than my always-deactivate-only choice.
-- Product loads via `Async.run(...)` from the start.
-- Category quick-tabs filter by substring-matching the real category name rather than my exact
-  name-match approach - more forgiving, same "no fake counts" principle.
-
-**One real bug found in it before adopting:** its `handleAddCategory()`/`openCategoryDialog()`
-is shared as-is between the real Category screen and the Product screen's own "+ Thêm danh mục"
-shortcut (same fx:id, same handler - a deliberate simplification vs. my earlier callback-based
-split). `applyCategoryFilter()` touches `categoryTable` with no null guard, and `categoryTable`
-is null when this runs from the Product screen (fresh `AdminController` instance per screen,
-only that screen's own fields populated) - so using that shortcut from the Product screen would
-NPE right after successfully saving the category to the database. Fixed with a 2-line null
-guard in `applyCategoryFilter()`, plus made `reloadCategories()` also refresh the Product
-screen's own category list when it's the one present, so the new category actually shows up in
-the product dialog's dropdown without needing a full screen reload either way.
-
-Also re-applied Session 7's Order Management work on top of this new base (removed the same
-dead order-stub methods again, `OrderController.java`/`quanlydonhang.fxml` were untouched by
-this upload so needed no changes) and re-ran the full fx:id/onAction cross-check across every
-FXML file against both controllers - clean.
-
-**Given how often re-uploads have landed a step behind actual progress:** please try to always
-grab the *most recent* zip this chat has produced before starting a new local session, rather
-than one from partway through - it's the difference between this session finding one real bug
-in otherwise-solid new work vs. potentially losing work outright.
-
-## Session 7 notes — Order Management / POS built, plus a note on this session's starting point
-
-**Housekeeping first:** the zip uploaded to start this session was a step *behind* what Session
-6 had already delivered (it was missing all of the Product Management work - same Sessions 1-5
-code otherwise, byte-for-byte). Rather than reverting Session 6's work, this session continued
-from the more advanced state (nothing else was lost - the diff was exactly the 3 files Session 6
-touched). The uploaded zip's own "Session 6" notes described a review pass with a detailed
-forward plan for Product/Order/Customer management; useful ideas from it were folded into this
-session's decisions below and the Backlog section, but its Step 0 (a big dialog-modality
-refactor) was skipped since the user had separately already said to deprioritize that - written
-without visibility into that conversation.
-
-**Built**: `quanlydonhang.fxml` (the dine-in table grid + live cart + checkout screen) is now a
-real, working POS flow: pick a table → start an order → search/add products to a cart → adjust
-quantities → attach an optional registered customer → pay (cash with change calc, or card) →
-order + items persist via `OrderDAO` (transactional) → stock decrements via
-`ProductDAO.adjustStock` → the receipt window opens automatically via the already-built (and
-previously unreachable) `HoaDonController`.
-
-⚠️ **Architecture decision: gave this screen its own `OrderController`, not a 7th screen on
-`AdminController`.** That class was ~1300 lines across 6 screens after Session 6 and had
-already needed 5 collision renames to add the 6th - this was the natural point to stop. The
-FXML's `fx:controller` now points to the new class; the old inert stub handlers for this screen
-were removed from `AdminController` rather than left as dead code. Trade-off taken knowingly:
-`OrderController` duplicates ~9 one-line navigation methods (open each screen, logout) instead
-of sharing them via a base class - a small, low-risk amount of duplication for now. If Customer
-management (next) also needs splitting out, that's the point to extract a shared base class for
-these (three duplicates is the usual signal to stop duplicating).
-
-⚠️ **Decision: dine-in tables stay decorative, exactly as before.** No table/seating entity
-exists in the schema (unchanged from Session 1). Clicking one of the 16 table buttons only sets
-local, in-memory UI state (which button is highlighted, the "Bàn N" label) - it's never
-persisted and never blocks starting an order. The real thing this screen builds and saves is
-the order/cart itself.
-
-⚠️ **Decision: no discount/cash-received fields exist anywhere in the FXML**, so payment
-(method choice, an optional flat-amount discount, cash received + live change calculation, all
-validated - discount can't exceed the subtotal, cash received can't be less than the total) all
-live in a new dialog built the same way the add/edit-category and add/edit-product dialogs are:
-programmatically, via `AlertUtil.configure(dialog)`. This keeps the main screen's existing
-layout untouched.
-
-⚠️ **Decision: the quantity column doubles as the remove control.** `orderDetailTable` has no
-action/remove column in the FXML (only STT/name/qty/price/subtotal) and the qty column is only
-60px wide. Rather than restructuring the table, the qty column renders inline "[-] N [+]"
-buttons; decrementing past 1 removes the line - a common POS pattern, and avoids needing a
-column the design doesn't have room for.
-
-⚠️ **Decision: cart lines are plain `OrderItem`s, not a new "CartLine" model.** `OrderItem`
-already snapshots product name + price for exactly this reason (see its own doc comment); reused
-directly with `id`/`orderId` left unset until `OrderDAO.insert(...)` actually persists them, per
-the plan's own suggestion.
-
-**Other things actually implemented, not just stubbed**: stock is checked (against the
-in-memory product list, refreshed after every payment) both when adding a new line and when
-incrementing an existing one - never allows a cart quantity to exceed available stock. Product
-search that matches more than one active product opens a small `ChoiceDialog` rather than
-guessing. "Chỉnh sửa" attaches/detaches a registered `Customer` (search dialog over
-`CustomerDAO.findAll()`) for loyalty/history tracking; unattached orders record no customer id
-("Khách vãng lai"). "In hóa đơn" re-opens the receipt for the last order *actually paid* in this
-screen visit and is honest ("chưa có hóa đơn") if nothing's been paid yet yet - it does not
-fabricate a receipt for an unpaid cart. Empty-cart and not-yet-started-order checkout attempts
-are blocked with a clear message rather than silently doing nothing.
-
-**Small additive model changes**: added `toString()` to `Customer` and `Product` (matching the
-existing pattern already documented on `Category`) so `ChoiceDialog` cells display something
-readable instead of the default `Object.toString()`.
-
-**Verified (not just by reading code)**: same fx:id/onAction cross-check as Session 6, run
-against every FXML file again (including the 5 still on `AdminController`, to confirm removing
-the order stub methods didn't orphan anything) - clean. Not yet run through `mvn javafx:run` -
-please build and test; this is the largest, most stateful piece of logic added so far and the
-one most likely to have an edge case that only shows up at runtime.
-
-## Session 6 notes — Product Management built
-
-Followed progress.md's own "next recommended step." `quanlysanpham.fxml` is now fully wired to
-`ProductDAO`, following the same patterns already established by Category/Account management:
-
-- **Real CRUD**: add/edit via a shared dialog (name, category, price, cost, stock, description,
-  active checkbox - all validated: required fields, price > 0, cost ≥ 0 if given, stock ≥ 0
-  integer, a category must be selected), search-by-name, status filter (Đang bán/Ngừng bán),
-  pagination via `Pager`, and a fully dynamic category filter combo box (populated from
-  whatever categories actually exist via `CategoryDAO.findAll()` - not hardcoded).
-- ⚠️ **Decision: "delete" = deactivate, not a real delete.** Unlike Category (which really can
-  be hard-deleted when unused), `ProductDAO` has no delete method and none was added: a future
-  `OrderItem` will need to keep referencing its product, and the task brief is explicit that a
-  product with order history shouldn't have that history invalidated by deleting it. The table's
-  🗑 action toggles active/inactive instead, with an honest confirm dialog that says so rather
-  than implying a real delete.
-- ⚠️ **Decision: kept the 3 hardcoded quick-tab shortcuts (Coffee/Cake/Juice), didn't make them
-  dynamic.** The FXML already had *two* filtering mechanisms side by side: 3 hardcoded
-  quick-tab buttons (top row + a duplicate list in the sidebar) and a `categoryFilter` combo
-  box. Rather than ripping out the hardcoded buttons and generating N buttons at runtime (a much
-  bigger FXML restructure for a "don't rewrite the UI" project), the combo box was made the
-  complete, always-accurate filter (any category, however many exist), and the quick-tabs stay
-  as name-matched shortcuts for the shop's anticipated 3 main categories - both write to the
-  same underlying filter state and stay visually in sync, so there's no contradiction between
-  them, but a renamed/removed "Cà phê" category would just make that one shortcut show 0/select
-  nothing rather than silently breaking.
-- ⬜ **Deliberately not done**: no image upload/file picker - the `imageColumn` shows a plain
-  placeholder glyph for every row (also applied to Category's own image column, which existed
-  but was never wired to anything - one-line fix while in the area). Adding real image handling
-  is a separate, self-contained feature; wasn't worth blocking core CRUD on it.
-- ⚠️ Minor known edge case, not fixed: editing a product whose category has since been
-  deactivated shows the category field empty (deactivated categories are intentionally excluded
-  from the picker) rather than pre-selecting a hidden category - the admin has to actively
-  (re)pick an active category to save. Not a crash, just something to be aware of.
-
-**Real field/method collisions found and fixed** (`AdminController` is shared by 6 screens; this
-is the first screen added since the original collisions were last dealt with, and it surfaced 5
-new ones): `quanlysanpham.fxml`'s own `addCategoryButton`, `statusColumn`, `previousPageButton`,
-`pageOneButton`, `pageTwoButton`, and `nextPageButton` all collided with fields/methods already
-claimed by Category/Account management on the same shared controller (same fx:id or onAction
-name, different meaning/type - would have caused an injection type mismatch or hijacked the
-wrong handler at runtime, not a compile error, so this needed a careful cross-check rather than
-just trusting the compiler). Renamed to `addCategoryFromProductButton`, `productStatusColumn`,
-`productPreviousPageButton`, `productPageOneButton`, `productPageTwoButton`,
-`productNextPageButton` (FXML `fx:id`/`onAction` + matching Java fields/methods) - purely a
-rename, no visual/layout change. Also refactored `openCategoryDialog(existing)` into
-`openCategoryDialog(existing, onSaved)` so the product screen's own "add category" shortcut
-button can reuse the real category-save logic without touching `categoryTable` (which is null
-on this screen).
-
-**Verified (not just by reading code)**: cross-checked every `fx:id` and `onAction` in all 6
-`AdminController`-backed FXML files against the actual Java fields/methods after this change -
-zero mismatches anywhere, including on the untouched screens (Order management's many
-`fx:id`s with no Java field are pre-existing/expected - that screen isn't built yet, see
-below). Not yet run through `mvn javafx:run` by an actual human - please build and test.
-
-⚠️ **Growing architectural debt, flagged again**: `AdminController` just grew by ~20 fields and
-~350 lines to take on a 6th screen, and needed 5 collision renames to do it safely. Customer
-management (next) and the Order/POS screen (the big one after that) will add a 7th and 8th.
-Strongly recommend splitting into one controller per screen before/while building the next one,
-now that the fields section header comments and this session's collision list show exactly
-which screen owns which fields - that's the map a split would follow.
-
-## Session 5 notes — dialog "mouse stuck" fix, attempt 2 (deferred)
-
-Session 4's `initOwner(...)` fix resolved one real symptom (dialogs sometimes appearing behind
-the main window), confirmed by the user, but not the main one: the mouse still feels confined
-to the dialog's bounds and can't move freely around the rest of the screen while open. Tried
-setting `Modality.WINDOW_MODAL` explicitly (was relying on the implicit `APPLICATION_MODAL`
-default) on all four popup sites in the project (`AlertUtil`'s alerts + the add/edit-category
-and add/edit-account dialogs, now sharing one `AlertUtil.configure(Dialog<?>)` method) — user
-confirmed this did **not** resolve the cursor confinement either.
-
-Target platforms clarified: **Windows is the actual deployment target**; GNOME, KDE, and
-Arch+Hyprland Linux are just the developer's own coding environments, not where this needs to
-ship. That's an important data point — Hyprland in particular is a **Wayland** compositor, and
-JavaFX still runs there through XWayland (X11 compat) rather than natively; Wayland/XWayland's
-pointer-confinement handling for "modal" transient windows is known to be stricter/buggier than
-a typical X11 or Windows desktop in exactly this way. So there's a real chance this is specific
-to the Linux dev machines' compositors and doesn't reproduce on Windows at all.
-
-**Deliberately deprioritized per explicit user instruction** - a real, understood, minor UX
-annoyance (dialogs still correctly block input to the app behind them; only cursor freedom of
-movement is affected), not a functional bug and not blocking the main objective. Parking it
-here. If it also reproduces on Windows later, the next thing to try is a bigger refactor: show
-dialogs non-modally (`Modality.NONE` + `Dialog.show()`) and manually `setDisable(true)` on the
-main window's root pane while one is open, sidestepping JavaFX/OS modal grab entirely
-(`AlertUtil.confirm()`'s synchronous boolean return would need to become callback-based first).
-
-## Session 4 notes — dialog "mouse feels stuck" fix
-
-Reported after Session 3: alerts (invalid login, "not implemented yet", etc.) made the mouse
-feel confined to the dialog's area instead of behaving like a normal modal window. Root cause:
-`AlertUtil` created every `Alert` without ever calling `initOwner(...)`. An owner-less modal
-dialog still blocks input correctly, but with no owner window, the window manager has no real
-window geometry to tie its input grab to - this is a well-documented JavaFX gotcha, not an
-actual limitation of modal dialogs. Fixed centrally in `AlertUtil` (one file, no call sites
-changed): every alert now attaches itself to whichever open window currently reports focus via
-`Window.getWindows()`, so `AlertUtil.error(...)`/`.warning(...)`/etc. behave identically
-everywhere they're already called.
-
-Confirmed working by the user (Session 3 perf fixes): `mvn javafx:run` builds and runs
-successfully; login and Category/Account search are both noticeably snappier.
-
-## Session 3 notes — performance fix ("login and buttons feel laggy")
-
-Diagnosed and fixed three real causes, all synchronous work running directly on the JavaFX
-Application Thread (found by reading the code, not yet re-verified by `mvn javafx:run` on a
-real machine — please re-test and report back):
-
-- **Login froze the UI for the PBKDF2 hash.** `AuthenticationService.login()` (via
-  `PasswordUtil.matches()`, ~120,000 iterations) ran directly inside the login button's click
-  handler. Now runs on a background thread via a new `util/Async` helper (a thin `Task`
-  wrapper); the button disables and shows "ĐANG ĐĂNG NHẬP..." while it works, and the existing
-  result-handling logic runs unchanged once it's done.
-- **Every dashboard load ran ~10 sequential DB queries on the FX thread.**
-  `DashboardStatsService.loadStats()` calls 10 DAO methods in a row, each opening its own
-  connection; this ran synchronously in `initialize()` on both `AdminController` and
-  `EmployeeController`, so every login *and* every click on "Trang chủ" paused the UI briefly.
-  Both now load stats via `Async.run(...)` and populate labels/chart once the result is back.
-- **Real N+1 query bug in Category and Account management.** Category's product-count column
-  and Account's employee-name/phone columns called their DAOs *once per row*, inside the
-  cell-value-factory *and* inside the live search-field listener — so every keystroke in either
-  screen's search box re-ran a burst of fresh DB connections proportional to the row count.
-  Fixed by batch-loading once per screen reload instead: added
-  `CategoryDAO.countProductsByCategory()` (one grouped query → `Map<categoryId, count>`) and a
-  `Map<employeeId, Employee>` built from `EmployeeDAO.findAll()` in `AdminController`; the
-  cell-value-factories and filters now read from these in-memory maps. Typing in either search
-  box no longer touches the database at all.
-
-Deliberately *not* done as part of this fix (would be over-engineering for a single-user
-desktop app once the N+1 pattern above is gone): connection pooling. Each DAO call still opens
-its own short-lived SQLite connection, which is a completely reasonable, standard approach at
-this scale now that the call count per screen is O(1) instead of O(rows).
-
-## Session 2 notes
-Confirmed working: `mvn clean compile` succeeds (verified by the user, not just by me reading
-the code). Two runtime fixes landed this session, both surfaced only by actually running the
-build (which I still can't do myself in this sandbox — please keep pasting build/run output,
-that's the only way these get caught):
-- `AdminController.java` was missing `import javafx.fxml.FXML;` despite using `@FXML`
-  throughout — plain oversight, fixed.
-- `sqlite-jdbc`'s runtime module dependency on `org.slf4j` (see Phase 2 section below) — fixed.
-
-## Session 1 summary
-
-### Phase 1 — Stabilize
-- ✅ Fixed JavaFX/FXML version mismatch: all FXML files normalized to `xmlns="http://javafx.com/javafx/21"`
-  to match the `javafx` 21.0.6 Maven dependency (see ⚠️ below for the module-path risk this pass
-  could not verify).
-- ✅ `EmployeeController` implemented (was missing; `employee-trangchu.fxml` referenced it).
-- ✅ `HoaDonController` implemented (was missing; `donthanhtoan.fxml` referenced it).
-- ✅ `dangky.fxml` (registration) had **no** `fx:controller` at all — added `RegisterController`.
-- ✅ App now boots to `dangnhap.fxml` (login) instead of straight into the admin dashboard.
-- ⚠️ **Bumped `maven-compiler-plugin` source/target from 11 → 21** (was briefly 17 in session 1 —
-  17 was the *minimum* needed for records/text blocks/arrow-switch, not a real preference; bumped
-  to 21 to match the installed JDK and the `javafx` 21.0.6 dependency, per request). The new
-  service/model code uses records, text blocks, and arrow-style `switch` (16+/14+, both well
-  under 21).
-- ⚠️ **Could not run `mvn compile` in the session sandbox** — no network access to Maven Central
-  from that environment. Every file was written carefully and cross-checked by hand (every FXML
-  `onAction`/`fx:id` reference was grepped against controller methods/fields to confirm they match),
-  but **please run `mvn clean compile` (or `javafx:run`) as the first step** and report anything
-  that doesn't build — I have not been able to verify this myself yet.
-
-### Phase 2 — Foundation
-- ✅ SQLite added (`org.xerial:sqlite-jdbc:3.46.1.3`) — chosen over a client/server DB since this
-  is a single-user desktop app. DB file lives at `~/.lunavera-coffee/lunavera.db` (survives `mvn clean`).
-  - ⚠️ `module-info.java` now has `requires org.xerial.sqlitejdbc;` for this. That's the module
-    name the driver's own manifest declares. **If the build ever fails with a "module not found"
-    error for this**, the fallback derived name is `sqlite.jdbc` — swap the line in `module-info.java`.
-    I could not verify which one resolves correctly without a working `mvn` in this session.
-  - ✅ **Fixed (session 2):** `mvn javafx:run` failed at launch with
-    `Module org.slf4j not found, required by org.xerial.sqlitejdbc` — recent `sqlite-jdbc`
-    versions ship a real `module-info` that requires `org.slf4j` for internal logging. Added
-    `org.slf4j:slf4j-api:2.0.16` to `pom.xml` and `requires org.slf4j;` to `module-info.java`.
-    No logging backend is configured, so expect a harmless
-    `no SLF4J providers were found, defaulting to no-operation` line on stderr — that's just a
-    warning, not a failure.
-- ✅ Password hashing: `PasswordUtil` uses PBKDF2WithHmacSHA256 (built into the JDK — no extra
-  dependency, so no extra module-path risk on top of the one above).
-- ✅ Models: `User, Employee, Customer, Category, Product, Order, OrderItem` + `Role`,
-  `AccountStatus`, `OrderStatus`, `PaymentMethod` enums (`model/` package).
-- ✅ DAOs: `UserDAO, EmployeeDAO, CustomerDAO, CategoryDAO, ProductDAO, OrderDAO` (`dao/` package),
-  all using `PreparedStatement`/try-with-resources, wrapping `SQLException` in `DataAccessException`.
-- ✅ `DatabaseConfig` creates the schema on first run and seeds one default admin account.
-  **Default login: `admin` / `Admin@123` — change this after first login**, there's no UI for
-  that yet (see Remaining).
-- ✅ `util/Session` (current logged-in user, static holder — single-user desktop process),
-  `util/SceneNavigator` (replaces the 3+ duplicated `switchScene` methods the original controllers
-  each had), `util/AlertUtil`, `util/ValidationUtil`, `util/CurrencyUtil`, `util/Pager` (shared
-  in-memory pagination for table screens).
-
-### Phase 3 — Authentication
-- ✅ Login (`LoginController` + `AuthenticationService.login`): checks username exists, password
-  matches (PBKDF2), account not locked; routes ADMIN → admin dashboard, EMPLOYEE → employee
-  dashboard by real DB role, not a hardcoded screen.
-- ✅ Registration (`RegisterController` + `AuthenticationService.register`): required-field,
-  phone format, username format/uniqueness, password strength + confirm-match validation.
-  ⚠️ **Decision:** `dangky.fxml`'s fields (full name, phone, username, password — no employee-only
-  fields) read as public *customer* self-registration, so it creates a linked `Customer` + `User`
-  with role `CUSTOMER`, not an employee account. Employee/admin accounts are created from Account
-  Management by an admin instead. Documented here since it's an interpretation of ambiguous scope
-  (task section 32).
-- ⚠️ **Decision:** there is currently no customer-facing dashboard screen in this project. A
-  `CUSTOMER`-role login succeeds but shows an explanatory dialog instead of opening a screen that
-  doesn't exist, rather than silently failing or faking one.
-- ✅ Logout clears `Session` and returns to login, from both Admin and Employee dashboards.
-- ✅ Role permission checks are enforced in code (not just hidden buttons) on the one screen this
-  pass wired that way: Account Management's add/edit/lock actions call `requireAdmin()`; an
-  Employee can view but not modify.
-- ⬜ Forgot-password flow: shows an honest "not implemented, contact an admin" dialog rather than
-  faking success.
-
-### Phase 4 — Admin management
-- ✅ **Category management** (`quanlydanhmuc.fxml`, real backing via `CategoryDAO`): add/edit
-  (shared dialog), delete (blocked with a clear message if products still reference the category —
-  no orphaning), search-by-name, real stat cards (total/active/hidden/product count), pagination
-  via `Pager`.
-- ✅ **Account management** (`quanlytaikhoan.fxml`, real backing via `UserDAO`/`EmployeeDAO`):
-  this is also where **Employee management lives** — ⚠️ *decision:* there is no separate
-  employee-CRUD FXML in this project (only `employee-trangchu.fxml`, the employee's own
-  dashboard), so `openEmployeeManagement()` routes here rather than to a screen that doesn't
-  exist. Add employee+login account (with role Admin/Employee), edit, lock/unlock, search,
-  filter by role/status, detail panel, pagination. Admin-only actions enforced in code.
-- ✅ **Product management** (`quanlysanpham.fxml`): see Session 6 notes above for full detail -
-  real CRUD via `ProductDAO`, search, status + dynamic category filters, pagination. Delete is
-  deliberately a deactivate-toggle, not a real delete (see Session 6 for why).
-- ⬜ **Customer management** (`quanlykhachhang.fxml`): the FXML itself has no `fx:id`/`onAction`
-  anywhere — it's pure static markup with nothing to attach a controller to yet. Needs FXML
-  work before any controller logic can attach.
-- ⬜ **Order management / POS** (`quanlydonhang.fxml`): this is the biggest remaining piece —
-  a full dine-in table + cart + checkout UI. Filter tabs are inert (no data loaded, so nothing
-  *appears* broken) but no order is ever created, edited, or paid yet. `OrderDAO`/`Order`/
-  `OrderItem` are ready for this screen to be built against (insert, revenue/count aggregates
-  are already implemented and used by the dashboards).
-
-### Phase 5–8 — POS, payment, invoice, dashboard, polish
-- ✅ Dashboard stats (`DashboardStatsService`, used by both Admin and Employee dashboards):
-  today's order count, today's revenue, today's distinct customers, paid/open/cancelled order
-  counts, 7-day revenue chart — all real DB aggregates, zero when there's no data yet (there
-  will be no data until the order-creation screen exists).
-- ⚠️ **Decision:** the dashboards' "Bàn" (dine-in table/seating) grid and counts are left as
-  the original static placeholder content. There's no table/seating entity in the schema —
-  it wasn't in the task's data-model section — so real numbers aren't invented for it. If
-  dine-in table tracking is actually wanted, it needs its own schema + DAO first.
-- ✅ `HoaDonController` (invoice/receipt popup) fully implemented against the `Order`/`OrderItem`
-  models — populates every field, prints via `javafx.print.PrinterJob`. Not yet reachable from
-  anywhere in the UI since there's no "complete order" action yet to open it from.
-  ⚠️ No QR-code image is generated (no QR library in the project; the `qrCodeImage` slot is
-  left blank rather than faked).
-- ⬜ Payment workflow (cash/card, change calculation): no screen to attach it to yet — needs
-  the POS/order-creation screen first.
-- ⬜ Inventory management: `openInventoryManagement()` on both dashboards shows an honest
-  "not built, stock is tracked directly on Product for now" message rather than a fake screen.
+- Older notes (in `docs/history/`) still use the pre-rename names `org.example.controller` and `HelloApplication`; they are now `com.coffeeshop.coffeeshopmanagement.controller` and `LunaveraApplication` (TODO 6.17).
 
 ## Architecture notes for whoever continues this
 
@@ -1364,1037 +54,761 @@ that's the only way these get caught):
 
 The to-do list lives in `TODO.md` (open items, decisions and human checks in its section 0). Sessions 42-56 did bugs, security, edge cases, features, quality-of-life items and the practices of section 6, and merged the MariaDB branch (see the session notes below); Sessions 57-65 checked every ticked TODO item against the code and added the findings of three more scans; Session 66 split `AdminController` into one controller per screen and started the service layer, the text bundle and the CSS clean-up (6.4, 6.5, 6.10, 6.14, 6.21, 6.29); Session 67 merged the two. Session 60 compiled the data layer against the real `sqlite-jdbc` and ran 98 of the 107 test files with a stand-in runner (542 passed, 2 skipped, 1 failed). Not yet seen on Windows, none of the four admin screens opened since the split, not run under Maven, not run with a real MariaDB/XAMPP setup, and the 36 tests that need the JavaFX toolkit have never run: the first step is `./mvnw -B clean test`, then the owner checks in TODO section 0. Open code work, most useful first (the Medium items first): 2.65 (a failure while opening the receipt can leave a paid order on screen and let a second click record the sale twice), 2A.28 (the login delay is skipped by typing the same staff phone in another spelling), 2.70 (a customer without a phone stays attached when another phone is typed), 2.74 (the MariaDB backup probably fails on MySQL 8 with the user the guide creates), 2A.34 (the transfer-QR integrity record sits next to the picture), 3.42 (7-day chart has no upper date limit; one test fails because of it), 3.49 (check the report CSV in the shop's own Excel; probably needs a `sep=,` line), 3.53 (profit ignores discounts and uses today's cost), then the Low items: 2.66, 2.67, 2.69, 2.71-2.73, 2.75, 2A.19, 2A.22, 2A.29-2A.33, 2A.35-2A.37, 3.18, 3.50-3.52, 3.54, 5.27-5.30, 6.7 / 6.22 (delete the run-once category merge, or make it a numbered migration), 6.51-6.56, 1.8 and 1.9 (MariaDB restore in the app, MariaDB username rule), 1.7 (language switch: `Messages` exists, 13 texts moved), then the features of section 4 (4.35 backup copy elsewhere and 4.36 cashier PIN first). Small and safe: 2.68 (one word for an empty table), 5.27 (typed quantity), 6.51-6.53 and 6.56 (CI settings, stale comments, package name, dead code). Open for a person: 6.9 (restore on the real files), 6.15 (one real jlink build) and the three new section 0 checks that open each admin screen (the split controllers have never been loaded by `FXMLLoader`). Added in Session 73 (all Low): 2.80 (the dong sign ₫ is refused in money boxes), 2.81 (the product CSV import takes unknown text in the "Đang bán" column as on sale and does not warn about cost above price), 2A.38 (the error filter is a deny-list: raw English and database texts, one with the database user and host, reach the screen), 3.59 (no maximum price or quantity; loyalty points wrap negative above 21 trillion dong), 6.60 (`QrCodeTest` covers version 1 only; add a decoder round-trip test).
 
-## Session 41 (continued): items 2.11-2.15
-
-- 2.11 `OrderDAO.findStaleOpenOrders(Duration)`; `DashboardStats` gained `staleOpenOrders`; `staleOrderLabel` on the admin dashboard (12 h, `DashboardStatsService.STALE_OPEN_AFTER`).
-- 2.12 `PasswordUtil.ITERATIONS = 600_000`, `needsRehash`, `AuthenticationService.upgradeHashIfOld` after a successful login.
-- 2.13 `ProductDAO.existsByNameInCategory`, checked in the product dialog.
-- 2.14 `HoaDonController.handlePrint` cancels the job on cancel or failure.
-- 2.15 This section rewritten.
-- Tests: `PasswordRehashTest` (6), `ProductNameCheckTest` (4), `StaleOrdersTest` (3); 248 in total.
-
-
-## Session 42: the rest of TODO section 2 (2.16 - 2.63, except 2.38, 2.53, 2.56)
-
-Built on the owner's TODO.md with the 7th-scan entries (2.40 - 2.63). 282 tests pass in a stand-in runner (sorted, reversed and shuffled order, no `data/` folder created); Maven and Windows were not used.
-
-- **Money** (2.16, 2.40): `MoneyParser` in the product, payment and salary boxes; `Money.toDong` refuses huge exponents.
-- **Accounts** (2.17, 2.31, 2.32, 2.48, 2.49, 2A.2): new `service/AccountService` (one transaction per create/edit/lock, last-admin rule inside the UPDATE); `UserDAO.findByUsername` fixed order; unique indexes `ux_users_username_nocase` and `ux_employees_phone` (skipped with a log line when duplicates exist).
-- **Pictures** (2.18, 2.21, 2.35, 2.58): deletes only inside `data/images`, only after saving; `Thumbnails` cache; logo resized.
-- **Receipt** (2.22, 2.27, 2.29, 2.37, 2.44, 2.45, 2.46): `receipt.css`, scrolling window, one-page print, paid time, table, cancelled banner, discount reason.
-- **Windows and sessions** (2.30, 2.33, 2.43, 2.61, 2.63): other windows closed on return to login; single history/report window; request counter and 250 ms pause on search; re-validation before refund/report; "Đang mở" filter; change-password throttle.
-- **Data safety** (2.23, 2.25, 2.26, 2.41, 2.42, 2.47, 2.50, 2.51, 2.52, 2.62): payment totals validated; `orders.paid_by`; cancel guard; restore swaps pictures last, refuses newer `user_version`, restores the transfer QR, shows a summary, banner + cancel, hourly auto backup; start refuses when the data folder cannot be created.
-- **Screen** (2.19, 2.20, 2.24, 2.34, 2.39, 2.54, 2.55, 2.57, 2.59, 2.60): see TODO.
-- **Not done:** 2.38 (flexible layouts), 2.53 (table state), 2.56 (owner decision).
-- Looked at on screen with Xvfb at 1366x768: receipts (short, long and cancelled), dashboard banner, menu notice, single history window, logout closing windows.
-
-- Session 42, later: sidebar flicker and side strips fixed (TODO 2.64): `SceneNavigator.showScreen` swaps the scene root instead of a new scene + window refit; `ScreenFit.layoutChildren` fills the window.
-
-## Session 43
-- 2.56 done: hidden category => its products are not sold at the POS (SellableMenu, SellableMenuTest). Admin table shows "Danh mục đang ẩn". 284 tests pass. Next: 2.38, 2.53.
-- 2.38 done: tables use constrained column policy (products, customers, reports), login background covers the window (LoginController.coverBackground). Checked at 2500x1100 in Xvfb. ScreenFit kept as small-screen safety net. 2.53 waits for the MariaDB branch merge (owner's request).
-- Section 3 batch 1 (app-level): 3.3/3.33 single-instance lock, 3.9, 3.12, 3.16, 3.19, 3.24, 3.27, 3.29, 3.30, 3.32, 3.34, 3.39 done; 293 tests pass. SQL-heavy items (3.1, 3.2, 3.5, 3.13, 3.22, 3.23, 3.31, 3.35, 3.36, 3.37, 3.41...) left for after the MariaDB merge.
-- Section 3 owner decisions applied: 3.6 no foreign phones, 3.15 10-digit mobiles only, 3.8 table emptying limited to opener+admin, 3.5/3.23 pay date rule (OrderDAO.EFFECTIVE_DAY), 3.7 and 3.11 left as is, 3.10 clock warning. 297 tests pass. Touches SQL in OrderDAO/ReportDAO: re-apply EFFECTIVE_DAY after the MariaDB merge (use DATE(COALESCE(paid_at, order_date))).
-- Section 3 batch 3: 3.18 (NFC + case-insensitive names), 3.20 (confirm before discarding a form), 3.28 (late autosave warning, OrderDAO.updateIfStillOpen), 3.38 (seed failure cleanup + dialog), 3.40 (legacy copy refused while journal exists). 303 tests pass.
-- 3.14 done (SessionGuard no longer pauses for non-modal windows). 305 tests pass. Section 3 now only has DB/schema items and features left.
-- Section 2A (security): done 2A.1, 8, 9, 11, 13, 15, 16, 20, 22; partly 3, 4, 6, 17, 21. Open for owner decisions: 5, 7+19, 23, 24, and 3's accounts list; after merge: 10, 18. 318 tests pass (also in reversed and shuffled order).
-
-- Session 44: 2A.5 done (FirstRunDialog, no seeded admin in production), 2A.24 done (admin-only customer phone change, logged), 2A.3 resolved (accounts screen already blocks employees). Open: 2A.7/2A.19 and 2A.23 owner answers. 322 tests pass.
-- Session 44 (2): 2A.7 done and 2A.19 partly (option B delay in LoginThrottle, in memory; table after merge), 2A.23 done (no customer login; staff phone login kept). 324 tests pass.
-- Session 44 (3): 2.19 fixed properly (clock stops when the order screen leaves the scene; verified with the real FXML under Xvfb). 324 tests pass.
-- Session 44 (4): section 4 items that need no schema change: 4.3 thermal receipt layout (ThermalReceipt), 4.4 customer purchase history (HistoryFilter.customerId, OrderHistoryWindow.showForCustomer), 4.17 AppIcon, 4.20 profit, 4.21 CSV export (ExportCsv, admin only), 4.30 payment split in the report. Also: history window columns now fit (constrained). 329 tests pass; rendered under Xvfb (receipt 58/80 mm, report, customers, customer history). Not tried: real printer, Excel, Windows. Left for after the merge: the rest of section 4.
-- Session 44 (5): section 5 items that need no schema change: 5.1 quick cash, 5.2 date presets (DatePresets), 5.3 dashboard refresh (AutoRefresh), 5.5 confirm line removal, 5.6 low-stock badge, 5.7 shortcuts, 5.8 product CSV (ProductCsv), 5.9 UiSettings (ui-settings.properties), 5.10 best sellers (ReportDAO.unitsSold), 5.12 OrderNumber, 5.13 StockPolicy, 5.14 TextNormalizer.searchKey, 5.15 ErrorText catches English messages, 5.21 no success box, 5.23 history phone search. Found already done: 5.4, 5.20, 5.22, 5.24. Left for after the merge: 5.11 (TableDAO), 5.17, 5.18, 5.25; partial 5.16, 5.19. 341 tests pass; checked under Xvfb: payment dialog, POS (toggle, badges, Ctrl+F, best-seller order), AutoRefresh stop.
-
-## Session 45: merge with the owner's MariaDB branch
-- Merged the owner's database branch (MariaDB default, SQLite option, importer that replaces the first-start data so the old admin carries over) with sessions 42-44. The branch point of the owner's copy was older than my tree, so every file was merged by hand: files where the owner had only an older copy of mine (ScreenFit, SceneNavigator, SessionGuard, PasswordChangeService/Dialog, AuthenticationService, StartupProblem) kept my newer version; DB code came from the owner.
-- Ported for both databases: `orders.paid_by` (MariaDbSchema, SqliteSchema.LATER_COLUMNS, importer, MoneyMigration), `AppFlags` via SqlDialect, LIKE escape `!`, `CAST AS CHAR`, "today" queries bound from the app clock, sort enum with dialect collation, `DbTime` for `newestActivity` and account creation, BackupService (`lunavera.sql` entry, restore and inspect refused on MariaDB with the phpMyAdmin help), HelloApplication (SqliteSnapshotService, hostServices), AdminController (phpMyAdmin box, restore help).
-- Checked: compiles; 424 tests on SQLite, 395 on MariaDB 10.11 (driver 2.7.6 here, pom says 3.4.1); import of an old SQLite file (admin + customer + starter menu) into an empty database and into one with first-start data; first start shows no first-run dialog; restart with the import line still set changes nothing.
-- The owner's earlier `CategoryDAOTest` failure on MariaDB did not reproduce in the merged tree (not diagnosed; may depend on the driver or test order).
-- Not checked: Windows, XAMPP/phpMyAdmin, MySQL 8, real driver 3.4.1, several tills. MariaDB has no unique index for the staff phone yet.
-- Session 45 (2): staff phone is now unique in the MariaDB database too (`ux_employees_phone` in `MariaDbSchema`; older databases get it on start via `SchemaMigrations.ensureMariaEmployeePhoneKey`, blank phones become NULL, skipped with a warning while two staff share a phone; the importer turns blank staff phones into NULL; `EmployeeDAO` turns the database error into "Số điện thoại này đã thuộc về một nhân viên khác."). New tests `StaffPhoneUniqueTest` (both databases) and `MariaDbStaffPhoneKeyTest` (MariaDB). 427 tests pass on SQLite, 399 on MariaDB. New TODO items 1.8 (in-app restore on MariaDB) and 1.9 (MariaDB account names only protected by the app).
-- Session 46 (2 and 2A leftovers, on the owner's updated tree): 2.53 table state from the OPEN order only (`TableDAO.holdsWithoutOrder`, dashboard warning); 2A.18 `users.must_change_password` (via `LATER_COLUMNS`, MariaDbSchema, importer, `AccountService`, `LoginController`, forced dialog wording); 2A.10 session ends after a password change/reset (`Session` baseline hash, `SessionGuard` `PASSWORD_CHANGED`, `PasswordResetSessionTest`); 2A.21 `data/tmp` (`DataPaths.createTempFile/cleanTmp`, used by `BackupService`, cleaned in `HelloApplication`); 2A.17 `TransferQrGuard.replace` + dashboard button "Mã QR chuyển khoản" + start-up warning.
-- Checked: compiles; 443 tests OK on SQLite, 415 OK on MariaDB 10.11 (driver 2.7.6). End-to-end: an old MariaDB database gets `must_change_password` on start; a fresh import from an old SQLite file works. Not checked: any JavaFX dialog (never opened), Windows, XAMPP/phpMyAdmin, real driver 3.4.1, several tills.
-- Not done: 2A.6 (needs Maven Central); 2A.3 DAO-level admin checks for products/categories and 2A.4 backup passphrase (the 8th-pass notes said so; still open).
-
-## Session 47 (9th pass)
-- Section 3 leftovers: 3.26 done (`DatabaseFileCheck`: a 0-byte `lunavera.db` next to backups or shop pictures is refused with a message instead of starting a new shop); 3.22 partly (`OrderDAO.insert` refuses a second OPEN order for a table; no database rule yet). Not done: 3.1, 3.4, 3.13, 3.17, 3.21, 3.25 (new columns), 3.31, 3.36, 3.37, 3.41.
-- Section 6: 6.6 SQLite steps are a numbered registry (`SchemaMigrations.SQLITE_STEPS`); 6.7/6.22 the `Ca Phe` merge runs once (`app_flags` `merge_ca_phe_v1`); 6.9 `docs/RELEASE.md`. Not done: 6.3, 6.4, 6.5 (JavaFX), 6.10.
-- Checked: the changed non-JavaFX classes compile with the JDK compiler; `DatabaseFileCheckTest` ran with a stand-in runner (5 passed). NOT run: every test that needs the database (no driver here): `OrderDAOTest.aTableCannotHoldTwoOpenOrders`, `SchemaMigrationsTest.everySqliteVersionAfterOneHasAStep`, `LegacyCategoryMergeTest`. Expected `mvn clean test`: 458 on SQLite.
-- Section 6, items 11-15: 6.11 `-Xlint:all` on (4 warnings in the non-JavaFX files fixed); 6.12 try/catch around `table_number` removed from `OrderDAO.map`; 6.13 six 1254 px PNG starter pictures became 800 px JPEG, `seed-menu` 12 MB -> 2.8 MB (`MenuSeedData` names updated); 6.15 `docs/PACKAGING.md` (untried). Not done: 6.14 (JavaFX controllers). Nothing new needs the database to run except the `OrderDAO.map` change (the existing order tests cover it).
-
-## Session 48 (10th pass)
-- Section 6, items 16-20: 6.17 controllers moved to `com.coffeeshop.coffeeshopmanagement.controller`, `HelloApplication` -> `LunaveraApplication` (package/imports/module-info/FXML/pom/README/docs; checked by script only, not compiled); 6.19 `CurrencyUtil` uses a `ThreadLocal<DecimalFormat>` (+1 test; 5/5 pass in a stand-in runner, but the new test also passes on the old code on this 1-CPU machine); 6.20 `.github/dependabot.yml`; 6.18 `SessionGuardTest` moved to the `util` test package (clock part not done). Not done: 6.16 WAL (reasons in the TODO note).
-- NOT run: anything that needs JavaFX or the database driver. First thing to do: `mvn clean test` (expected 459 on SQLite: 458 + the new `CurrencyUtilTest` test), then `mvn javafx:run` and open every screen, because of the package move.
-
-## Session 49 (11th pass): TODO 6.30 - 6.35
-- 6.30 done in code: `FxmlControllerCheckTest` (6 tests, plain-text reading of FXML/CSS/controller source). It found five style classes used on a screen with no rule loaded for them (`primary-button` on the dashboard and customers screens, `search-field` on customers, `section-subtitle` on the employee dashboard, `product-area` on products) and 26 `fx:id`s nothing reads; both are listed in the test as known, so only new ones fail. The five classes need a look on screen.
-- 6.31 checked (CI already runs Ubuntu and Windows) and 6.34 (stray notes file already gone): boxes ticked.
-- 6.32 checked: every listed reproduced bug already has a test; no new ones written.
-- 6.33 done in code: `pluginManagement` pins for clean, resources, jar, install and deploy plugins, plus `maven-enforcer-plugin` (JDK 21+, Maven 3.8.5+). Versions are from memory and Maven was not run.
-- 6.35 part done: `AsyncOrderTest` (6), `PageMathTest` (8), `TextLengthLimiterTest` (4); new `util/PageMath` and `TextLengthLimiter.accepts` so the logic is testable; `PageBar` now calls `PageMath`. Not done: `PasswordReveal`, `IdleLogout` wiring, receipt paid time/cancelled banner (need a JavaFX toolkit).
-- Checked here with a stand-in JUnit (jars and network are not available): the 24 new tests pass (FXML test also checked by breaking the files on purpose); `PageMath`, `TextLengthLimiter` and `Async` compile with `-Xlint:all` against small JavaFX stand-ins. NOT run: Maven, the pom change, `PageBar.java` (needs JavaFX), anything needing the database.
-- First thing to do: `./mvnw -B clean test` (24 more tests than before; 498 `@Test` annotations in the tree by count), then open the customers screen, both dashboards and the products screen and look at the five classes above.
-
-## Session 51 (11th pass, other branch): TODO 6.37 - 6.39
-- 6.37: `dao/OrderItemDiff` and the autosave in `OrderDAO.updateIfStillOpen` now write only changed lines. 8 DB-free tests pass here; the real-database test `OrderDAOTest.autosaveChangesOnlyTheLinesThatDiffer` is not run.
-- 6.38: README was mostly current already; fixed the "12 tables" wording there and in `docs/DATABASE.md`.
-- 6.39: `util/AppClock` replaces `now()`/`today()` in the data code; the test bootstrap pins the date for the run. 5 tests pass here.
-- Checked here: all non-JavaFX main classes plus the edited tests compile with `-Xlint:all` against small JavaFX/JUnit stand-ins. NOT run: Maven, any database test.
-- First thing to do: `./mvnw -B clean test`; if `OrderDAOTest.autosaveChangesOnlyTheLinesThatDiffer` or `UniqueViolationTest` fails, the driver's error code or the `ORDER BY id` assumption is the place to look.
-
-## Session 50 (12th pass): TODO 6.36, 6.40 - 6.45
-- **6.36 / 6.40** `dao/UniqueViolation`: a duplicate is recognised by error code (MariaDB 1062; SQLite 2067 / 1555 through `SQLiteException.getResultCode().code`; message text only for the plain SQLite code 19). Used in `CustomerDAO`, `CategoryDAO`, `EmployeeDAO`, and `AccountService.translate` (which now also catches MariaDB duplicates). `UniqueViolationTest`.
-- **6.41** receipt layout checked (no demo values); `ReceiptLayoutTest` keeps it that way.
-- **6.42** `DatabaseConfig` resolves settings, SQLite file and URL on first use (`Resolved` record, stored only after success) instead of in static initializers; a failure no longer kills the class for the run; `reset()` lets the data folder change. `DatabaseConfigResolveTest`.
-- **6.43** stale class comments fixed in `OrderDAO`, `HoaDonController`, `CustomerController`.
-- **6.44** README section about fonts and pictures. The owner's table (who made the photos, right to use) is empty on purpose.
-- **6.45** `CheckoutService.pay(..., Role actingRole)` enforces `DiscountPolicy.require` before anything is written, with the subtotal taken from the lines; `DiscountPolicy.messageFor/require`; `OrderController` passes the role. 6 tests in `CheckoutServiceTest`, 5 in `DiscountPolicyTest`.
-- **Checked here** (JDK 21 only; no Maven, no driver jars, no JavaFX): the changed non-JavaFX classes compile with `-Xlint:all` against small stand-ins for `org.sqlite`; `DiscountPolicyTest` 15 of 15 and the `UniqueViolation` rule pass in a stand-in runner; the fail-twice-then-recover path of `DatabaseConfig` and `reset()` ran for real (folder logic only).
-- **NOT run:** Maven; anything needing the database (`UniqueViolationTest` real-driver tests, `DatabaseConfigResolveTest`, the new `CheckoutServiceTest` tests); `OrderController` (JavaFX); `ReceiptLayoutTest` (regex checked by script). New tests: about 9 + 7 + 2 + 2 + 6 + 5 on top of the 498 `@Test` of session 49.
-- **First thing to do:** `./mvnw -B clean test`. If `UniqueViolation` does not compile, `SQLiteException.getResultCode()` or its `code` field differs in the real driver: adjust that one line. Then pay one order as an employee with a discount above 10% and check the message.
-- **Owner:** fill in the photo table in README (6.44). (6.36 was done with 6.40; 6.37 - 6.39 were done on the other branch, see Session 51.)
-
-## Session 52: merge of the two branches (6.30 - 6.45)
-- Merged by three-way merge against the zip both branches started from. Round-1 work (6.30 - 6.35) was identical on both sides and merged without a change.
-- 6.36 / 6.40 were done twice (this branch `SqlErrors`, the other `UniqueViolation`). Kept `UniqueViolation` (it reads the driver's typed result code) and removed `SqlErrors` and `SqlErrorsTest`; `CategoryDAO`, `CustomerDAO`, `EmployeeDAO` and `AccountService` use `UniqueViolation`.
-- Kept from this branch: 6.37 (`OrderItemDiff`, autosave), 6.38 wording fix, 6.39 (`AppClock`, test date pin). AppClock was re-applied to `CustomerDAO`, `AccountService` and the new `CheckoutServiceTest` test after taking the other branch's versions of those files.
-- Kept from the other branch: 6.41 - 6.45 (`DatabaseConfig` resolved on first use with `reset()`, `CheckoutService.pay(..., Role)` with `DiscountPolicy.require`, `ReceiptLayoutTest`, README photo section).
-- Interaction checked by reading: `DatabaseConfig` (their `Resolved`/`reset()` and our two `AppClock` lines in the first-admin seed merged without overlap); `CheckoutService` (their role/discount check and our `AppClock.now()` for order and paid time).
-- **Fix found while merging:** `PageMathTest` (6.35, from the first round, present on both branches) lacked `import java.util.List`, so it did not compile and would have stopped test compilation for the whole module. Import added.
-- **Checked here after the merge** (JDK only, stand-in JUnit/JavaFX/`org.sqlite`): all non-JavaFX main classes and every test file touched by either branch compile; these run and pass: `OrderItemDiffTest` 8, `DiscountPolicyTest` 15, `FxmlControllerCheckTest` 6, `ReceiptLayoutTest` 2, `AppClockTest` 5, `AsyncOrderTest` 6, `PageMathTest` 8, `TextLengthLimiterTest` 4. NOT run: Maven, and every test that needs the database (`UniqueViolationTest`, `DatabaseConfigResolveTest`, `CheckoutServiceTest`, `OrderDAOTest` incl. the autosave test, the other DAO tests).
-- **First thing to do:** `./mvnw -B clean test` on the merged tree.
-
-## Session 53: second merge check (this tree against the 12th-pass branch)
-- Compared this merged tree with the 12th-pass branch (the one with `UniqueViolation`, `DatabaseConfig.reset()`, `CheckoutService.pay(..., Role)`) and the zip both started from, three-way. Every code and test file of the 12th-pass branch is already in this tree: the merge of each file equals this tree's version, so no code changed in this step. The only difference in a contested file was `AppClock.now()` instead of `LocalDateTime.now()` in `CheckoutServiceTest`; this tree's version is kept.
-- Documentation fixes only: `TODO.md` 6.37 and 6.39 were left unticked although their work is in the tree and Session 51 describes it; both are ticked now (6.37 got its note). The stale "Not started: 6.37 - 6.39" line in Session 50 was corrected.
-- Still open in section 6 (as far as the notes say): 6.24 - 6.29, 6.32, 6.33, 6.35, 6.44 (waiting for the owner's photo table).
-- Not run: Maven or any database test (no Maven, driver jars or JavaFX here). First thing to do: `./mvnw -B clean test`.
-
-## Session 54 (13th pass): the small practices, TODO 6.12, 6.16 - 6.19, 6.23, 6.26, 6.28, 6.33
-- **Already done, only unticked** (checked in the files, ticked with a note): 6.13 (seed-menu 2.8 MB; 6.15 stays open: `docs/PACKAGING.md` exists but no real build was made), 6.12 (`OrderDAO.map`), 6.17 (controller package, `LunaveraApplication`), 6.18 (`AppClock` from 6.39), 6.19 (`CurrencyUtil` `ThreadLocal`), 6.33 (pom plugin pins and enforcer).
-- **6.16** write-ahead logging: `DatabaseConfig.enableWriteAheadLog()` at the very end of `initialize()`, then `synchronous = NORMAL` on every later connection; falls back quietly if WAL is refused. README, `docs/RELEASE.md`, `docs/DATABASE.md` say how to copy or put back the file by hand. `DatabaseConfigWalTest` (4).
-- **6.23** `config/SqlStatus` replaces about 45 hand-typed status/role literals in the SQL of six classes; the generated SQL text is identical (checked by substituting back). `SqlStatusTest` (3) also forbids new literals.
-- **6.26** **`.gitignore` was missing** from the project although the notes said it was there. Recreated and checked with `git check-ignore`; `GitIgnoreTest` (2) guards it and `.gitattributes`.
-- **6.28** README "Rules when changing the code". Audit of all 69 log calls: `SchemaMigrations` was writing shared **phone numbers** into the log in four places; it now writes a count and the query that lists them.
-- **Checked here** (JDK 21 only; no Maven, no SQLite driver, no JavaFX): every touched non-JavaFX class compiles with `-Xlint:all` against stand-ins (the only compile errors are the known JavaFX ones in `ImageStorage`, which the sourcepath pulls in); `SqlStatusTest` and `GitIgnoreTest` run and pass (5), and both fail when I plant a literal / remove `.gitignore`; the SQL equivalence of the five rewritten files was checked by script.
-- **NOT run:** Maven; `DatabaseConfigWalTest` (needs the driver); every existing database test after the WAL switch. New tests this pass: 9 (3 + 4 + 2).
-- **First thing to do:** `./mvnw -B clean test`. If a test about `lunavera.db` size fails (`BackupSafetyTest`, `BackupServiceTest`), look at WAL first (a checkpoint changes the main file's size). Then the two new checks in section 0 (WAL files on Windows; `git status` shows no `data/`).
-- **Not touched** (medium or large, and 6.44 is waiting for the owner): 6.24 CHECK constraints, 6.25 backup/data-folder tests, 6.27, 6.29 CSS, 6.32, 6.35 and the rest of the open list.
-
-## Session 55 (13th pass, part 2): the medium items I could do without a screen or a server
-- **6.24 (SQLite, part)** `SchemaMigrations.ensureDataRules`: triggers that make the database refuse negative prices/stock, order lines of 0 pieces, a discount above the subtotal, unknown statuses/roles, negative points. Skipped while old rows break a rule. MariaDB not done. `DataRulesTest` (9).
-- **3.22** a partial unique index `ux_orders_one_open_per_table` (SQLite) and a clear message when two tills collide; the code check and `MAX(id)` were already there. MariaDB still relies on the code check.
-- **6.25 / 6.27** `backupTo` writes `<target>.part` first so a failed copy cannot destroy an older file; `BackupToTest` (4).
-- **3.31** `VN_KEY` SQLite function plus `DatabaseConfig.searchKeySql`; history search ignores case and accents. `VietnameseSearchTest` (5).
-- **3.41** dashboard warning for shared customer phones (`CustomerDAO.countSharedPhones`, `DashboardStats.sharedCustomerPhones`, one line in `AdminController`).
-- **6.3** `DashboardStatsServiceTest` (10).
-- **5.19** tooltips on the two icon-only FXML buttons (login eye, account-detail close).
-- **Housekeeping:** the notes of 6.36 and 6.37 had been attached to 3.36 and 3.37 by a merge; removed. Both are still open.
-- **Checked here** (JDK 21 only; no Maven, no SQLite driver, no JavaFX): all touched classes and all new tests compile against stand-ins; the data-rule SQL was run in Python's SQLite on the real DDL (normal flows pass, bad writes refused, unique index works, legacy rows detected); the folding rule was mirrored in Python; `DashboardStatsServiceTest` warning tests (5), `FxmlControllerCheckTest` and `ReceiptLayoutTest` (8 in all) were run and pass; both edited FXML files parse.
-- **NOT run:** Maven and every test that needs the database (`DataRulesTest`, `BackupToTest`, `VietnameseSearchTest`, the DB half of `DashboardStatsServiceTest`, and all older database tests with the new triggers and WAL in place). New tests this pass: 9 + 4 + 5 + 10 + 0 = 28.
-- **Look first if `mvn test` fails:** (1) compile error in `DatabaseConfig.registerSearchKeyFunction` (the `org.sqlite.Function` API was written from memory); (2) an older test that writes a value the new triggers refuse (I searched the tests for raw inserts and found none on the shared database, but a DAO test that stores a discount above a subtotal would trip `orders_money_valid`); (3) the two file-size tests named in session 54.
-- **Not done, and why:** 6.6, 6.7, 6.22, 6.11 (each says what is still missing in its own note; needs a second real migration step, a numbered legacy-merge step that raises `LATEST_VERSION`, or Maven Central for SpotBugs); 6.35 (the rest needs a JavaFX test toolkit); 3.1, 3.13, 3.17, 3.21, 3.25 (each needs new order or product columns in both schemas plus a decision for old rows); 3.4 (feature 4.8); 3.36 (the date filters share `EFFECTIVE_DAY` with every report, and the speed gain was never measured); 3.37 (MariaDB commits each `CREATE TABLE` by itself, so a transaction only helps SQLite and cannot be tested here); 5.11, 5.16, 5.17, 5.18, 5.25 (JavaFX screens I cannot load here).
-
-## Session 56 (13th pass, part 3): MariaDB data rules and the data line on the login screen
-- **6.24 (MariaDB, rest)** `SchemaMigrations.ensureMariaDataRules`: the same rules as `CHECK` constraints, each tried on its own, existing-row check first, failures logged and never thrown. `DataRuleSqlTest` (4). 6.24 is ticked now.
-- **5.25** `DatabaseConfig.locationSummary()` + `LoginController.showDataLocation()` + a `dataLocationLabel` in `dangnhap.fxml` + `.data-location` in `dangnhap.css`; never shows the user or the password. `LocationSummaryTest` (3).
-- **Checked here:** everything touched compiles (the only compile errors in any run are JavaFX classes this sandbox lacks: `ImageStorage`, `TextLengthLimiter`); 35 database-free tests were run together and pass (`SqlStatusTest`, `DataRuleSqlTest`, `LocationSummaryTest`, `GitIgnoreTest`, `DiscountPolicyTest`, `ReceiptLayoutTest`, `FxmlControllerCheckTest`); the login FXML parses.
-- **NOT run:** Maven; any database test; any MariaDB statement (no server); the login screen on a display. New tests this part: 7 (4 + 3). Over the whole 13th pass: 9 (session 54) + 28 (session 55: 9 + 4 + 5 + 10) + 7 = 44 new tests.
-- **Still open (and why):** 6.6 / 6.7 / 6.22 (need an owner decision to delete the run-once job, or a real second migration step; the data rules are deliberately an idempotent ensure and not a numbered step, because a fresh database skips the numbered steps); 6.11 (SpotBugs/Checkstyle need Maven Central); 6.35 (a JavaFX test toolkit); 3.1, 3.13, 3.17, 3.21, 3.25 (new columns in both schemas and a rule for old rows); 3.4; 3.36; 3.37; 5.11, 5.16, 5.17 (open-folder button), 5.18 (JavaFX screens I cannot load).
-
-## Session 57: audit of `TODO.md` against the code (2026-10-17, no code changed)
-- **What was checked:** all 174 items then ticked in `TODO.md`, the 56 open ones and section 1. Every class, method, file and test named in a ticked item exists (the only misses are things removed or renamed on purpose: `DataCleanup`, `HelloApplication`, `DefaultPasswordPrompt`, `SqlErrors`, the stray notes file); every `package` line matches its folder and every app import resolves; the claimed test counts match the files. Read in depth: 2.8, 2.42, 2.53, 2.56, 2A.10, 2A.17, 2A.18, 2A.21, 3.22, 3.24, 6.16, 6.18.
-- **Not possible here:** Maven, JavaFX and the SQLite/MariaDB drivers are missing and there is no network, so nothing was compiled or run. This was a read of the code and the tests only.
-- **Unticked** (part of each was still open): 2A.19 (`LoginThrottle` is still an in-memory `HashMap`), 2A.22 (no list of locked/removed accounts after a restore), 3.18 (no database rule for category names; the username index exists on SQLite only).
-- **Ticked** (the code or document side is finished; what is left is in each item): 4.26, 6.7, 6.9, 6.11, 6.15, 6.20, 6.22. This differs from the "still open" list of Sessions 55 and 56 for 6.7, 6.11 and 6.22, on purpose: those items only asked for the run-once job, `-Xlint:all` and a dependency check (Dependabot), all of which exist; deleting the run-once job later, SpotBugs/Checkstyle and a real second numbered migration are follow-ups, not part of the wording.
-- **Stale notes removed** from done items (an old "OPEN / NOT done / PARTLY FIXED" note sat above the later "DONE" note): 2.23, 2.38, 2.53, 2.56, 2A.5, 2A.7, 2A.10, 2A.18, 2A.23, 2A.24, 3.22, 6.16, 6.18. Kept as real gaps: MariaDB has no "one open order per table" index (3.22); WAL does not work on some synced folders (6.16).
-- **Documents:** `TODO.md` header and section 0 updated (one test-count line instead of three; two new human checks: `mvn javafx:jlink` and the restore test); `docs/RELEASE.md` rewritten (MariaDB paths, what the code backs up by itself, the `-wal`/`-shm` warning, the test count, the "Release status" block above). The `RELEASE.md` handed over next to the project zip was an older copy than `docs/RELEASE.md` inside it (no `-wal` warnings); both now carry the same new text.
-- **Still the first thing to do:** `./mvnw -B clean test`. If a test about `lunavera.db` size fails (`BackupSafetyTest`, `BackupServiceTest`), look at WAL first; if the build fails to compile, look at `DatabaseConfig.registerSearchKeyFunction` (the `org.sqlite.Function` API was written from memory).
-
-## Session 58: second audit pass over the three documents (2026-10-17, no code changed)
-- **What was checked:** the new `TODO.md`, `progress.md` and `RELEASE.md` against the same code tree. The counts (178 ticked / 52 open before this session, 578 `@Test` methods), every identifier named in a ticked item, the items rewritten in Session 57 (2A.7, 2A.10, 2A.17, 2A.18, 2.53, 2.56, 6.16, 6.22) and every figure in `RELEASE.md` (schema version 2, 14 automatic backups every 24 h, 3 `before-restore` copies, 10 hourly MariaDB snapshots, `docs/DATABASE.md` section 6) match the code. Nothing was compiled or run.
-- **Unticked again** (the item asks for something not done yet): 6.7 (the run-once job is not deleted), 6.9 (no restore tested on the real files), 6.15 (no real packaged build), 6.22 (not a numbered migration; code still there). Still ticked from Session 57: 4.26, 6.11, 6.20. The count is now 174 ticked, 56 open.
-- **Wording fixed:** 6.18 no longer says that only `AppClockTest` reads the clock (`TestDatabaseSupport`, `MoneyMigrationTest` and `FirstAdminTest` also do, harmlessly); 5.25 lost its old "waits for the merge / not started" notes; the example path in `RELEASE.md` step 2 is now `D:\LunaveraCopy`.
-- **Documents:** `docs/RELEASE.md` in the project was still the old text; it was replaced by the new one. There is only this one copy (the second copy in the project root was dropped, so the two can never differ); the file itself now says Session 61.
-- **Still the first thing to do:** `./mvnw -B clean test`, then the owner checks in TODO section 0.
-
-## Session 59: three stale spots removed (2026-10-17)
-- `TODO.md` 3.32: the note named a "Cơ sở dữ liệu mới" notice that no longer exists; it now says the first-run dialog (`FirstRunDialog`) shows the data folder.
-- `TODO.md` 2A.6: "weekly" corrected to "monthly, at most 5 open pull requests" (matches `.github/dependabot.yml`).
-- `DatabaseConfig`: removed the unused `freshDatabase` flag and `isFreshDatabase()` (nothing read it). Nothing compiled or run here; the change only deletes a field, a getter and its two assignments.
-- **Found in the second recheck of Session 59:** `TODO.md` 6.42 still said `DatabaseConfig.reset()` forgets `freshDatabase`; the field is gone, the sentence now names only `initialized`. `docs/RELEASE.md` told the reader to keep itself identical to `docs/RELEASE.md` (there is no second copy in the project, the Session 58 note about a root `RELEASE.md` refers to a copy kept outside the zip); that line now says it is the only copy.
-- **Recheck result:** all 174 ticked items were checked against the code again (every named class, method, test, constant and SQL string); nothing ticked is missing from the code, and no open item is finished. Counts unchanged: 174 ticked, 56 open, 578 `@Test` methods in 104 test classes. Still not compiled or run.
-
-## Session 60: third recheck, first real test run (2026-10-17)
-- **How:** JDK 21 (the `jdk.compiler` module of the runtime, run as `java -m jdk.compiler/com.sun.tools.javac.Main`), the real `sqlite-jdbc` 3.46.1.3 jar from GitHub, a minimal JUnit 4 stand-in (`@Test` with `expected`/`timeout`, `@Before/@After/@BeforeClass/@AfterClass`, `Assume`, `Assert`) and a small runner; the system properties of the surefire configuration (`lunavera.dataDir`, `user.home`, `lunavera.db.type=sqlite`). 84 main files compile without JavaFX; the few JavaFX types the data layer touches (`Task`, `Image`, `Stage`, `Screen`) were replaced by stubs for this run only. 98 of the 107 test files compile that way and were run from the project folder, in one JVM, alphabetical order.
-- **Result:** 542 passed, 2 skipped, 1 failed. Not run: `FirstRunDialogTest`, `PasswordResetSessionTest`, `CrashHandlerTest`, `FontBundleTest`, `PagedTableSortTest`, `QualityOfLifeTest`, `SessionGuardPostponeTest`, `SessionGuardTest`, `TextLengthLimiterTest` (36 tests; they need the JavaFX toolkit or AWT). Nothing was run under Maven, and no MariaDB test was run. The runner reported 545 runs while a text count finds 542 `@Test` in these files; the difference of 3 was not explained.
-- **Failure = new item TODO 3.42:** `DashboardStatsServiceTest.theLastSevenDaysIncludeTodayAndNoNegativeRevenue` fails after `EdgeCasesTest`, which stores an order paid on 2031-03-02: `OrderDAO.revenueForLast7Days` has no upper date limit, so a future-dated paid order becomes an 8th entry. Alone the test passes. Code not changed.
-- **Items checked again:** every ticked item's named classes, tests and constants (as in Session 59); 27 ticked items name tests that ran and passed; 2A.10 and 6.17 name only tests that were not run. Open items: nothing finished, and `categories.name` is still a plain case-sensitive `UNIQUE` (3.18 stays open).
-- **Counts now:** 174 ticked, 57 open, 578 `@Test` methods. `docs/RELEASE.md` needed no change (its facts are unchanged).
-- **Still the first thing to do:** `./mvnw -B clean test`, then fix 3.42, then the owner checks in TODO section 0.
-
-## Session 61: fourth recheck of the documents after the owner's edits (2026-10-17, no code changed)
-- **What came in:** the owner's `TODO.md`, `progress.md` and `docs/RELEASE.md` (Sessions 59 and 60 had been written meanwhile) and one changed source file, `DatabaseConfig.java`, which only lost the unused `freshDatabase` flag and `isFreshDatabase()`; the rest of the tree is identical to the one of Sessions 57-58. This session worked on top of the owner's versions.
-- **Every ticked item, read again one at a time** (174): each named class, method, constant, test class, file and quoted screen text was looked up in the code and the tests; all are there, except names that were removed or renamed on purpose (`DataCleanup`, `DefaultPasswordPrompt`, `HelloApplication` now `LunaveraApplication`, `SqlErrors`, `login.fxml`, `isFreshDatabase`). Cited test counts match the files. The new open item 3.42 matches the code (`revenueForLast7Days` has no upper date bound). Session 59's fix of 3.32 (the message did not exist) is right. No open item is finished: the 56 others were searched for evidence again and nothing was found beyond what each says.
-- **Stale notes fixed in `TODO.md`:** six ticked items still carried a "not done" note that a later "DONE" had replaced: 2A.17 (screen for holder/bank, start-up warning), 2A.21 (`data/tmp/`), 3.26, 3.31 and 3.41 (8th-pass "not done / still open"), 6.24 (MariaDB "Not done" next to "DONE for both databases"). 2A.14 lost an "OPEN (session 43)" sentence that its 8th-pass note had replaced; 2A.10 now quotes the real logout message. 3.31 got a line saying that Session 60 compiled `registerSearchKeyFunction` against the real driver. The header explains that older "not run" notes are history for the 98 test files that ran. The seven "8th pass: not done" notes left in 3.1, 3.4, 3.13, 3.17, 3.21, 3.25 and 3.37 are in open items and are true.
-- **`progress.md` fixed:** the release-status block pointed to Session 58 for the open code work (it lives in "Next recommended step"); "Next recommended step" still said the tree had never been compiled or tested and left out 3.42, and now says what Session 60 did and lists 3.42 first.
-- **`docs/RELEASE.md` fixed:** it had still the four MariaDB mistakes of Session 58 (the daily `auto-*.zip` also runs on MariaDB and holds `lunavera.sql`; the snapshots have no pictures; the rollback is "import `lunavera.sql` again, put `images` back"; restore steps are in `docs/DATABASE.md` section 6) and now carries the known failing test of 3.42 in the release checklist (step 4).
-- **Counts:** 174 ticked, 57 open (231 numbered items), 578 `@Test` methods in 104 test classes (107 test files). Nothing compiled or run in this session.
-- **Still the first thing to do:** `./mvnw -B clean test`, then fix 3.42, then the owner checks in TODO section 0.
-
-## Session 62: stale notes of Session 61 fixed, fifth recheck (2026-10-17, no code changed)
-- **Stale notes fixed:** `TODO.md` 6.3 said that `DashboardStatsService`, `Async.runOrdered` and `TextLengthLimiter` had no tests; they have (`DashboardStatsServiceTest` 10, `AsyncOrderTest` 6, `TextLengthLimiterTest` 4, and `PageMathTest` for the page arithmetic of `PageBar`). The note now names only what really needs a JavaFX toolkit (`PasswordReveal`, the `PageBar` controls, `IdleLogout`), which is tracked in 6.35. The Session 58 line about `docs/RELEASE.md` no longer says it is identical to a root copy that does not exist.
-- **Rechecked one item at a time:** all 174 ticked items (named classes, methods, tests, constants, files and quoted screen texts; test-count claims against the files), the 57 open items (searched for finished work: none), the counts, `docs/RELEASE.md` (every figure) and this file. Result: nothing ticked is missing from the code, every number in the notes (14 automatic and 3 before-restore backups, 10 snapshots, the 24 h interval, the 1 GiB and 50 MiB caps, the 30 s session check, the 60 s dashboard refresh, the 12 h stale-order limit) matches a constant in the code, the cited test counts do not exceed the real ones, and no open item is finished.
-- **Counts:** 174 ticked, 57 open (231 numbered), 578 `@Test` methods in 104 test classes (107 test files). Nothing compiled or run in this session.
-- **Still the first thing to do:** `./mvnw -B clean test`, then fix 3.42, then the owner checks in TODO section 0.
-
-## Session 63: eighth scan, new findings added to TODO (2026-10-17, no code changed)
-- **What was read:** `CheckoutService`, `OrderDAO` (insert, update, pay, cancel, history filter), `ReportDAO`, `TableDAO`, `AuthenticationService`, `LoginThrottle`, `PasswordUtil`, `SecurityLog`, `AppLogging`, `ImageStorage`, `SingleInstance`, `DataPaths`, `OrderController.completeOrder`, `SceneNavigator`, `HoaDonController`, `Async`, `DatabaseSettings`, plus greps over the whole source for case conversion, printing, process calls and size limits. Everything already in `TODO.md` was skipped.
-- **New open items (16):** bugs 2.65 (receipt opened before the till is reset: a failure can lead to a duplicate sale), 2.66 (a refund always restocks), 2.67 (history time column and sort use the opening time); security 2A.25 (security events share a 3 x 1 MB log), 2A.26 (MariaDB: no TLS option, no read timeout), 2A.27 (a known user name can be kept on the delay); edge cases 3.43 (no pixel limit on product pictures), 3.44 (data folder inside OneDrive/Dropbox not noticed), 3.45 (case conversion without a locale); features 4.32 (two payment methods on one order), 4.33 (waste log), 4.34 (e-wallet methods); quality of life 5.26 (Caps Lock warning); practices 6.46 (safety net around success callbacks), 6.47 (MariaDB `ONLY_FULL_GROUP_BY`), 6.48 (`MessageDigest.isEqual`).
-- **How sure:** 2.66, 2.67, 2A.25, 2A.26, 3.44, 3.45, 4.32, 4.33, 5.26 and 6.46 are confirmed by reading the code; 2.65, 2A.27, 3.43, 4.34 and 6.47 are reasoned from the code and were not reproduced (each says so). Nothing was compiled or run.
-- **Counts:** 174 ticked, 73 open (247 numbered), 578 `@Test` methods; no code or test changed. `docs/RELEASE.md` needed no change.
-- **Still the first thing to do:** `./mvnw -B clean test`, then fix 3.42 and 2.65, then the owner checks in TODO section 0.
-
-## Session 64: ninth scan, new findings added to TODO (2026-10-17, no code changed)
-- **What was read this time:** `AccountService`, `UserDAO.findByUsername`, `PasswordChangeService`, `ValidationUtil`, `CustomerService`, `CustomerDAO`, `Csv`, `ExportCsv`, `ProductCsv`, `BackupService` (restore part), the product dialog and delete code in `AdminController`, `EmployeeDAO`, `IdleLogout`, `AppClock` and a grep of every direct clock read. Most of what I probed is already handled in the code or listed in the `TODO` (stale stock on save 3.2, the customer-phone hint 3.x, idle logout on every window, zip-slip checks), so this scan found less than the eighth.
-- **New open items (6):** security 2A.28 (the login delay is skipped by typing the same staff phone in another spelling: the throttle key is the typed text, the lookup normalises the phone), 2A.29 (a restore accepts a backup with no active administrator); edge cases 3.46 (a CSV stock of "1.5" becomes 15), 3.47 (the Excel-formula apostrophe is visible when Excel opens a CSV); practices 6.49 (no LICENSE and no CHANGELOG), 6.50 (`AppClock` is "the one place", but order opening time and several default date ranges still read the system clock).
-- **How sure:** 2A.28, 2A.29, 3.46, 6.49 and 6.50 are confirmed by reading the code or the file list; 3.47 is reasoned from how Excel opens CSV files and was not checked with Excel. Nothing was compiled or run.
-- **Counts:** 174 ticked, 79 open (253 numbered), 578 `@Test` methods; no code or test changed. `docs/RELEASE.md` needed no change.
-- **Still the first thing to do:** `./mvnw -B clean test`, then fix 2A.28 and 3.42 and 2.65, then the owner checks in TODO section 0.
-
-## Session 65: tenth scan, new findings added to TODO (2026-10-17, no code changed)
-- **What came in:** the same source tree as Sessions 57-64 (only `TODO.md` and `progress.md` differed from the previous zip). I worked on top of the owner's versions, which already had the 8th and 9th scans.
-- **What was read this time:** the POS table map and quantity code in `OrderController`, `AuthenticationService` and `LoginThrottle`, `Session`, `BackupService` (preview and extraction), the CSV import in `AdminController` and `ProductCsv`, the report export in `ReportWindow` and `Csv`, `DatabaseConfig` (connections, seeding, comments), `SingleInstance`, `LoyaltyPolicy` and the rounding calls, `.github/workflows/ci.yml`, `dependabot.yml` and the jlink part of `pom.xml`. Probed and found already safe or already listed (so nothing added): zip-slip in the picture and QR extraction, log injection (`SecurityLog.clean`), user-name enumeration by message, stale lock files (the OS frees the lock), connection pool (listed in 1.5), unbounded `readAllBytes` on the transfer QR and on the product CSV (both capped before the read), floating point in money paths (none), swallowed exceptions (the catches log).
-- **New open items (12):** bugs 2.68 (the word for an empty table, "Không hoạt động" against "Trống"), 2.69 (the product CSV import is not one transaction); security 2A.30 (the backup preview has no size caps), 2A.31 (1,000 different names wipe every login delay), 2A.32 (the first unknown-user login is slower: lazy dummy hash), 2A.33 (a test switch in the shipped code can seed `admin` / `Admin@123`); edge cases 3.48 (the table map assumes 12 tables in 3x4), 3.49 (the report CSV probably opens in one column in a Vietnamese-format Excel); quality of life 5.27 (the POS quantity can only be changed by one); practices 6.51 (CI has no `permissions`, timeout or concurrency, unpinned actions, runs `test` not `clean test`, no package build), 6.52 (more comments about the removed default administrator), 6.53 (the packaged program is named `app`).
-- **How sure:** 2.68, 2.69, 2A.30-2A.33, 3.48, 5.27 and 6.51-6.53 are confirmed by reading the code or the files; 3.49 is reasoned from how Excel splits CSV files in a Vietnamese regional format and was not tried; 2A.32 is real but small. Nothing was compiled or run.
-- **Counts:** 174 ticked, 91 open (265 numbered), 578 `@Test` methods; no code or test changed. `docs/RELEASE.md` needed no change (its checklist does not depend on any of the new items; 6.51 only asks the CI to run the same `clean test` it names).
-- **Still the first thing to do:** `./mvnw -B clean test`, then fix 2.65, 2A.28 and 3.42, then the owner checks in TODO section 0.
-
-## Session 66 (13th pass, part 4): the structural items 6.4, 6.5, 6.10, 6.14, 6.21, 6.29 (2026-10-17)
-- **Numbering:** this pass was written in parallel with the audits of Sessions 57-65 on the same tree as Session 56 (it was numbered 57 in its own copy); it is Session 66 here. The audits read `AdminController`, which this pass split: see the header of `TODO.md`.
-- **6.4 (done)** `AdminController` split into `AdminScreen` + `AdminDashboardController`, `CategoryController`, `ProductController`, `AccountController` + `CategoryDialog`; the four FXML files name their own controller; `FxmlControllerCheckTest` follows `extends`; `AdminScreensTest` (6). Done by a script that copies members verbatim; checked member by member (nothing lost, nothing duplicated, 83 `@FXML` fields each in one class).
-- **6.5 (part)** `service/Cart` (add, quantity, stock limit, totals) used by `OrderController`; `MoneyParser.parseOptionalDong`. `CartTest` (10), `MoneyParserTest` (+2).
-- **6.14 + 6.21 (part)** `CategoryService`, `ProductService` (permission + rules); delete category, delete product and lock account now run in the background with the questions kept on the UI thread. UI-thread database calls in the controllers: about 25 to 16. `CategoryProductServicesTest` (7).
-- **6.10 (part)** `Messages` + `messages_vi.properties` + `MessagesTest` (6) which catches a missing, unused or duplicate key at test time; `CategoryDialog` moved as the first screen.
-- **6.29 (part)** 23 dead classes/ids found; 52 rules and 21 selector alternatives removed from the style sheets; `CssRulesTest` (2) keeps them out. Sharing the common rules was not done (needs a look at every screen).
-- **Checked here** (JDK 21 only; no Maven, no database driver, no JavaFX; this pass ran before the real `sqlite-jdbc` run of Session 60): every touched class compiles with no error that names a project symbol (the only errors are JavaFX classes the sandbox lacks); 65 database-free tests were run together and pass (`SqlStatusTest`, `DataRuleSqlTest`, `LocationSummaryTest`, `GitIgnoreTest`, `CssRulesTest`, `MessagesTest`, `MoneyParserTest`, `DiscountPolicyTest`, `CartTest`, `ReceiptLayoutTest`, `FxmlControllerCheckTest`, `AdminScreensTest`); negative controls: a planted dead CSS rule and a misspelled message key each fail their test.
-- **NOT run:** Maven; any database test (`CategoryProductServicesTest` and everything older); and above all **no screen was opened**. The risks are in the screens: inherited handlers (6.4), the background delete flows (6.14), the dialog text (6.10) and the CSS (6.29). The three new checks in section 0 are how to find out.
-- **New tests this part:** 6 + 10 + 2 + 7 + 6 + 2 = 33; 77 in the whole 13th pass.
-- **Still open in these six items:** 6.5 (payment dialog, table loading), 6.10 (the other 66 files and the FXML text), 6.14 (dialog saves, 16 calls), 6.21 (customer and table rules), 6.29 (shared sidebar rules). Each says what is left in its own note.
-
-## Session 67: the audited documents merged with the structural pass (2026-10-17)
-- **What came in:** the owner's `TODO.md`, `progress.md` and `docs/RELEASE.md` (Sessions 57-65: the audits, the first real test run, the eighth to tenth scans) on one side, and the structural pass (Session 66: `AdminController` split, `Cart`, the two services, `Messages`, the CSS clean-up) on the other. Both started from the tree and documents of Session 56. The audits changed no code except `DatabaseConfig` (Session 59: the unused `freshDatabase` flag removed).
-- **How it was merged:** the documents were merged item by item, not line by line (the items are very long lines, so a line merge produced three false conflicts). The owner's `TODO.md` is the base: the six notes of Session 66 were added to items 6.4, 6.5, 6.10, 6.14, 6.21, 6.29; 6.4 is ticked; three human checks were added to section 0; two older sentences that the new notes supersede were changed (6.5 "the cart" moved; 6.10 "not done" became "not done at that time"). The owner's 265 items, their order and their box states are unchanged except 6.4 (checked by script: same item set, only 6.4 differs, 29 lines differ in all).
-- **Code:** the same `freshDatabase` removal was applied to this tree, so the code matches Session 59 and the 6.42 note (it never read the flag: `grep` finds no other use). Nothing else in the code changed in this session.
-- **Names that moved:** the audit items written against `AdminController` that are still open were pointed at the new classes (2.69, 3.43, 3.45 -> `ProductController` and the others, 2A.3 -> `ProductController`/`CategoryController`/`CategoryDialog` and the services; the note of 3.41 -> `AdminDashboardController`). `TODO.md` got one paragraph in its header that says where each part of `AdminController` went, which covers the finished items and the old session notes that still use the old name.
-- **Documents:** `docs/RELEASE.md` is the owner's rewrite with two changes: the test count (611) and, in step 2, "open each admin screen" (they are separate controllers now). The "Release status" block at the top and the "Next recommended step" paragraph of this file were brought up to date.
-- **Counts now:** 175 ticked, 90 open (265 numbered items); 611 `@Test` methods in 109 classes (112 test files): the 578 of Session 61 plus 33 from Session 66 (5 new classes and 2 cases in `MoneyParserTest`). The real run of Session 60 (542 passed, 2 skipped, 1 failed) covered the 578; the 33 new tests ran only as described in the notes of 6.4-6.29 (the database-free ones in a stand-in runner; `CategoryProductServicesTest` and the database half of `DashboardStatsServiceTest` not at all).
-- **Link between the two sides:** the failing test of TODO 3.42 (`DashboardStatsServiceTest.theLastSevenDaysIncludeTodayAndNoNegativeRevenue`) is one of the tests added in the medium pass (Session 55); the gap is in `OrderDAO.revenueForLast7Days` (no upper date bound), not in the test.
-- **Still the first thing to do:** `./mvnw -B clean test`; then fix 3.42, 2.65 and 2A.28; then the owner checks in TODO section 0, which now include opening each of the four admin screens (the inherited sidebar handlers have never been loaded by FXMLLoader).
-
-## Session 68 (2026-10-18)
-
-- **Check:** all ticked TODO items re-verified against the 4th zip (the `AdminController` split, 611 tests, FXML handlers); nothing finished-but-unticked found.
-- **11th scan:** 19 new open items added to `TODO.md` (2.70-2.74, 2A.34-2A.37, 3.50-3.52, 4.35-4.37, 5.28-5.29, 6.54-6.55) plus 3 ideas in section 7.
-- **Counts now:** 175 ticked, 109 open (284 numbered items). No code changed; Maven could not be run here.
-- **Still the first thing to do:** `./mvnw -B clean test`.
-
-## Session 69: twelfth scan and a fifth check of the ticked items, on the tree with the split controllers (2026-10-18, no code changed)
-- **What came in:** the tree of Session 68: `AdminController` split into `AdminScreen` + four screen controllers, `Cart`, `ProductService`, `CategoryService`, `Messages` + `messages_vi.properties`, the CSS clean-up, `README.md` updated, and the documents of Sessions 66-68. Only the documents were changed in this session.
-- **Ticked items (175) checked again against this tree:** every class, method, constant, test class, file and quoted screen text named by a "DONE" note was looked up in the code, the tests and `messages_vi.properties`; all are present, except names removed or renamed on purpose (`DataCleanup`, `DefaultPasswordPrompt`, `HelloApplication` now `LunaveraApplication`, `SqlErrors`, `login.fxml`, `isFreshDatabase`). The behaviours that lived in `AdminController` were looked for in the new classes (existence-by-name check for product name check, `MoneyParser`, picture clean-up, account lock, own-role lock, `Csv.cell`, the transfer-QR guard, the cost warning, the discard confirmation, the stock limit, the CSV import, the restore button). Cited test counts match the files (611 `@Test` in 109 classes).
-- **The split, checked statically, independently of `FxmlControllerCheckTest`:** all 9 FXML files name an existing controller; every `fx:id` that needs a field has one in the class or a superclass; no `@FXML` field is without an `fx:id` (so none can stay null); all 66 handler names (`#name`) exist as methods; every controller that needs `initialize()` has it. Not checked, and still the first human test: that `FXMLLoader` finds private `@FXML` members and `initialize()` in the superclass `AdminScreen` (it does in the JavaFX versions I know of, but nobody has loaded the four screens). `module-info` opens the controller package to `javafx.fxml`, nothing new is needed; the code imports no `java.desktop` class, so no `requires` is missing.
-- **CSS:** every style class that an FXML file or a Java string uses has a rule, except `product-area` (never defined, harmless); the dynamic ones (`table-button-*`, `today-order-badge-*`, `inventory-*`) have rules and are set in Java.
-- **Stale note fixed:** the ticked item 6.4 still carried the 8th-pass "NOT done, on purpose" paragraph; removed. No other ticked item has a "not done" note that a later "DONE" replaced; the remaining ones (2.8, 2A.17, 2A.23, 2A.24, 3.40, 6.17, 6.42) name real gaps. No open item is finished (searched again for evidence on 1.7, 3.x, 4.x, 5.x and the partial 6.x ones; `Messages` covers only the category dialog, as 6.10 says).
-- **New open items (5):** bug 2.75 (buttons that start background work stay clickable: `Async.run` against `setDisable(true)` is 6/0 in `ProductController`, 3/0 in `CategoryController`, 9/1 in `AdminDashboardController`); edge cases 3.53 (profit ignores the order discount and reads today's cost; 4.20 only noted it in a ticked item) and 3.54 (the order export stops at 200,000 rows without saying so); quality of life 5.30 (saving a CSV that is open in Excel shows only the generic error); practice 6.56 (dead code: `BackupService.listBackups`, `DatabaseConfig.describeConnection`; and the undefined style class `product-area`).
-- **Probed and fine (nothing added):** the new `Cart` (stock rule, price snapshot, the list it wraps is a final field never reassigned), `ProductService` / `CategoryService` (the permission message is Vietnamese; a product that an order uses cannot be deleted because the foreign key has no `ON DELETE`, so the check-then-delete gap only gives an error), `Messages` (the number-format locale is already 6.55), `MariaDbBackup` (password goes in `MYSQL_PWD`), `DatabaseSettings` (host and database name are validated), the history paging.
-- **Counts:** 175 ticked, 114 open (289 numbered items), 611 `@Test`. Nothing was compiled or run here (no Maven, JavaFX or database driver).
-- **Still the first thing to do:** `./mvnw -B clean test`, then open each of the four admin screens, then fix 2.65, 2A.28, 3.42.
-
-## Session 70: thirteenth scan and a sixth check of the ticked items (2026-10-18, no code changed)
-- **What came in:** the tree of Session 69 as a new zip (`AdminController` split, `Cart`, the two services, `Messages`, 611 tests, the documents of Sessions 57-69). Only the documents were changed here.
-- **Ticked items (175), checked again from scratch:** 638 names, constants, columns, settings, files and methods quoted in the ticked items were looked up in the code (all present; the only misses are names removed or renamed on purpose, files that are not in the tree such as `progress.md` itself, and `VOIDED` / `password_changed_at`, which the notes only mention as ideas); every test count cited in the `TODO` is at or below the real count (611 `@Test` in 109 classes); the notes that still say "not done" / "partly" inside ticked items (2.8, 2A.17, 2A.24, 3.40, 6.3, 6.11, 6.17, 6.20, 6.33, 6.42) all name real remaining gaps. The FXML check was redone without `FxmlControllerCheckTest`: every `#handler` of the nine FXML files exists in the controller or its superclass `AdminScreen`, and the five admin classes hold the 83 `@FXML` fields. The guard calls were counted before and after the split (`requireAdmin` 12 / 12, `Session.isAdmin()` 10 / 10, `SessionGuard` 3 / 3, `SecurityLog.event` 1 / 1, `AlertUtil.confirm` 14 / 14): nothing was lost. The `OrderController` change to `Cart` was compared line by line with the old code: same behaviour (stock rule, price on the line, refresh after each change).
-- **Finished but not ticked:** none. The open items were searched again for evidence (spending points, moving or merging tables, vouchers, item notes, cash received, picture cleanup screen, database size, a saved login delay, the MariaDB restore in the app, a language switch, a busy indicator, a backup reminder, two payment methods, expenses, waste log, Caps Lock, menu order, LICENSE/CHANGELOG): none exists.
-- **New open items (6):** edge case 3.55 (the two databases disagree about accents in unique names); features 4.38 (expenses and cash out), 4.39 (customers: last visit, visits, total spent, best customers); quality of life 5.31 (menu order cannot be changed), 5.32 (the transfer-QR account text is saved only together with a new picture); practice 6.57 (`Messages.get` logs a missing key on every call, its comment says once). All are confirmed by reading the code or the files. Many ideas that came up in this scan were already in the document from the 8th to 12th scans (Caps Lock, two payment methods, e-wallets, waste log, OneDrive folders, TLS for MariaDB, the shared security log, pixel limits, restock on refund, LICENSE) and were not repeated.
-- **Counts:** 175 ticked, 120 open (295 numbered items), 611 `@Test`. Nothing was compiled or run here (no Maven, JavaFX or database driver). `docs/RELEASE.md` needed no change.
-- **Still the first thing to do:** `./mvnw -B clean test`, then open each of the four admin screens, then fix 2.65, 2A.28 and 3.42.
-
-## Session 71: fourteenth scan (2026-10-18, no code changed)
-- **What came in:** the same tree as Session 70 (only the two documents were changed since). Nothing in the code changed in this session.
-- **What was read this time:** `CategoryDialog`, `FirstRunDialog`, the account dialog and save in `AccountController`, the delete flows of `CategoryController` and `ProductController`, `ProductController`'s save part, `README.md`, `.gitignore`, `.github/workflows/ci.yml`, `pom.xml` (the test dependency), the test suite (sleeps, disabled tests, assertion-less tests) and the repository file list (stray files, files over 500 KB).
-- **Probed and fine (nothing added):** the first-start dialog (Esc cannot skip it, the owner chooses the password, the default password is refused), the account dialog (own role and status locked, username fixed, salary and hire date checked), the product delete flow (order check twice, picture removed only when no other product uses it), the report date range (from after to is refused), no disabled tests and no `assertTrue(true)`, no stray IDE or log files in the tree.
-- **New open items (3 and 1 idea):** bug 2.76 (the category dialog edits the table's own row before the save works, so a refused save leaves the refused name on screen after Cancel); practices 6.58 (the README says `mvn` and never `mvnw`), 6.59 (no code-coverage report); section 7 idea (JUnit 4 to 5, only with a big test round). All confirmed by reading the code or the files.
-- **Counts:** 175 ticked, 123 open (298 numbered items), 611 `@Test`. Nothing was compiled or run (no Maven, JavaFX or database driver). `docs/RELEASE.md` needed no change.
-- **Still the first thing to do:** `./mvnw -B clean test`, then open each of the four admin screens, then fix 2.65, 2A.28 and 3.42.
-
-## Session 72: fifteenth scan, first real run of the split tree (2026-10-18, no code changed)
-- **What came in:** the tree of Session 71 as a new zip: `AdminController` split into `AdminScreen` and four screen controllers, `Cart`, `ProductService`, `CategoryService`, `Messages`, 611 `@Test` in 109 classes. Only the documents were changed here.
-- **First real run of the 33 new tests:** the same stand-in setup as Session 60 (JDK 21 `jdk.compiler`, real `sqlite-jdbc` 3.46.1.3, a minimal JUnit 4 runner, a few JavaFX types stubbed, run from the project folder in one JVM). Main code: 92 files compile (all but the screens). Tests: 103 of the 112 files compile and were run: **575 passed, 2 skipped, 1 failed**. The failure is the known `DashboardStatsServiceTest.theLastSevenDaysIncludeTodayAndNoNegativeRevenue` (TODO 3.42). `CartTest`, `CategoryProductServicesTest`, `MessagesTest`, `MoneyParserTest`, `CssRulesTest` and `AdminScreensTest` are among the passing ones where they need no JavaFX. Not run: the nine files that need the JavaFX toolkit or AWT, and no screen was opened; Maven was not run.
-- **Ticked items (175):** all named classes, methods, tests, constants and quoted texts looked up again (only the names removed on purpose are missing); the behaviours that lived in `AdminController` were searched in the whole `src/main` (28 of them, all found in the new classes). No ticked item is wrong. **Finished but not ticked:** none (the open items were searched again for evidence).
-- **Probes on the real database code (all on this tree):** a random sequence of 600 operations (open, edit, pay with discount, refund, abandon, restock) with 3 seeds: stock, loyalty points, revenue, line totals and table state always matched an independent model; 8 threads x 60 sales on one SQLite file: no lock error, stock exact.
-- **New open items (6):** bugs 2.77 (a typed decimal like `10.50` or `25.5` is read 10-100 times too big: `MoneyParser` drops every separator), 2.78 (a full disk makes every sale fail with the generic "try again" text; reproduced on a 14 MB filesystem), 2.79 (the POS screen stays usable while a payment is being saved); edge cases 3.56 (the history search cannot find the transfer reference `DH000012`), 3.57 (an accented password hashes differently in composed and decomposed Unicode), 3.58 (the order history accepts a "from" date after the "to" date and shows nothing).
-- **How sure:** 2.77, 2.78, 3.56 and 3.57 are reproduced by running the code; 3.58 and 2.79 are confirmed by reading the code and were not reproduced (no JavaFX). Two other candidates were dropped after checking: "Session.getCurrentUser() is not null-checked" (it follows `requireAdmin()`), and the customer drop-down (already 3.52).
-- **Counts:** 175 ticked, 129 open (304 numbered items), 611 `@Test`. `docs/RELEASE.md` was checked figure by figure against the code (14 / 3 / 10 kept, schema version 2, 611 tests) and needed no change.
-- **Still the first thing to do:** `./mvnw -B clean test`, then open each of the four admin screens, then fix 2.77, 2.78, 2.79, 2.65, 2A.28 and 3.42.
-
-## Session 73: sixteenth scan, first time the pure-logic classes were run here (2026-10-18, no code changed)
-- **What came in:** the same source tree as Sessions 66-72 (only `TODO.md` and `progress.md` differed). Work was done on top of the owner's documents of Sessions 70-72.
-- **Ticked items (175) checked again:** every class, method, constant, test class, file and quoted text named by a DONE note was looked up in the code, the tests and `messages_vi.properties`; all are present (only names removed or renamed on purpose are missing); cited test counts match (611 `@Test` in 109 classes); the seven ticked items that still say "not done" (2.8, 2A.17, 2A.23, 2A.24, 3.40, 6.17, 6.42) name real gaps, not leftovers. **Finished but not ticked:** none; no open item has a closing DONE note.
-- **New this time, running code instead of reading it:** the JDK's `jdk.compiler` module (there is no `javac` binary, as in Session 60) compiled 36 classes with no JavaFX or database dependency (two JavaFX types stubbed for `TextLengthLimiter`): `ValidationUtil`, `MoneyParser`, `CurrencyUtil`, `Money`, `LoyaltyPolicy`, `TextNormalizer`, `Csv`, `PasswordUtil`, `ProductCsv`, `Cart`, `ErrorText`, `QrCode`, `PageMath`, `FileSizeText`, `OrderNumber` and others. About 190 edge inputs were run through them.
-- **QR code check (nothing wrong found):** 86 texts of 1 to 2,331 bytes (every capacity boundary, one receipt text, one Vietnamese text) were encoded and decoded again by an independent Python decoder (format information and BCH, mask, zig-zag read, de-interleaving, Reed-Solomon of every block, byte-mode payload): all 86 verified, in all 40 versions; the two ECC tables equal the standard ones. Nothing in `src/test` guards this beyond version 1 (TODO 6.60).
-- **Other things probed and fine:** phone, username, password and e-mail rules behave as documented (the username and phone checks trim first, so a trailing newline is not a gap); `PasswordUtil` (salted, malformed stored hashes give false, `needsRehash` right); `TextNormalizer` (`đ`/`Đ`, accents, either Unicode form); `Csv.cell` (formula characters get a leading apostrophe, commas, quotes and line breaks are quoted); `Cart` (stock 0 and negative stock refuse, price snapshot, third add over stock refused); `Money.toDong` stops a sum above the `long` range with a clear message; the product CSV rows with a bad price, a missing category, an over-long name or description, a duplicate in the file (case-insensitive) and a stock outside 0 to 1,000,000 are all refused with a line number.
-- **New open items (5, all Low):** 2.80 (`₫` refused by `MoneyParser`), 2.81 (CSV import: unknown text in "Đang bán" means on sale, cost above price not warned, extra or missing cells ignored), 2A.38 (`ErrorText` is a deny-list: 13 of 30 typical technical texts reach the screen, one with the database user and host), 3.59 (no price or quantity ceiling; loyalty points reach -1,794,967,296 for a 25 trillion dong total), 6.60 (`QrCodeTest` covers one version). The note of 5.30 now says that its filter half is reproduced. Already in the list and not repeated: the stock "1.5" read as 15 (3.46), decimal amounts read 10 to 100 times too big (2.77).
-- **How sure:** all five are reproduced by running the class (2.80, 2.81, 2A.38, 3.59) or by running an independent decoder over its output (6.60). Nothing was compiled or run for the screens, the database layer or Maven in this session.
-- **Counts:** 175 ticked, 134 open (309 numbered items), 611 `@Test`. `docs/RELEASE.md` was not changed (its figures do not depend on any of the new items).
-- **Still the first thing to do:** `./mvnw -B clean test`, then open each of the four admin screens, then fix 2.77, 2.78, 2.79, 2.65, 2A.28 and 3.42.
-
-## Session 74: seventeenth scan (2026-10-18, no code changed)
-- **What came in:** the same source tree as Sessions 66-73 (`diff -r` shows only `TODO.md` and `progress.md` differ). The ticked/open state of all 309 numbered items is unchanged from Session 73, so the check of the 175 ticked items done in Sessions 72 and 73 (every name, test, constant and quoted text found in the code; the 28 behaviours that lived in `AdminController` found in the new classes; 575 passed, 2 skipped, 1 failed = item 3.42 in the real run of Session 72) still holds. **Finished but not ticked:** none.
-- **Probed here by running code on SQLite (all fine):** 20,000 random inputs through `TextNormalizer`, `Csv.cell`, `MoneyParser`, `ValidationUtil` and `ProductCsv.parse` (none threw an unexpected exception); an export of nine awkward product names read back by the import (only a name starting with a tab changes, which no screen allows); 300 random orders with discounts, payment methods, midnight crossings and refunds on 3 seeds: `summary`, `dailySales`, `paymentSplit`, `unitsSold`, `topProducts` and the history count always agreed with an independent model; 12 backups made while 4 threads sold 2,500 items: every backup passed `integrity_check` and held a consistent stock-versus-sales snapshot; the column lists of `SqliteToMariaDbImporter` equal the real SQLite schema for all 9 tables. Dropped after checking: "two accounts for one employee" (creating an account creates its own employee row, by design) and "negative numbers in the CSV exports become text" (numbers are written raw, only text goes through `Csv.cell`).
-- **New open items (2, both Low):** 3.60 (`CurrencyUtil.format` and `Money.toDong` round differently; `-0đ`), 6.61 (every test run leaves a 3 MB folder in the system temp folder). Both reproduced by running the code.
-- **Counts:** 175 ticked, 136 open (311 numbered items), 611 `@Test`. `docs/RELEASE.md` needed no change.
-- **Still the first thing to do:** `./mvnw -B clean test`, then open each of the four admin screens, then fix 2.77, 2.78, 2.79, 2.65, 2A.28 and 3.42.
-
-## Session 75: eighteenth scan, tests run under other locales and time zones (2026-10-18, no code changed)
-- **What came in:** no new upload; the tree of Session 74 (same source as Sessions 66-74). The 175 ticked items were not checked again item by item (nothing in the code changed since Sessions 72-74, where that was done); no open item has a closing DONE note, so nothing is finished but unticked.
-- **New way of testing:** the 103 test files that need no JavaFX (575 + 2 skipped + 1 known failure on the default settings) were run again with the same stand-in runner under three settings: `vi_VN` with `Asia/Ho_Chi_Minh` (the shop's own): 575 passed, 1 failed (3.42); `tr_TR` with `Pacific/Kiritimati` (UTC+14, the Turkish dotless i): the same, so no `toLowerCase`/`toUpperCase` or time-zone fault; `ar_SA` with `America/Los_Angeles`: 568 passed, **8 failed** (see 6.62). The failures are in the tests, which build phone numbers and file names with unqualified `String.format`; in the app the same call builds the bank-transfer note and three page labels.
-- **Reproduced by running code and found nowhere in the list (2 items):** 2A.39 (Medium: a password typed into the user-name box is logged as `failed login: no such user '<password>'`, and the README says the security log never records passwords; the README line now names the gap), 6.62 (Low: digits written with `String.format` follow the PC's locale; 8 tests fail under `ar_SA`; the transfer note would read `DH` + Arabic-Indic digits).
-- **Checked and fine:** all shared static state is `synchronized`, `volatile` or immutable (`Thumbnails`, `LoginThrottle`, `UiSettings`, `AppClock`, `Session`, `SingleInstance`); no personal data in the log calls except the case above; every resource file (fxml, css, fonts, images) is referenced; generated file names are valid on Windows; export buttons are shown to the admin only; `database.properties.example` and the database guide carry no insecure default (the user is not `root`, the password is a placeholder); the unencrypted link of a second till (2A.26) and the flush of the login delay by 1,000 names (2A.31) were already in the list.
-- **Counts:** 175 ticked, 138 open (313 numbered items), 611 `@Test`. `docs/RELEASE.md` needed no change.
-- **Still the first thing to do:** `./mvnw -B clean test`, then open each of the four admin screens, then fix 2.77, 2.78, 2.79, 2.65, 2A.28, 2A.39 and 3.42.
-
-## Session 76: nineteenth scan, the seventh check of the ticked items, real runs of two more classes (2026-10-18, no code changed)
-- **What came in:** a new zip. `diff -r` against the zip handed over after Session 71 shows only `README.md`, `TODO.md` and `progress.md` changed (the README line about 2A.39); the source and the 611 tests are the same as in Sessions 66-75.
-- **Ticked items (175), checked again:** 573 names, constants, columns, settings and methods quoted in the DONE notes were looked up in the code (all present; the only misses are `VOIDED`, `password_changed_at` and `HttpClient`, which the notes mention as ideas or as things the app does not use); every test count cited in the `TODO` is at or below the real count (611 `@Test`); no open item has a closing DONE note except 3.18, whose DONE text belongs to its first half and whose second half (a database-level rule for category names) is still open. **Finished but not ticked:** none.
-- **New this time, by running the real classes:** `DatabaseSettings.fromProperties` on nine awkward passwords and `ProductCsv.parse` on twelve file layouts (BOM, CRLF, semicolons, tabs, blank lines, no last line break, dotted and comma prices, lower-case and accent-less category names). A header-only file, a byte-order mark, CRLF, semicolons, blank lines and the price spellings are all handled.
-- **New open items (2):** bug 2.82 (a database password with a backslash, a leading or trailing space, or `\u` is changed by `Properties.load` and `trim()`; a password ending in a backslash swallows the next line and the `db.type` under it), edge case 3.61 (a tab-separated product file is refused with the "missing columns" message). Both reproduced by running the class.
-- **Also read and fine (nothing added):** `CrashHandler` (one dialog per 10 s, every error logged), the receipt print path in `HoaDonController` (no printer, closed dialog, failed page and the narrow roll are all handled), `ImageStorage.deleteQuietly` (only files inside the images folder are deleted), `DbTime` (both stored forms are read).
-- **Counts:** 175 ticked, 140 open (315 numbered items), 611 `@Test`. Maven, JavaFX and a database server were not available; nothing outside the two classes above was run. `docs/RELEASE.md` needed no change.
-- **Still the first thing to do:** `./mvnw -B clean test`, then open each of the four admin screens, then fix 2.77, 2.78, 2.79, 2.82, 2.65, 2A.28, 2A.39 and 3.42.
-
-## Session 77: twentieth scan (2026-10-18, no code changed)
-- **What came in:** no new upload; the tree of Session 76 (same source as Sessions 66-76; only the documents changed). The 175 ticked items were checked in full in Session 76 and nothing in the code changed since; no open item has a closing DONE note, so nothing is finished but unticked.
-- **What was read or run this time:** `UiSettings` (a missing, unreadable or read-only file only means defaults), `ReceiptQr` and `TransferQr` (plain ASCII text; the shop's own picture is looked up by name, never made up), the `db.type` handling in `SqlDialect` and `DatabaseSettings`, `ImageStorage.resolve` and `deleteQuietly` (only files inside the images folder are deleted), the MariaDB schema and migrations (the data rules are not `CHECK` constraints there, so an old MySQL that ignores `CHECK` does not switch them off), the missing-version check of the server (none exists; the notes of 2.74 and 2.82 already cover the MySQL 8 and password cases) and a search of the document for forged-receipt and tamper ideas.
-- **New (1 idea, no numbered item):** section 7, "open an order from its receipt" (a scanner-friendly line in the receipt QR; reasoned, not needed for the app to be correct). Candidates dropped after checking: `UiSettings.getDouble` accepting `NaN` (a hand-edited file only makes a window open at its scene size), a server-version check for MySQL 5.7 (the data rules do not rely on `CHECK`), forged receipts (a refund is always made from the app's own history, not from a printed receipt).
-- **Counts:** 175 ticked, 140 open (315 numbered items), 611 `@Test`. Nothing was compiled or run in this session. `docs/RELEASE.md` needed no change.
-- **Still the first thing to do:** `./mvnw -B clean test`, then open each of the four admin screens, then fix 2.77, 2.78, 2.79, 2.82, 2.65, 2A.28, 2A.39 and 3.42.
-
-## Session 78: twenty-first scan and a ninth check of the ticked items (2026-10-18, no code changed)
-- **What came in:** no new upload; the tree of Session 77 (same source as Sessions 66-77; only the documents changed).
-- **Ticked items (175), checked again:** 573 names, constants, columns, settings and methods quoted in the DONE notes were looked up in the code (present; the only misses are `VOIDED`, `password_changed_at` and `HttpClient`, which the notes mention as ideas or as things the app does not use); every test count cited in the `TODO` is at or below the real count (611 `@Test`); the counts of the file (175 ticked, 141 open, 316 numbered) match this file and the header of `TODO.md`. **Finished but not ticked:** none (no open item has a closing DONE note; 3.18's DONE text belongs to its first half).
-- **Run on the real classes this time:** `MoneyParser.parseDong` on 23 inputs (`50.000`, `50,000`, `50 000`, `50.000đ`, `50 VND`, 50,000,000 and a 1.000.000.000.000 are read; `50k`, `1tr`, `1,5tr`, `50 nghìn`, `₫50.000`, `5e4`, `0x10`, Arabic-Indic and full-width digits are refused); `ImageStorage` (compiled with a one-class stand-in for the JavaFX `Image`) read for the name and extension rules; `DiscountPolicy` read for the limits (an administrator up to the subtotal, others 10 %, a reason for every discount).
-- **New open item (1):** 5.33 (the money boxes refuse "50k", "1tr", "50 nghìn": reproduced). Checked and fine: a data folder written with quotes is caught by the start-up `try` (the person sees the start-up message, not a silent exit), the picture copy never overwrites, `module-info` exports only what the FXML needs.
-- **Counts:** 175 ticked, 141 open (316 numbered items), 611 `@Test`. Nothing but `MoneyParser` was run (no Maven, JavaFX or database server). `docs/RELEASE.md` needed no change.
-- **Still the first thing to do:** `./mvnw -B clean test`, then open each of the four admin screens, then fix 2.77, 2.78, 2.79, 2.82, 2.65, 2A.28, 2A.39 and 3.42.
-
-## Session 79 (2026-10-18)
-
-- **Check:** the new upload differs from the Session 78 tree only in README, TODO and progress (diffed); all 175 ticked items still hold; no open item is finished.
-- **22nd scan:** 6 new open items: 2.83 (print exception path), 3.62 (SQLite import: read-only open, version and integrity checks), 4.40 (reports by hour/weekday/category and previous period), 5.34 (report CSV holds only the top 20; no load time), 5.35 (customer search ignores email), 6.63 (loyalty tiers belong in `LoyaltyPolicy`).
-- **Counts:** 175 ticked, 147 open (322 numbered), 611 `@Test`. No code changed; Maven could not be run here.
-- **Still the first thing to do:** `./mvnw -B clean test`.
-
-## Session 80 (2026-10-18)
-
-- **Check:** the source is byte-identical to Session 79's tree (diffed); all 175 ticked items still hold; no open item is finished.
-- **23rd scan:** 5 new open items: 4.41 (ingredient/recipe stock), 4.42 (product code / barcode), 4.43 (table reservations), 5.36 (receipt/history/report windows have no owner window), 6.64 (the two `SceneNavigator.switchScene` methods are copies). The Vietnamese sort order was run on the real JDK collator and is correct.
-- **Counts:** 175 ticked, 152 open (327 numbered), 611 `@Test`. No code changed; Maven could not be run here.
-- **Still the first thing to do:** `./mvnw -B clean test`.
-
-## Session 81 (2026-10-18)
-
-- **Check:** the source is unchanged (diffed against the tree of Sessions 79-80); all 175 ticked items hold; no open item is finished.
-- **24th scan (deep):** 4 new open items: 2.84 (editing a legacy customer-role account makes it a staff account), 2A.40 (restore preview has no size cap), 2A.41 (`SecurityLog.clean` misses other line separators), 3.63 (a written backup is never read back); two ideas (birthday offers, gift cards).
-- **Counts:** 175 ticked, 156 open (331 numbered), 611 `@Test`. No code changed; Maven could not be run here.
-- **Still the first thing to do:** `./mvnw -B clean test`.
-
-## Session 82 (2026-10-18)
-
-- **Check:** every backticked name in the 175 ticked items was looked up in the source by a script; the 10 not found are history (deleted or renamed classes described as such). One stale name in the Done section was corrected. No open item is finished.
-- **25th scan:** 3 new open items: 2.85 (restore safety copy ignores the WAL file after a crash), 3.64 (a bad `hire_date` breaks login and the account list), 5.37 (POS never refreshes tables/stock on a multi-till shop).
-- **Counts:** 175 ticked, 159 open (334 numbered), 611 `@Test`. No code changed; Maven could not be run here.
-- **Still the first thing to do:** `./mvnw -B clean test`.
-
-## Merge note: two progress histories kept
-- The block above is the other branch's session history (13th pass part 2 to the end). The block below is the language-switch branch's history: first a "Session 55 (14th pass)" verification note that came from an earlier documents-only branch (its numbering clashes with the other branch's Session 55; both are kept as written), then the whole "Branch: language switch (TODO 1.7)" section.
-
-## Session 55 (14th pass): verification of everything ticked, and TODO bookkeeping
-- **Verified** (JDK 21 with stand-ins for JUnit, JavaFX `Image` and `org.sqlite`; no Maven, no driver, no JavaFX): every identifier named in a ticked item exists; 181 non-JavaFX main classes compile with `-Xlint:all` (0 warnings); 53 test classes ran, 299 tests passed, 5 did not (4 need the SQLite driver, 1 needs JavaFX's image decoder); 30 test classes (179 tests) need the database and 14 need JavaFX, so neither group ran. Checked in the code: the backup folder rules of 2.23, WAL and every raw copy of the database (6.16), the rename (6.17), the clock (6.18/6.39), the pom pins and enforcer (6.33), `.gitignore` (6.26), the README rules (6.28).
-- **Found and fixed in `TODO.md`:** notes on 3.36 and 3.37 that belong to 6.36/6.37 (those items are still open: the date filters still use `DATE(...)`, and set-up is not one transaction); stale 'not done' text in 2.23, 6.16, 6.18; 6.20 and 6.27 were done and are ticked. **My earlier claim that nothing is open in section 1 was wrong**: section 1 has sub-items (1.4, 1.7, 1.8, 1.9) that my first count did not see.
-- **Not in this tree** (done on another branch, so the open items below still show as open here): the section 4 features (audit log, stock log, shift close, customer merge, table management, reorder level, health line, picture cleanup, staff removal, transfer reference, and the columns for 3.13/3.17/3.21/3.25/3.41), and the 6.21-6.25 work (discount rule inside `CheckoutService`, `sqlLiteral()` for 6.23, three backup tests). Expect overlaps when merging: 6.23 (`SqlStatus` here, `sqlLiteral()` there), `OrderDAO`, `CheckoutService`, `DatabaseConfig`.
-- **Update (owner's Maven run):** `./mvnw -B clean test` passed: 562 tests, 0 failures, 1 skipped, BUILD SUCCESS; see the language-switch section below. The 5 tests that failed here only because of the stand-ins pass under Maven.
-- **First thing to do:** `./mvnw -B clean test`.
-## Branch: language switch (TODO 1.7), started from `Lunavera-Coffee-main_small-practices.zip`
-- **Branch point (for the later merge):** the zip the owner sent as "the current state" before starting 1.7: `Lunavera-Coffee-main_small-practices.zip`, sha256 `2c3dfa2141cea4db4b505a01da52d7627184b07264c2ee89d63c46d358620fea`, with `TODO_5438f4.md` and `progress_348211.md`. Merge this branch against that zip as the common base (three-way, per file). `i18n-vs-branch-point.patch` is the full difference from that zip.
-- **Files this branch adds:** `util/I18n.java`, `util/LanguageSetting.java`, `resources/i18n/messages_vi.properties`, `resources/i18n/messages_en.properties`, `test/.../util/I18nTest.java`, `test/.../util/UntranslatedTextTest.java`, `src/test/resources/i18n/untranslated-baseline.txt`.
-- **Files this branch changes (merge care):** `LunaveraApplication.java` (2 lines in `start`), `util/SceneNavigator.java` (`newLoader`, `reloadCurrent`, remembers the shown screen, error texts), `util/AlertUtil.java`, `util/DashboardWidgets.java`, `util/SessionGuard.java`, `controller/LoginController.java`, `controller/EmployeeController.java`, `controller/AdminController.java` (only the dashboard messages and the "administrators only" box), `controller/PasswordChangeDialog.java`, `resources/fxml/dangnhap.fxml`, `employee-trangchu.fxml`, `admin-trangchu.fxml`, `resources/css/dangnhap.css`, `TODO.md` (1.7 only), this file.
-- **Merge hazards to expect:** any other branch that edits the same Vietnamese strings in those files, or adds new Vietnamese text (it will fail `UntranslatedTextTest` until it uses `I18n.t(...)` or `%key` and the baseline is regenerated: `mvn test -Dtest=UntranslatedTextTest -Dlunavera.i18n.writeBaseline=true`). Anything that loads an FXML with `new FXMLLoader(...)` directly must use `SceneNavigator.newLoader(...)` instead. A merged branch that adds a language key must add it to both `.properties` files (`I18nTest`).
-- **State at the end of this round:** Phase 1 done in code; login, employee dashboard, admin dashboard (cards and sidebar), dashboard widgets, shared dialogs (`AlertUtil`, `PasswordChangeDialog`, `SessionGuard`) translated; 1102 untranslated literals left (baseline file). Checked here with a stand-in JUnit: `I18nTest` 13, `UntranslatedTextTest` 3, `FxmlControllerCheckTest` 6 pass; brace and parenthesis balance of every edited Java file. NOT run: Maven, any JavaFX code (`SceneNavigator`, `LoginController`, the three FXML files and the new CSS were edited without a toolkit to load them).
-- **Maven run by the owner (after this branch was in the tree):** `./mvnw -B clean test` gave **562 tests, 0 failures, 0 errors, 1 skipped, BUILD SUCCESS** (25 s). The skipped one is `MariaDbStaffPhoneKeyTest` (needs a MariaDB server). It ran `I18nTest` (13), `UntranslatedTextTest` (3) and `FxmlControllerCheckTest` (6) among the rest. So everything this branch edited, including the JavaFX classes that could not be compiled where it was written (`SceneNavigator`, `LoginController`, `LunaveraApplication`, `DashboardWidgets`, `AlertUtil`, `SessionGuard`, `PasswordChangeDialog`, `AdminController`, `EmployeeController`), now compiles under Maven, and the language files, FXML keys and the untranslated-text baseline agree.
-- **Still not seen on a screen:** the owner's first start of the app showed the start-up problem screen instead of the login screen (`Access denied for user 'lunavera'@'localhost' (using password: NO)`). That is the database step, not the language switch: there is no `data/database.properties`, so the app looks for MariaDB on `127.0.0.1:3306` as user `lunavera` with no password, and a MariaDB server on that computer refuses it. To get to the login screen, copy `database.properties.example` to `data/database.properties` (next to `lunavera.db`) and either write `db.type=sqlite` in it (the old file, no server needed) or fill in the real MariaDB user and password (`docs/DATABASE.md`). The start-up problem screen is not translated yet (`StartupProblem`, 23 strings) and appears before `LanguageSetting.restore()` runs, so it stays Vietnamese even after English was chosen.
-- **First thing to do now:** make the database step work as above, then run the app: login screen in Vietnamese, press "English" (the screen reloads in English), sign in as staff and as admin and look at both dashboards, change a password, wait for the idle sign-out; then quit, restart and check English is remembered. Look at the switch buttons' size and colour at the top right of the login screen.
-- **Owner's check on a screen (after the database step was fixed):** login screen and home screen are in English; English is remembered after a restart; the switch styling is good. Pop-ups and other screens return to Vietnamese because those texts are not translated yet (1102 literals left, `untranslated-baseline.txt`); the switch only on the login screen is fine for now.
-- **Change after that check:** the switch is now one pill with a sliding green thumb (220 ms, ease in-out) instead of two buttons that change colour at once. Files: `dangnhap.fxml` (new `StackPane` pill, `Region` thumb `languageThumb`, two 86-wide buttons), `dangnhap.css` (`.language-thumb`, the active button only turns its text white), `LoginController` (`changeLanguage` slides first, then `applyLanguage` saves the choice and reloads the screen; the buttons are disabled during the slide). Checked here: the FXML is well-formed and `FxmlControllerCheckTest`, `I18nTest`, `UntranslatedTextTest` pass; the controller's brace and parenthesis balance is 0. NOT seen on a screen: look at the slide in both directions and at a quick double click.
-- **Next in 1.7:** translate more screens so pop-ups and the other screens follow the language, in this order: customers, POS (`quanlydonhang` + `OrderController`), order history and reports, products/categories/accounts (the `AdminController` combo-box filters must be moved from Vietnamese words to codes first), backup/restore/QR dialogs, then the data-layer messages and the start-up screens.
-- **Second round of translating (after the owner confirmed the slide works):** customers screen (`quanlykhachhang.fxml`, `CustomerController`) and the orders/POS screen (`quanlydonhang.fxml`, `OrderController`, 151 texts: every label, pop-up, the payment dialog, the transfer-QR box). 274 keys per language file now. Untranslated literals left: **842** (715 Java, 127 FXML), down from 1102. New shared keys: `common.save/edit/exportcsv/success/missing.title/file.savefail`.
-- **Checked here:** `I18nTest` 13, `UntranslatedTextTest` 3 and `FxmlControllerCheckTest` 6 pass; brace and parenthesis balance of `CustomerController` and `OrderController` is 0; both FXML files are well-formed. NOT run: Maven (only the owner can), and nothing was seen on a screen. Edits to these two controllers were made by exact-text replacement with a count check on every one, so a text that did not match would have stopped the script rather than being skipped.
-- **Look at when running:** with English chosen at the login screen, open Customers (list, "Add customer" dialog, a wrong phone, export) and Orders (pick a table, start an order, add items, change the table status, the payment dialog with cash and transfer, print receipt); the English text is longer than the Vietnamese in places (table buttons, payment grid), so check nothing is cut off. A pop-up that still shows Vietnamese there is a service-layer message (see TODO 1.7 status).
-- **Next:** order history and reports windows (`OrderHistoryWindow` 44, `ReportWindow` 50), then products, categories and accounts (`AdminController` 255 + the three FXML files; its combo-box filters must move from Vietnamese words to codes first), `BackupService` and the backup/restore/QR dialogs, the receipt (`donthanhtoan.fxml`), then the service/DAO messages and the start-up screens.
-- **Third round, after the owner reported Vietnamese still on the orders tab:** found by tracing what the tab can show beyond its own screen: payment method names (`PaymentMethod`), starter table names read from the database ("Bàn 1": new `DiningTable.displayName()`, used by the table map in `OrderController` and `DashboardWidgets`), `DiscountPolicy.messageFor` and `TablePolicy` messages (service layer), and the receipt window and printed receipt right after paying. All now use the language files (316 keys per file). Untranslated literals left: **783** (677 Java, 106 FXML).
-- **Not translated on purpose:** product, category, customer and staff names and the starter menu are data. If the owner wants the product list in English too, that needs a decision (a second name column, or a bilingual starter menu); nothing is done about it yet.
-- **Test fix:** the UTF-8 check in `I18nTest` flagged a plain "Ã" as mojibake; "ĐÃ HỦY" is real Vietnamese. It now looks for a lead character followed by a Latin-1 symbol (a real double-encoding) and was checked against both kinds of text.
-- **Added:** `LanguageFollowsTest` (5: payment names, stored value unchanged, table names, discount messages, table-policy message). Checked here with a stand-in JUnit: it and `PaymentMethodTest` (5), `DiscountPolicyTest` (15), `I18nTest` (13), `UntranslatedTextTest` (3) and `FxmlControllerCheckTest` (6) pass; all non-JavaFX main classes compile with the edits. NOT run: Maven, any screen.
-- **Next:** order history (`OrderHistoryWindow` 44) and reports (`ReportWindow` 50), then products, categories and accounts, backup/restore/QR, and the remaining service and DAO messages.
-- **Fourth round:** `OrderHistoryWindow` and `ReportWindow` translated (378 keys per file). The history status filter's remembered value is now a code (`ALL/PAID/CANCELLED/OPEN`, key `history.status`); an old remembered Vietnamese word is simply ignored once. The report's exported CSV headers follow the language in use. The chart legend and axis on the admin dashboard said "Doanh thu" (no accent mark, so the counter missed it): fixed, and `UntranslatedTextTest` now also counts a short list of accent-free Vietnamese words (this also puts `ReceiptQr`'s "Hoa don #", the text inside the receipt QR, into the baseline; it is deliberately plain ASCII and stays). Untranslated literals left: **691** (585 Java, 106 FXML).
-- **Checked here:** `I18nTest` 13, `UntranslatedTextTest` 3, `FxmlControllerCheckTest` 6, `LanguageFollowsTest` 5 pass; brace and parenthesis balance of both windows is 0; every non-JavaFX main class compiles. NOT run: Maven, any screen (both windows are code-built JavaFX, so none of their layout was seen).
-- **Look at when running:** Orders tab > Order history (the filters, a cancel confirmation, export) and Admin dashboard > Revenue report (both date pickers, "View report", the summary line, export); in English the summary line is long, check it wraps instead of being cut off.
-- **Next:** products, categories and accounts (`AdminController` 255 + three FXML files; the combo-box filters must move from Vietnamese words to codes first), backup/restore/QR (`BackupService`, `TransferQrGuard`, `ImageStorage`), `ProductCsv`, then the other service/DAO messages (`OrderDAO` 22, `AccountService` 12) and the start-up screens (`StartupProblem`, `FirstRunDialog`).
-- **Fifth round:** all of `AdminController` (255 texts) and the three admin FXML files translated; 583 keys per language file. Done with a small tool instead of by hand: it finds every message built from string pieces joined with `+` (or `String.format`), turns it into one template with `{0}`, `{1}` placeholders, and replaces it with `I18n.t("key", ...)` where the key and the English text come from a table written for it (each template reuses an existing key when the Vietnamese text already has one). Because a message is translated as a whole, the English word order is free. The tool stops and lists any template without an entry, so nothing is skipped silently; it also skips `static final` constants (they would freeze the language at class load). Untranslated literals left: **335**, all in Java (335); the FXML files are finished.
-- **Logic that compared Vietnamese words (the hazard noted earlier) is handled:** the filter lists still hold the shown text but are compared with the same translated text, and the "All ..." check is the exact-match helper `isAllChoice`. A language change cannot happen while a window is open (the switch is on the login screen), so the lists and the comparisons always agree.
-- **Placeholder filling hardened:** `I18n` now fills `{0}`, `{1}` in one pass over the text, so a product the shop named, for example, `{1}` is copied as typed (new test in `I18nTest`, now 14).
-- **Checked here:** `I18nTest` 14, `UntranslatedTextTest` 3, `FxmlControllerCheckTest` 6, `LanguageFollowsTest` 5 pass; the three FXML files are well-formed; `AdminController` parenthesis and brace balance checked with a tokenizer that skips strings and comments (an earlier regex-based counter wrongly reported -3 and was replaced). NOT run: Maven, any screen. `AdminController` is a very large JavaFX class, so run `./mvnw -B clean test` before anything else: a typo in a replaced expression would show as a compile error there.
-- **Look at when running (English chosen at login):** Products (add and edit dialog, a wrong price, delete a product that has orders, import/export CSV), Categories (add, delete a category that has products), Accounts (add staff, a weak password, lock/unlock, filters), and on the dashboard the Backup, Restore and Transfer-QR dialogs. Try the filter drop-downs in each: "All ..." must show everything.
-- **Next:** the service and data layer and start-up screens, roughly 335 texts: `BackupService` 31, `ProductCsv` 23, `OrderDAO` 22, `AccountService` 12 and the smaller ones, then `FirstRunDialog`, `StartupProblem`, `LunaveraApplication` (these appear before the language is restored, so `LanguageSetting.restore()` has to move earlier in `start()`), and `MenuSeedData` (decision needed).
-- **Sixth round (service, data and start-up layer):** 149 more keys (735 per language file). Same tool as the fifth round, this time over 55 files with a per-file skip list for text that is data or a file format (seed names, stored table and walk-in names, the dong sign, the product CSV header and yes/no values, the QR text). `LanguageSetting.restore()` now runs first in `start()` and cannot throw. Constants that froze the language at class load became methods: `ErrorText.generic()`, `BackupService.mariaDbRestoreHelp()`, `AccountService.lastAdminMessage()`, `PageBar.allLabel()`; `DatePresets` holds keys. Three tests that referenced the old constants were updated (`ErrorTextTest`, `BackupEntryNameTest`, `AccountServiceTest`).
-- **Bug found while doing it (fixed, and kept from coming back):** `AlertUtil.error` runs the message through `ErrorText.forScreen`, which hides anything that starts like a raw error ("Could not ...", "Cannot ...", "Unable ...", "Failed ...", "Error ...") or contains a path or an exception name. Eleven English messages from the earlier rounds began with "Could not" and would have shown the generic sentence instead; they now read "The statistics could not be loaded: ...". `I18nTest` has a new test that fails for any text that would be hidden, except a short list of keys only ever used as dialog titles. Rule for new English messages: never start with "Could not / Cannot / Unable / Failed / Error".
-- **Left on purpose (82 literals):** the baseline file header lists them. The one decision for the owner is the starter menu (`MenuSeedData`, 59): leave it Vietnamese, or add English names.
-- **Checked here with a stand-in JUnit (no database driver, no JavaFX):** all non-JavaFX main classes compile with -Xlint:all; 57 test classes pass including `I18nTest` 15, `UntranslatedTextTest` 3, `FxmlControllerCheckTest` 6, `LanguageFollowsTest` 5, `ErrorTextTest`, `ProductCsvTest`, `MoneyParserTest`, `MoneyGuardTest`, `StartupProblemTest`, `BackupEntryNameTest`, `DiscountPolicyTest`, `PaymentMethodTest`. The other test classes in the tree need the SQLite driver (or JavaFX) and could not run here; none of the failures I looked at came from a changed message (they are "No suitable driver" or a JavaFX `Image` stand-in). NOT run: Maven, any screen. **Run `./mvnw -B clean test`: 31 Java files were edited by the tool, and `FirstRunDialogTest`, `CrashHandlerTest` and `QualityOfLifeTest`, which cover three of them, could not be compiled here.**
-- **Look at when running (English chosen at login):** first start on an empty data folder (the first-account dialog), a start with no `database.properties` or a stopped MariaDB (the start-up problem screen, now in English), a second copy of the program (the "already running" box), pay an order and look at the receipt, a backup then a restore, import a CSV with a bad line, enter a wrong discount as staff.
-- **README** has a new "Language (Vietnamese / English)" section for owners and developers.
-- **Owner's three decisions (after the sixth round):** (1) starter menu gets English names, (2) printed receipts always English, (3) language switch stays on the login screen only.
-- **(1) Starter menu names:** new `config/SeedNames` (33 products, 4 categories, keyed by the stored Vietnamese name, display only; `product(lang, name)`, `category(lang, name)`; a name the shop typed or renamed is returned unchanged). Used in `OrderController` (category buttons, product cards, cart column, stock and remove messages; the search also matches the English name), `DashboardWidgets` (low-stock list) and `ReportWindow` (top products table). The management screens (`AdminController`) and the CSV exports keep the stored names. New `SeedNamesTest` (7) fails if a starter item has no English name or a stale one remains.
-- **(2) Always-English receipts:** new `util/ReceiptText` (`t`, `bundle`, `paymentMethod`, `productName`, `table`) is the single source of receipt text; `ThermalReceipt` (16 calls) and `HoaDonController` use it; the receipt window is opened with `SceneNavigator.loadAndShowNewWindow(path, title, ReceiptText.bundle())` so its FXML labels are English too; `I18n.bundleFor(code)` and `PaymentMethod.label(language)` were added for it. Both places that open the receipt (the orders tab and the order history) pass the English title. `LanguageFollowsTest` (now 7) checks it stays English while the UI is Vietnamese.
-- **(3)** nothing to change; recorded in the TODO and README.
-- **Checked here:** compile of all non-JavaFX classes with -Xlint:all; `SeedNamesTest` 7, `LanguageFollowsTest` 7, `MenuSeedDataTest` 5, `I18nTest` 15, `UntranslatedTextTest` 3, `FxmlControllerCheckTest` 6 pass; balance of every edited file checked with a tokenizer. NOT run: Maven, any screen.
-- **Look at when running:** with English chosen, the POS shows e.g. "Black coffee", "Tea", "Peach tea"; search "peach" finds it; pay an order and check the receipt window and the printed receipt (English, "Cash", "Table 3", English item names), then switch the app to Vietnamese and check the receipt is still English while the POS shows the Vietnamese names; open an old order from the history (receipt in English); a product you add yourself keeps its own name everywhere.
-
-## Merge: the language-switch branch + the branch that split AdminController
-- **Base for both:** `Lunavera-Coffee-main_small-practices.zip`. Merged with a per-file three-way merge on top of the other branch's tree; 22 files had been changed on both sides.
-- **Clean merges (no manual work):** `DatabaseConfig`, `CustomerDAO`, `OrderDAO`, `DashboardStatsService`, `MoneyParser`, `CustomerController`, `EmployeeController`, `LoginController`, `admin-trangchu.fxml`, `quanlydanhmuc.fxml`, `quanlysanpham.fxml`, `quanlytaikhoan.fxml`, `README.md` and others.
-- **Conflicts resolved by hand:** `dangnhap.css` and `dangnhap.fxml` (the other branch's "where is the data" line and the language switch: both kept), `SchemaMigrations.java` (its imports plus `I18n`), `OrderController.java` (four spots: the other branch's `Cart` rules with the translated texts, e.g. the stock warning now reads `cartRules`'s result and the English text), `TODO.md` (four items that both sides had re-worded as bookkeeping: the other branch's later wording kept), `progress.md` (both histories kept, one after the other).
-- **`AdminController` was deleted on the other branch:** all 255 texts I had translated in it were re-applied to the new classes with the same tool (existing keys reused; the tool lists any text without a key and writes nothing until each has one). New keys were added for what that branch introduced.
-- **`Messages` vs `I18n`:** two text systems for the same job would drift, so `Messages` became a layer over `I18n` (see the 6.10 note in TODO.md); `MessagesTest` follows.
-- **Left Vietnamese on purpose (119 literals, baseline file header):** the starter menu and its English-name table, file-format and stored values, the icon keywords in `ProductController`, and the database-trigger messages in `SchemaMigrations` (they are written into the database).
-- **Checked here (stand-ins for JUnit, JavaFX, `org.sqlite`; no Maven, no driver):** all 146 non-JavaFX main classes of the merged tree compile with `-Xlint:all`; 101 test classes compile and 64 of them pass (347 tests), including both branches' tests that need no database (`I18nTest` 15, `MessagesTest` 6, `UntranslatedTextTest` 3, `FxmlControllerCheckTest` 6, `AdminScreensTest` 6, `SeedNamesTest` 7, `LanguageFollowsTest` 7, `LocationSummaryTest`, `CartTest`...). The other 37 need the SQLite driver (I looked at every one that did not say so in its message: all are "no suitable driver" at class set-up). The JavaFX classes (the six admin controllers, `OrderController`, `ReportWindow`, `HoaDonController`, `ThermalReceipt` and others) could not be compiled here; each edited file was checked for balanced braces and parentheses and for the `I18n` import. **NOT run: Maven, any screen.**
-- **First thing to do:** `./mvnw -B clean test` on the merged tree; a compile error in one of the JavaFX files would show there first. Then click through, in English: login, the three admin screens (products, categories, accounts), orders, receipt, reports.
-
-## Session 83 (14th pass): the Medium money and data bugs (2026-10-18)
-- **Done in code, ticked (11):** 2.65 (receipt failure no longer leaves the paid cart on screen), 2.70 (an attached customer is detached when the phone or name stops matching, also for a customer without a phone), 2.74 (`mysqldump --no-tablespaces`, retried without it for an old client), 2.77 (a decimal in a money box is refused, not read 10 or 100 times too big), 2.78 (a full disk is named), 2.79 (the till is locked while a payment saves), 2.82 (`database.properties` read literally, the password exactly as typed), 2.84 (a customer-role account cannot be saved as staff), 2.85 (a restore's safety copy includes sales still in the write-ahead log), 3.53 (profit uses the cost recorded at the sale and the order's discount share; one-time backfill for old lines), 5.37 (the till refreshes tables and stock every 20 seconds). Each item's note in `TODO.md` says what was and was not checked.
-- **Not done, with the reason in the item:** 3.13 (needs a decision on how a refund is reported, and a `cancelled_at` column; the item text is cut off in the file) and the rest of 3.18 (a case-insensitive unique rule on SQLite needs a deterministic function in an index).
-- **Checked here** (JDK 21; no Maven, no SQLite or MariaDB driver, no JavaFX): every touched class compiles with no error that names a project symbol (the only errors are JavaFX classes the sandbox lacks); 120 database-free tests were run together and pass (the money, discount, cart, attached-customer, disk-full, properties-file, MariaDB-backup tests, the CSS, message-key, FXML and controller-shape checks, and others). The `mysqldump` retry was run end to end against a stand-in shell script. The SQL of 3.53 (profit, discount share, cost edit, backfill) and the crash-and-fold mechanism of 2.85 were run on real SQLite through Python with the project's own table definitions.
-- **NOT run:** Maven; every test that needs a database, including the 20 added in this session (`Section4ReportsTest` +4, `UnitCostBackfillTest` 2, `AccountServiceTest` +3, `BackupServiceTest` +3, and the process tests that need a Unix shell are the only database-free ones among them); and no screen. The till changes (2.65, 2.70, 2.79, 5.37) are the least verified: they are UI code compiled only for project symbols.
-- **A mistake made and fixed in this session:** a new test file named `DataAccessExceptionTest` overwrote the existing one of that name (5 tests) before it was noticed; the original was restored and the new tests live in `DiskFullHintTest`. A script then compared every test file with the previous tree: no file lost a test, no main file is missing.
-- **Counts now:** 186 ticked, 148 open (334 numbered items); 655 `@Test` methods in 113 test classes (116 test files): the 611 of Session 67 plus 44 (`DatabasePropertiesFileTest` 10, `DiskFullHintTest` 6, `AttachedCustomerRuleTest` 7, `MariaDbBackupTest` +5, `MoneyParserTest` +4, `Section4ReportsTest` +4, `AccountServiceTest` +3, `BackupServiceTest` +3, `UnitCostBackfillTest` 2).
-- **Behaviour changes the owner should know:** a decimal such as `10.50` in a price box or in the product CSV is now an error (it used to be saved as 1,050); the database password is no longer altered or trimmed; the profit report subtracts discounts and ignores later cost edits for earlier days; the till greys out for a moment while paying.
-- **Still the first things to do:** `./mvnw -B clean test`; then fix 3.42 and 2A.28; then the owner checks in TODO section 0 (three new ones were added for this session).
-
-## Merge: the "medium bugs" branch (Session 83: 2.65, 2.70, 2.74, 2.77, 2.78, 2.79, 2.82, 2.84, 2.85, 3.13, 3.18, 3.53, 5.37) + the language-switch branch
-- **Base:** the branch that split `AdminController` (`Lunavera-Coffee-main.zip`, up to Session 82). The medium-bugs zip is that branch plus Session 83 (30 files changed). My tree already held the base plus the language switch, so only those 30 files were merged.
-- **Clean:** `TODO.md`, `DatabaseConfig`, `DatabaseSettings`, `SqliteToMariaDbImporter`, `DataAccessException`, `OrderDAO`, `AccountService`, `BackupService`, `quanlydonhang.fxml`, `AccountServiceTest`; taken from the other branch as they were (nothing of mine touched them): `ReportDAO`, `MariaDbSchema`, `SqliteSchema`, `docs/DATABASE.md`, `docs/RELEASE.md`, `database.properties.example`, `Section4ReportsTest`, `BackupServiceTest`, `MoneyParserTest`, `MariaDbBackupTest`; added: `AttachedCustomerRule` and its test, `DatabasePropertiesFileTest`, `UnitCostBackfillTest`, `DiskFullHintTest`.
-- **Conflicts, resolved by taking the other branch's new logic and putting the translations back on top:** `MariaDbBackup` (its `Outcome` restructure), `AccountController` (2.84: an old customer-role account keeps its role), `MoneyParser` (2.77: decimals refused, thousands separators checked), `OrderController` (2.65: the till is cleared before the receipt opens; 5.37: quiet auto-refresh with "Updated at" label; 2.79), `progress.md` (both histories kept).
-- **Translations for what that branch added (6 new keys, 757 per language file):** `money.notanamount`, `pos.updatedat`, `pos.paid.status`, `pos.receipt.openfail`, `db.error.diskfull`, `account.customerrole`; its other new texts matched keys that already existed. Two new constants would have fixed the language when their class loaded, so they became methods: `DataAccessException.DISK_FULL_HINT` -> `diskFullHint()` (its test, `DiskFullHintTest`, follows) and `MoneyParser.NOT_AN_AMOUNT` -> `notAnAmount()`.
-- **Checked here (stand-ins for JUnit, JavaFX, `org.sqlite`; no Maven, no database driver):** all 148 non-JavaFX main classes compile with `-Xlint:all`; 105 test classes compile, 67 pass (379 tests), among them both branches' tests that need no database: `I18nTest` 15, `MessagesTest` 6, `UntranslatedTextTest` 3, `FxmlControllerCheckTest` 6, `MoneyParserTest` 10, `AttachedCustomerRuleTest` 7, `DiskFullHintTest` 6, `DatabasePropertiesFileTest` 10, `MariaDbBackupTest` 7. The 38 that fail here all fail on the missing SQLite driver or on `mysqldump` not being installed (read each reason). Balanced braces and the `I18n` import were checked on every Java file. **NOT run: Maven, any screen.** The JavaFX files could not be compiled here (`OrderController`, `AccountController`, ...), so `./mvnw -B clean test` comes first.
-- **Look at when running:** pay an order in English and in Vietnamese (the till clears first, then the receipt opens; make the receipt fail to open if you can, to see the "order saved" message), type `12,5` or `12.5` in a money box (refused with the new message), a full disk (message), restore and the safety copy, an old customer-role account (role stays), and a second till: the POS shows "Updated at ..." and refreshes tables and stock.
-
-## Merge note (2026-10-19): the security branch follows
-The sessions below this line come from the other line of work (the security branch: 2A.3, 2A.4, 2A.6, 2A.14-2A.41, the 2.66-2.83 fixes and the third branch). Their session numbers overlap with the ones above (both histories have a Session 83 to 89); each heading says which line it belongs to by its content. They are kept as they were written.
-
-## Session 83 (2026-10-18)
-
-- **Base:** the owner's upload of 2026-10-18 (byte-identical to the Session 82 tree). The owner is working on 2.65, 2.70, 2.74, 2.77, 2.78, 2.79, 2.82, 2.84, 2.85, 3.13, 3.18, 3.53, 5.37 and 1.7 separately; none of those were touched.
-- **2A.28 (login delay):** `LoginThrottle` reduces a typed phone to one form and keeps a second counter per account; `AuthenticationService.login` checks it after the account is found and records failures and success under both.
-- **2A.39 (password in the log):** `SecurityLog.redactTyped`; unknown-name and blocked lines log length plus two characters; lines about real accounts use the database name.
-- **2A.34 (transfer QR record):** fingerprints of the picture and of the account text live in `app_flags` (`AppFlags.valueWithPrefix`, `replaceValues`); `TransferQrGuard.State` gained `UNCONFIRMED` and `UNVERIFIABLE` (and lost `FIRST_SEEN`), `accept` needs an admin, an old `qr-transfer.sha256` is adopted once when it matches. `OrderController` (payment dialog) and `AdminDashboardController` (start-up warning) handle each state.
-- **Files:** `LoginThrottle`, `AuthenticationService`, `SecurityLog`, `AppFlags`, `TransferQrGuard`, `OrderController` (one block), `AdminDashboardController` (one block); tests `LoginThrottleTest`, `AuthenticationServiceTest`, `TransferQrGuardTest` (rewritten), new `SecurityLogRedactTest`, `TransferQrGuardDatabaseTest`; `README.md` (two lines), `TODO.md`.
-- **What was run:** the four pure test classes (36 tests) compiled and run with `javac` and JUnit against stand-ins for the SQLite driver and JavaFX `Image` (the real driver is not available here); `TransferQrGuardDatabaseTest` only compiled. The two SQL statements of `AppFlags` were tried on SQLite 3.45 with Python. No Maven, JavaFX or MariaDB here.
-- **Counts:** 178 ticked, 156 open (334 numbered); 632 `@Test` methods in `src/test`.
-- **Still the first thing to do:** `./mvnw -B clean test`, then the two new checks at the end of TODO section 0.
-
-## Session 84 (2026-10-19)
-
-- **2A.14:** `DataPaths.restrictToOwner` handles Windows with an inherited owner-only access list (and applies it to what is already inside); test `theWindowsAccessListHasOneOwnerEntryPassedOnToEverythingInside`. Not tried on a real Windows PC.
-- **2A.22:** `BackupService.accountsBroughtBack` runs before the swap; the restore message lists accounts brought back (removed, unlocked, older password), never hashes. Tests in `BackupServiceTest` (need SQLite, not run here).
-- **Counts:** 180 ticked, 154 open (334 numbered). Docs: README (two lines), TODO (two new checks in section 0).
-- **Still first:** `./mvnw -B clean test`, then the two new checks in TODO section 0.
-
-## Session 85 (2026-10-19)
-
-- **2A.29:** `BackupService.verifyDatabase` refuses a backup with no active administrator.
-- **2A.30 and 2A.40:** `inspectInto` uses the restore's size caps (database, each picture, pictures in total) and reads the info entry up to 16 KiB; caps are a `Limits` parameter for tests.
-- **Tests:** `aBackupWithoutAnActiveAdministratorIsRefused`, `lookingAtABackupKeepsToTheSizeLimits` in `BackupServiceTest` (compiled only; they need SQLite).
-- **Counts:** 183 ticked, 151 open (334 numbered).
-
-## Session 86 (2026-10-19)
-
-- **2A.33:** the default-admin seeding and its property are gone from `DatabaseConfig`; `TestDatabaseSupport.seedTestAdmin()` does it for tests.
-- **2A.35:** `AccountService.checkRules` (user name, password, phone) in create, first admin and update; `ValidationUtil.MAX_PASSWORD_LENGTH` = 128. Two test files changed their passwords.
-- **2A.36:** `docs/DATABASE.md` narrow `GRANT`; item stays open until tried on a real server.
-- **2A.38:** `ErrorText.forScreen` is an allow-list (Vietnamese and not technical), with the clean front part of mixed messages.
-- **2A.41:** `SecurityLog.clean` replaces all control characters and line separators.
-- **Run here:** `ErrorTextTest` and `SecurityLogRedactTest` (11 tests). The account, first-admin and password tests compile but need SQLite.
-- **Counts:** 187 ticked, 147 open (334 numbered).
-
-## Session 87 (2026-10-19)
-
-- **Done:** 2.66 (refund chooses stock), 2.67 (history time), 2.68 ("Trống" in `TableStatus` only), 2.69 (`ProductDAO.insertAll`), 2.71 (`configureSqlite` closes on failure), 2.72 (`rehashPassword`), 2.73 (`mysqldump` limit on a reader thread), 2.75 (`Async.run(..., Node... busy)`, `Busy`), 2.76 (category dialog edits a copy), 2.80 (₫ sign), 2.81 (CSV active column, warnings).
-- **Part done:** 2.83 (driver exception handled; background printing left).
-- **Run here:** `ProductCsvTest`, `BusyTest`, `TableStatusTest`, `MoneyParserTest`, `MariaDbBackupTest` (with a fake script), `DatabaseConfigConnectionTest`, `HistorySortKeyTest`, `PasswordRehashTest`: all passed. Compile-only (need SQLite): `OrderDAOTest`, `ProductDAOTest`, `UserDAOTest`, `AccountServiceTest`. Controllers cannot be compiled here (no JavaFX).
-- **Counts:** 198 ticked, 136 open (334 numbered).
-
-## Session 83B (other branch): security items 2A.3, 2A.4 and 2A.6 worked on (2026-10-18, code changed)
-- **What was asked:** the owner is working on 2.65, 2.79, 2.78, 2.77, 2.70, 2.85, 2.74, 2.82, 2.84, 3.53, 3.13, 3.18, 5.37, 2A.39, 2A.28, 2A.34, 2A.25, 2A.26 and 1.7 and asked for 2A.3, 2A.4 and 2A.6. None of those other items was touched; the only shared files changed are `TODO.md`, this file and `docs/RELEASE.md` (test count), plus the files below.
-- **2A.3 (ticked, done in code):** `ProductDAO.insert/update/delete/setActive` and `CategoryDAO.insert/update/deleteIfUnused` start with `Permissions.requireAdmin(...)`. Run on the real classes (a stand-in for the SQLite driver and JavaFX `Image`, since neither is available here): nobody and a cashier are refused on all seven methods, an administrator passes the check and only then reaches the (missing) database. All callers are admin screens or admin services; `MenuSeeder` and the importer use raw SQL. Six test classes that wrote products or categories now sign an administrator in (`TestSession.admin()` in `@BeforeClass`, `clear()` in `@AfterClass`); `PermissionsTest` has 3 new tests.
-- **2A.4 (still open, much more done):** new `BackupCrypto` (AES-256-GCM, 64 KiB blocks, PBKDF2-HMAC-SHA256 600,000 rounds, authenticated header and last-block flag) and `BackupService.createEncryptedBackup`, `inspect(path, passphrase)`, `scheduleRestore(path, passphrase)`, `isEncryptedBackup`, `withEncryptedExtension`; `BackupPassphraseDialog` (SQLite shops only); the dashboard backup and restore handlers use them; README explains the Windows folder rights with an `icacls` command that uses account ids. **`BackupCryptoTest` (15 tests) was run here against the real class with a JUnit stand-in: 15 passed** (about 8 s). Not run here: the 4 new `BackupServiceTest` tests (need SQLite), `BackupPassphraseDialogTest` (JavaFX class), and the two dialogs themselves. The changed controller was not compiled (no JavaFX); I read the result line by line. Left open: the customer notice (an adviser), enforcing Windows folder rights from the program, a locked automatic backup.
-- **2A.6 (still open, the doable parts done):** the Maven wrapper now names Maven 3.9.16 with `distributionSha256Sum` (value taken from the wrapper files of Quarkus, Apache Flink and WildFly, which agree; Maven Central cannot be reached from here, so the download itself was not tried); new `.github/workflows/dependency-scan.yml` (OSV-Scanner reusable workflow pinned to a commit, runs on pom changes and weekly; not run). Left open: the wrapper jar is still 3.1.0 (replace it with `./mvnw wrapper:wrapper -Dmaven=3.9.16` where Maven Central is reachable, which also adds `wrapperSha256Sum`), pinning the actions of `ci.yml` (6.51), signing the installer.
-- **Documents:** `TODO.md` 2A.3 ticked with a note, 2A.4 and 2A.6 notes extended, two new human checks in section 0; `docs/RELEASE.md` test count 635 in 111 classes; README gained the data-folder rights and backup-passphrase paragraphs.
-- **Counts:** 176 ticked, 158 open (334 numbered items), 635 `@Test` in 111 classes (+24: 15 `BackupCryptoTest`, 4 `BackupServiceTest`, 3 `PermissionsTest`, 2 `BackupPassphraseDialogTest`).
-- **Still the first thing to do:** `./mvnw -B clean test` (the first run downloads Maven 3.9.16 and checks its checksum), make one locked backup and restore it, then the items you are working on.
-
-## Session 84B (other branch): one item added (2026-10-18, no code changed)
-- **Added:** `TODO.md` 6.65 (the CI never runs the tests on MariaDB, the shop's default database), with a ready-to-use `test-mariadb` job (service container `mariadb:10.11`, database, user and password matching `TestDatabaseSupport`, the Maven command from `docs/DATABASE.md`). It was the only item left over from an unfinished scan that was never delivered (the other items of that scan were already in the document; the CI safety settings are 6.51). Confirmed from `ci.yml` (no `services:`, no MariaDB) and the test support class. The YAML was not run (no GitHub, no MariaDB server here).
-- **Counts:** 176 ticked, 159 open (335 numbered items), 635 `@Test` in 111 classes. Nothing else changed.
-
-## Session 88 (2026-10-19): merge of the other branch
-- **What was merged:** the owner's branch with 2A.3, 2A.4 (part) and 2A.6 (part), which was built on the same base as Sessions 83-87 here. A three-way merge (base, other branch, this branch) had one conflict, in `progress.md`; the other branch's two session notes are kept below as "Session 83B" and "Session 84B" because their numbers collide with this branch's.
-- **Joined by hand:** `ProductDAO.insertAll` (new here) also starts with `Permissions.requireAdmin`, like the other branch's `ProductDAO` methods; `PermissionsTest` now also refuses `insertAll` and `cancelPaidOrder(id, false)`. `BackupService` has both sets of overloads (`inspect(path, passphrase)` and `inspect(path, Limits)`); no call is ambiguous. The dashboard restore handler has the passphrase question and the busy button together.
-- **Run here:** `BackupCryptoTest`, `ProductCsvTest`, `ErrorTextTest`, `SecurityLogRedactTest`, `LoginThrottleTest`, `TransferQrGuardTest`, `BusyTest` (57 tests, all passed). Compile-only: `PermissionsTest`, `BackupServiceTest`. No Maven, JavaFX or SQLite here.
-- **Counts:** 199 ticked, 136 open (335 numbered), 681 `@Test` in 117 classes.
-
-## Session 83C (third branch): 2A.25 (security log) and 2A.26 (MariaDB TLS and read timeout) (2026-10-18)
-- **What was asked:** work on 2A.25 and 2A.26 only; the owner is busy with 2.65, 2.70, 2.74, 2.77, 2.78, 2.79, 2.82, 2.84, 2.85, 3.13, 3.18, 3.53, 5.37, 1.7, 2A.28, 2A.34 and 2A.39 and has not put those into this version, so none of them was worked on. **Files changed** (so a merge with that work is easy to check): new `util/LogRateLimiter`, `util/SecurityLogFile` and three test classes; changed `util/SecurityLog` (new methods only; `clean()` is untouched, which 2A.39 and the control-character item will edit), `util/AppLogging` (one call added), `service/AuthenticationService` (only the four `SecurityLog.warn` lines inside `login()`, relevant to 2A.28), `util/TransferQrGuard` (one line, the "CHANGED" warning, relevant to 2A.34), `util/Permissions` (one line), `config/DatabaseSettings` and `config/DatabaseConfig` (`current()` and `locationSummary`), the four existing test classes named below, `docs/DATABASE.md`, `database.properties.example`, `README.md` (one table row), `TODO.md` and this file. Nothing in `MariaDbBackup`, `OrderDAO`, `MoneyParser`, `ProductCsv`, the admin controllers or the schema was changed.
-- **2A.25 (done):** new `util/SecurityLogFile` (a `java.util.logging.Handler`: `data/logs/security-YYYY-MM.log`, one file a month, parts of 5 MB up to 20, months older than 24 deleted at start, one line per record) and `util/LogRateLimiter` (one line per key per minute, 30 a minute in all, the next line says `(+N similar not written)`). `SecurityLog` got `install(Path)` and `warnLimited(key, text)` (and `resetLimitsForTests()`); `AppLogging.install()` calls `SecurityLog.install` in a step of its own; `AuthenticationService.login` (4 lines), `Permissions.requireAdmin` and `TransferQrGuard` (the "CHANGED" warning) use `warnLimited`. The security lines still reach the normal log too.
-- **2A.26 (done):** `DatabaseSettings` is now a record with three more components (`sslMode`, `sslServerCert`, `socketTimeoutMillis`; the old 9-argument constructor is kept, so no caller changed) and reads `db.ssl`, `db.sslMode`, `db.sslServerCert`, `db.socketTimeoutMs`. `mariaDbUrl()` now gives `...?connectTimeout=5000&socketTimeout=30000&sslMode=disable` (or the chosen mode, plus `serverSslCert=` when a certificate is named) and brackets an IPv6 host. A remote server without TLS gets a log warning at start (`DatabaseConfig.current()`) and "KHÔNG mã hóa" on the login-screen line (`locationSummary`); TLS shows "mã hóa TLS". `docs/DATABASE.md` sections 3 and 7, `database.properties.example` and the `README.md` file table were updated.
-- **Tests (42 new, 611 -> 653 in 109 -> 112 classes):** `LogRateLimiterTest` 10, `SecurityLogFileTest` 9, `SecurityLogTest` 6, `DatabaseSettingsTest` +13, `LocationSummaryTest` +2, `AuthenticationServiceTest` +1 (300 wrong passwords leave 2 log lines), `AppLoggingTest` +1 (the security file holds only security events and the normal log still has everything). The JDK has no `javac` binary here, so the classes were compiled through the `jdk.compiler` module with stand-in `org.junit`, `org.sqlite` and two JavaFX types, and run with a 30-line runner: the 6 changed or new test classes (62 tests), `AppLoggingTest` (3, with the data folder set by hand), `MariaDbBackupTest` and `StartupProblemTest` (9, they also use `DatabaseSettings`) all passed. Also run end to end: `AppLogging.install()` creates `security-2026-10.log`, which holds the security events and not another logger's message, one line for 51 repeated warnings. **Not run:** Maven, JavaFX, a real database, a real MariaDB with TLS (the connector parameter names `sslMode`, `serverSslCert`, `socketTimeout` are from the Connector/J 3.x documentation; the pom has 3.4.1).
-- **New open items:** 2A.42 (the backup button's `mysqldump` does not read the TLS keys; the two clients use different options), 4.44 (a read-only list of the last security events on the dashboard) and a section 0 check (TLS on a real server, the 30-second timeout, the longer login line on Windows, the security log after 20 wrong passwords).
-- **Counts:** 177 ticked, 159 open (336 numbered items), 653 `@Test` in 112 classes.
-- **Still the first thing to do:** `./mvnw -B clean test`, then the section 0 check above, then the items the owner is working on.
-
-## Session 84C (third branch): 2A.31 (throttle table), 2A.32 (dummy hash and constant cost), 2A.37 (monotonic clock) (2026-10-18)
-- **What was asked:** work on 2A.31, 2A.32 and 2A.37 on top of Session 83. The owner's in-progress items (2.65, 2.70, 2.74, 2.77, 2.78, 2.79, 2.82, 2.84, 2.85, 3.13, 3.18, 3.53, 5.37, 1.7, 2A.28, 2A.34, 2A.39) were not worked on. **Files changed, for the merge:** new `util/MonotonicClock`, `util/MonotonicClockTest`; changed `service/LoginThrottle` (the clock, a `delayed` flag, `recordFailure` and the new `makeRoom`; `key()` is untouched, which 2A.28 will edit), `service/PasswordUtil` (the dummy hash constant, `matchesAtConstantCost`, `check`, `paddingIterations`; `hash`, `needsRehash` and `pbkdf2` untouched, `matches` now delegates to `check`), `service/AuthenticationService` (the lazy dummy-hash field removed, two lines in `login()`: the unknown-user check and the stored-hash check; the 2A.28 change to the name handling will be near them), `util/IdleTracker` (rewritten: no `Instant` methods any more), `util/IdleLogout` (one line), `util/LogRateLimiter` (the default clock), and the tests `LoginThrottleTest`, `IdleTrackerTest`, `PasswordUtilTest`, plus `TODO.md` and this file.
-- **2A.31:** a full table no longer clears: `makeRoom` drops quiet entries (15 minutes), then the weakest one (not waiting before waiting, fewer failures, older). 3,000 names typed in a flood leave the delay of the attacked name running.
-- **2A.37:** `LoginThrottle`, `IdleTracker` and `LogRateLimiter` read `MonotonicClock.millis()` (`floorDiv(System.nanoTime(), 1_000_000)`), not the PC's clock. A source-guard test fails if any of the three reads `currentTimeMillis`, `Instant.now` or `LocalDateTime.now` again. `blockedUntil == 0` no longer means "not blocked" (a monotonic clock's zero is arbitrary): it is the `delayed` flag.
-- **2A.32:** `PasswordUtil.dummyHash()` is a constant 600,000-iteration hash of a random discarded password (a test fails if `ITERATIONS` is raised without making a new one); `matchesAtConstantCost` pads an old or damaged stored hash up to today's cost. **Timed here:** unknown name 124/150/173/155 ms for four attempts in a row, wrong password on a current hash 144 ms, on an old 120,000-iteration hash 30 ms before and 150 ms now, damaged hash 146 ms.
-- **Tests (19 new, 653 -> 672 in 112 -> 113 classes):** `LoginThrottleTest` +8, `IdleTrackerTest` rewritten (5 -> 8), `MonotonicClockTest` 3, `PasswordUtilTest` +5. As in Session 83, no Maven and no `javac` binary: compiled through `jdk.compiler` with stand-in libraries and run with the small runner from the project root (the source-guard test needs that): `LoginThrottleTest`, `IdleTrackerTest`, `MonotonicClockTest`, `PasswordUtilTest`, `AuthenticationServiceTest` and `LogRateLimiterTest`, 53 tests, all passed. **Not run:** Maven, JavaFX (`IdleLogout` compiles only with JavaFX; its one changed line was read, not compiled), a real change of the Windows clock.
-- **New open items:** 3.65 (Medium: after the clock has been wrong, `BackupService.isDue` finds the newest backup "in the future" and makes no automatic backup until the real date catches up, while the pruning keeps that file and deletes the real ones) and 6.65 (`CrashHandler`'s 10-second rule reads the wall clock, with a `0` as "never shown" that would be wrong on a monotonic clock).
-- **Counts:** 180 ticked, 158 open (338 numbered items), 672 `@Test` in 113 classes.
-- **Still the first thing to do:** `./mvnw -B clean test`, then the section 0 checks (including the TLS one of Session 83), then the items the owner is working on, then 3.65.
-
-## Session 89: merge of the third branch (2A.25, 2A.26, 2A.31, 2A.32, 2A.37) into the merged branch (2026-10-19)
-- **What was merged:** the zip `Lunavera-Coffee-main (1).zip` (the owner's merge of my branch with the other one: 2A.3, 2A.4, 2A.6, 2A.14, 2A.22, 2A.28, 2A.29, 2A.30, 2A.33-2A.36, 2A.38-2A.41, 2.66-2.69, 2.71-2.73, 2.75, 2.76, 2.80, 2.81) with the zip `Lunavera-Coffee-main.zip` (2A.25, 2A.26, 2A.31, 2A.32, 2A.37). A real three-way merge: the common start is the version I was given before the branches split (`Lunavera-Coffee-main_074fd9.zip`). 73 files changed on one side, 30 on the other, **11 on both**; the other 92 changes combined without any overlap (19 files that only the third branch touched were copied in as they are).
-- **The 11 shared files:** `README.md`, `docs/DATABASE.md` and `DatabaseConfig.java` merged by themselves (both sets of changes are in, checked by diff: the README got the security-log line; `DatabaseConfig` has the TLS warning and the connection note). Eight needed hand work:
-  - `LoginThrottle` (3 conflicts): the merged class keeps **both** designs. From the third branch: the monotonic clock, the `delayed` flag instead of `blockedUntil = 0`, `makeRoom` / `weaker` (a full table pushes out the weakest entry, 2A.31), `trackedNames()`. From the other branch: the phone-number key, the per-account waits (`secondsUntilAllowedForAccount`, `recordFailureForAccount`, `recordSuccessForAccount`). `failure()` is one method used by both kinds of bucket, so the full-table rule also protects the account buckets.
-  - `AuthenticationService` (3 conflicts): one log call per case that is **both** rate-limited (`warnLimited`, 2A.25) **and** safe about what was typed (`redactTyped` for text that is not an account, the user name from the database for accounts, 2A.39). The rate-limit key for a real account is its id, not the typed text. The real-user password check uses `matchesAtConstantCost` (2A.32) and the per-account wait of 2A.28 runs before it.
-  - `SecurityLog` (1 conflict): the third branch's file (own monthly file, `install`, `warnLimited`, `resetLimitsForTests`) plus the other branch's `redactTyped` and the stricter `clean` (control characters, line and paragraph separators, 2A.41).
-  - `TransferQrGuard` (1 conflict): the database-backed record and the legacy-file takeover of 2A.34, with the three repeating warnings (changed, not yet accepted, cannot be read) sent through `warnLimited` so a payment screen that is looked at all day writes one line a minute.
-  - `LoginThrottleTest` and `AuthenticationServiceTest`: both sets of tests kept (17 and 12 tests). The log-flood test of the third branch expected the old wording of the "blocked" line; it now looks for "login blocked for the typed text". `AuthenticationServiceTest.setUp` calls `SecurityLog.resetLimitsForTests()` so no test depends on what an earlier one logged (the limiter is static and lasts a minute).
-  - `TODO.md` / `progress.md`: both branches added a **6.65**. The third branch's (`CrashHandler` reads the wall clock) kept its number because its notes refer to it; the CI-on-MariaDB item became **6.66** (its text, the Session 88 note and Session 84B were updated). The third branch's Session 83 and 84 were renamed **83C** and **84C** (the other branch already has 83 and 84).
-- **A failing test found in the merged branch and fixed:** `SqlStatusTest.noHandTypedStatusValueIsLeftInTheDataCode` fails on the other branch alone (it also failed before the merge): the new "no active administrator" check of 2A.29 in `BackupService` wrote `'ADMIN'` and `'ACTIVE'` by hand. It now uses `SqlStatus.ROLE_ADMIN` and `SqlStatus.ACTIVE`.
-- **What was run here (no Maven, SQLite driver or JavaFX; the same stand-ins as in earlier sessions):** the merged main classes that touch both branches compile (106 classes with their dependencies). Of the 124 test files, 62 compile and run without a database or a window; **all 62 pass: 403 tests, 0 failed**, among them `LoginThrottleTest` 17, `AuthenticationServiceTest` 12, `SecurityLogTest` 6, `SecurityLogFileTest` 9, `LogRateLimiterTest`, `MonotonicClockTest` 3 (the clock guard), `IdleTrackerTest` 8, `PasswordUtilTest` 11, `DatabaseSettingsTest` 25, `TransferQrGuardTest` 11, `BackupCryptoTest` 15, `MessagesTest`, `AdminScreensTest`, `FxmlControllerCheckTest` and `SqlStatusTest`. The other 62 test files need SQLite or JavaFX and were not run.
-- **Item states checked after the merge:** 2A.25, 2A.26, 2A.28, 2A.29, 2A.30, 2A.31, 2A.32, 2A.33, 2A.34, 2A.35, 2A.37, 2A.38, 2A.39, 2A.40, 2A.41, 2A.14, 2A.22, 2A.3 and 2.66-2.69, 2.71-2.73, 2.75, 2.76, 2.80, 2.81 are ticked; 2A.4, 2A.6, 2A.36 and 2.83 are still open, as both branches say.
-- **Counts:** 204 ticked, 135 open (339 numbered items), 742 `@Test` methods in 121 classes (124 test files).
-- **Still the first thing to do:** `./mvnw -B clean test` (the first run downloads Maven 3.9.16 and checks the checksum), then the checks in TODO section 0.
-
-## Session 90: merge of the language-switch / medium-bugs branch with the security branch (2026-10-19, code changed)
-- **Inputs:** `Lunavera-Coffee-main_merged-medium-bugs-i18n.zip` (the language-switch line: `I18n`, two language files, 1.7 phase 1, and the medium bugs 2.65, 2.70, 2.74, 2.77-2.79, 2.82, 2.84, 2.85, 3.53, 5.37) and my merged security branch (Session 89). Common start: `Lunavera-Coffee-main_074fd9.zip`. 91 files changed on the security side, 110 on the language side, **36 on both**; 25 of the 36 had real conflicts (about 50 hunks), the other 11 combined by themselves. The 2.82 password-reading fix, the 2.77 money parsing and my 2.80 dong sign work together (run: `25.5` refused, `₫50.000` and `50.000đ` accepted).
-- **A slip in my own procedure, found and fixed:** the file walker that lists changed files skipped any folder whose path contains `/.git`, which also skipped `.github/`; `dependency-scan.yml` (2A.6) was therefore missing from the first merged tree and was copied in afterwards. The earlier merge of Session 89 was not affected (the third branch changed nothing under `.github/`).
-- **Combined by hand (the interesting ones):** `ErrorText` (my allow-list of 2A.38 assumed Vietnamese letters; with the English language on, the app's own messages have none, so it now builds one pattern per text of **both** language files and a message is the app's own when it matches one, or has Vietnamese letters; driver text is still hidden; two English texts that contained "does not exist" were reworded); `MariaDbBackup` (the 2.73 time limit with a reader thread and the 2.74 `--no-tablespaces` retry now live in one `dumpTo`/`run` pair); `LoginThrottle`, `AuthenticationService`, `SecurityLog`, `TransferQrGuard` as in Session 89; `OrderHistoryWindow` (three-answer refund dialog with keys; the time column uses the payment time); `HoaDonController` (a failed print cancels the job and shows the driver's reason, as keys); `ProductCsv` / `ProductController` (strict "Đang bán", warnings, one-transaction import, all as keys); `TableStatus` and the three FXML files (2.68: a free table reads "Trống" from `tables.status.free`; the key `tables.status.inactive` is gone); `Permissions`, `AccountService`, `DashboardWidgets`, the dashboard, the order screen, category and account controllers (busy buttons of 2.75).
-- **New language keys (63 in each file, in a section at the end of both files; the total is now 819 keys per language):** the TLS notes, the account rules, the backup-passphrase dialog, the locked-backup and crypto messages, the restore account notes, the QR warnings, the CSV warnings, the three-answer refund text (the key `history.cancel.message` was changed: it used to say that stock is always put back) and a few more. `BackupService`, `BackupCrypto`, `DatabaseSettings`, `AccountService`, `TransferQrGuard`, `ErrorText` and `BackupPassphraseDialog` have no Vietnamese text in the code any more; `untranslated-baseline.txt` goes down by one for `DatabaseConfig`.
-- **A compile error that was already in the language branch's zip:** `AdminDashboardController` line 193 used `BackupService.MARIADB_RESTORE_HELP`, a constant that branch had turned into the method `mariaDbRestoreHelp()`. Fixed in the merge (found by compiling every main class with stand-ins: the only errors left are the JavaFX types).
-- **What was run here (no Maven, SQLite driver or JavaFX; stand-ins as before):** of the 132 test files, 69 compile and run here: **458 tests pass, 2 fail**; the 2 are `UnitCostBackfillTest`, which needs the SQLite driver (it fails the same way on the language branch alone). Among those that pass: `I18nTest`, `UntranslatedTextTest`, `MessagesTest`, `ErrorTextTest` (7, with two new English-language tests), `LoginThrottleTest`, `AuthenticationServiceTest`, `BackupCryptoTest`, `MoneyParserTest`, `SqlStatusTest`, `FxmlControllerCheckTest`, `AdminScreensTest`, `MonotonicClockTest`. The other 63 test files need SQLite or JavaFX and were not run; the JavaFX screens were not compiled.
-- **Item states after the merge:** all of 2.65-2.85 except 2.83, 2A.3, 2A.14, 2A.22, 2A.25, 2A.26, 2A.28-2A.35, 2A.37-2A.41, 3.53 and 5.37 are ticked; 2A.4, 2A.6, 2A.36, 2.83, 3.13, 3.18 and 1.7 (phases 2 and 3) are open, as the branches say. 6.65 (CrashHandler clock) and 6.66 (CI on MariaDB) are both open.
-- **Counts:** 216 ticked, 123 open (339 numbered items), 820 `@Test` methods in 129 classes (132 test files).
-- **Still the first thing to do:** `./mvnw -B clean test` (the first run downloads Maven 3.9.16 and checks its checksum), then the section 0 checks.
-
-## Session 93: six uploaded zips merged into one tree (2026-10-23, code and documents changed)
-- **What the six zips were** (found by reading their `progress.md` tails and by comparing the files, not from their names): `_1_` = the language switch + medium bugs + security line merged (Session 90, 820 tests, the most complete and the only one with the `BackupService.mariaDbRestoreHelp()` and `tables.status.free` fixes); `_5_` and `_3_` = two earlier merges of the same three lines (818 tests; `_5_` still has the compile error `BackupService.MARIADB_RESTORE_HELP` and shows a free table as "inactive"); `_2_` = a later snapshot that added the fourth branch (the stored login delay) to a merge of the three; `_4_` = security line + fourth branch, no language switch, no medium bugs; `_6_` = language switch + medium bugs, no security line (oldest code).
-- **Base:** `_1_`. Every line that `_3_`, `_5_` and `_6_` have and the base has not was read: they are older wordings, other key names for the same texts, or code the security line rewrote. Nothing newer was found in them.
-- **Brought over from `_2_`/`_4_` (the fourth branch, 2A.19 and 2A.27):** `LoginAttemptStore`, `LoginAttemptsDAO`, `LoginThrottle` (persistent), `AuthenticationService` and `PasswordChangeService` (`LoginThrottle.persistent`), `UserDAO` (`updateStatus`/`updateRole` need an administrator), the `login_attempts` table in `SqliteSchema` and `MariaDbSchema`, `ci.yml` (permissions and pinned actions), `docs/DATABASE.md`, and the tests `LoginAttemptsDAOTest` (8), `LoginThrottleStoreTest` (8), `UserDaoPermissionTest` (2), `UserDAOTest`, `SessionGuardTest`, `SqliteToMariaDbImporterTest`, `BackupServiceTest` (the Session 90 fix of the restore test). Not taken from `_2_`: its own version of the language files and `ErrorText` (`I18n.isKnownText`); the base solves the same problem differently and was checked more.
-- **`TODO.md`:** 2A.19 and 2A.27 ticked (code is in); 6.55 ticked (no file of `src` uses `MessageFormat` any more, found by reading the code, the old note did not say so); 2A.43 and 6.67 added from `_5_` (they were missing from the base).
-- **Checked here:** the two language files have the same 819 keys; every `I18n.t("key")` in `src/main` exists; the new classes parse and compile against everything except JavaFX and the SQLite driver (the only errors are those missing libraries). **Not run:** Maven, any test, any screen, MariaDB. Test count: 838 `@Test` in 132 classes (the base's 820 plus the 18 above).
-- **Still the first thing to do:** `./mvnw -B clean test`, then fix what the compiler or the tests name (the merged JavaFX classes were never compiled), then section 0 of `TODO.md`.
-
-## Session 94: five small open items done (2026-10-24, code, tests and documents changed)
-- **TODO 5.35:** the customer search box also finds a customer by e-mail. New `service/CustomerSearch.matches(customer, typed)` (name and e-mail through `TextNormalizer.searchKey`, the phone as typed and in its canonical form); `CustomerController.applyFilter` calls it; `customers.search.prompt` says "name, phone number or email" in both language files. `CustomerSearchTest` (5).
-- **TODO 6.48:** `PasswordUtil.check` uses `MessageDigest.isEqual`; the hand-written `constantTimeEquals` is gone. `PasswordUtilTest.aStoredDigestOfTheWrongLengthIsRefused`.
-- **TODO 6.52:** comments only: `DatabaseConfig.initialize` Javadoc, the "Before the default admin is seeded" comment, and the `LunaveraApplication` start-up comment now describe the first-run window instead of a seeded administrator.
-- **TODO 6.57:** `Messages` logs a missing key once per key (set capped at 500). `MessagesTest.aMissingKeyIsLoggedOnlyOnce`.
-- **TODO 6.58:** `README.md` uses `./mvnw` (and `mvnw.cmd`) and explains the wrapper. `docs/PACKAGING.md` and `docs/DATABASE.md` still write `mvn` in some commands.
-- **Stale numbers fixed:** test count 845 in 133 classes (TODO state paragraph, section 0, this file's release status, `docs/RELEASE.md`); counts 225 ticked / 116 open.
-- **Checked here (JDK 21, stand-in JUnit runner, no JavaFX, no database):** `PasswordUtilTest` (12), `CustomerSearchTest` (5), `MessagesTest` (7), `I18nTest` (15), `UntranslatedTextTest` (3): 42 passed, 0 failed. **Not run:** Maven, `CustomerController` (JavaFX, changed but never compiled here), every other test, any screen.
-- **Still the first thing to do:** `./mvnw -B clean test`.
-
-## Session 95: 3.42, 3.58 done, 6.53 part done (2026-10-24, code, tests and documents changed)
-- **TODO 3.42:** `OrderDAO.revenueForLast7Days` has an upper date limit (`EFFECTIVE_DAY <= today`) and skips a row outside the seven days. The same SQL was run on SQLite through Python and gave only the in-range days. New `EdgeCasesTest.anOrderPaidOnAFutureDayDoesNotAddAnEighthDayToTheWeeklyChart` (needs the SQLite driver; not run here). The dashboard test needed no change.
-- **TODO 3.58:** `HistoryFilter.hasReversedDates()`; `OrderHistoryWindow` warns once when a picked date makes the range reversed, shows "invalid date range" in the count line instead of an empty list (new key `history.dates.invalid`, both languages), runs no query, and refuses "Xuất CSV" with the same warning (no empty file). `HistoryFilterTest` (2).
-- **TODO 6.53 (part, left open):** `pom.xml` launcher, jlink image and zip are named `lunavera`; `docs/PACKAGING.md` uses the new names. `jpackage` and the icon wait for one real jlink build (6.15).
-- **Counts:** 848 `@Test` in 134 classes; 227 ticked / 114 open.
-- **Checked here (JDK 21, stand-in runner):** `HistoryFilterTest`, `I18nTest` (15), `UntranslatedTextTest` (3), `MessagesTest` (7): 27 passed, 0 failed. **Not run:** Maven, the 3.42 test, `OrderHistoryWindow` (JavaFX, changed, never compiled here), any screen.
-- **Still the first thing to do:** `./mvnw -B clean test`.
-
-## Session 103: 6.56 done, 4.24 extended (2026-10-24, code, tests and documents changed)
-- 6.56 deleted `BackupService.listBackups` and `DatabaseConfig.describeConnection` (`TestDatabaseSupport` reads the `_test` database name from `DatabaseSettings.load()`); removed `product-area` from `quanlysanpham.fxml` and from the known list in `FxmlControllerCheckTest`. The "used in FXML but defined nowhere" check already existed there (not in `CssRulesTest`).
-- 4.24 (was already ticked) `DatabaseHealth.Health` has a fifth field `lastManual` (from `BackupReminder.lastManual()`), shown on the health line as `admin.health.manual`; the old four-argument constructor stays. Test added: `DatabaseHealthTest.theLineShowsTheLastCopySavedByHand`.
-- Counts: 257 ticked / 84 open (341); 929 `@Test` in 145 classes; 849 language keys per file.
-- Not run: Maven, JUnit, windows.
-
-## Session 102: merge of the Session 99 branch (2026-10-24, code, tests and documents changed)
-- Merged 5.32, 5.34, 6.62, 6.50, 3.54 (the other branch's "Session 99") with Sessions 100 (3.44, 3.47, 3.49) and 101 (5.11, 5.17, 5.18). Base: `Lunavera-Coffee-all-merged.zip`. Seven files changed on both sides; `git merge-file` merged all of them with no conflict.
-- Hand fixes: `ExportCsv.writeOrders` writes the `sep=,` line (3.49) after the BOM; `ExportOrdersStreamTest.lines` expects it and strips it; `BackupDialogs`, `BackupReminder.now()` and the close filter in `LunaveraApplication` read the time from `AppClock` (6.50) instead of `Instant.now()` / `LocalDateTime.now()`.
-- Counts: 256 ticked / 85 open (341 items); 928 `@Test` in 145 classes; 848 language keys per file.
-- Not run: Maven, the JUnit classes, windows, MariaDB streaming.
-
-## Session 101: 5.11, 5.17, 5.18 done (2026-10-24, code, tests and documents changed)
-- 5.11 `TableDAO.findAll` reads `opened_at` (join on the open order) into `DiningTable.openedAt`; `service/TableAge` (`since`, `isLong`, `text`, `LONG_AFTER` = 2 h); the table map button shows `Đang sử dụng  ·  35 phút` and a long one gets `table-button-long` (amber, `quanlydonhang.css`); keys `tables.age.*`.
-- 5.17 `controller/BackupDialogs.run` holds the backup dialog steps (moved out of `AdminDashboardController.handleBackupData`, same behaviour); the saved box is `AlertUtil.infoWithAction` with `Mở thư mục` (`HostServices.showDocument`, path shown if it fails); keys `admin.backup.openfolder*`.
-- 5.18 `util/BackupReminder` (last hand-made backup outside `data/`, kept as `backup.lastManual` in the per-computer settings; due after 7 days; once per run) and `BackupDialogs.offerBeforeLeaving`, called from the logout of `AdminScreen`, `CustomerController`, `OrderController` and from a close-request filter on the main stage; keys `backup.remind.*`. Automatic backups deliberately do not count.
-- Tests added: `TableAgeTest` (5), `BackupReminderTest` (8), `TableDAOTest` (+1, table 7): 908 `@Test` in 141 classes; 843 language keys per file.
-- Run in a plain JDK (sources copied without `module-info`; JavaFX parts of `UiSettings` removed in the copy): the real `TableAge` and `BackupReminder`, all expected values. The JavaFX classes were checked only for syntax errors. Not run: JUnit, `TableDAO` against a database, any window, Maven.
-
-## Session 100: 3.44, 3.47, 3.49 done (2026-10-24, code, tests and documents changed)
-- 3.44 `util/CloudFolderCheck` (`syncServiceOf(Path)`, `problem(Path)`), called from `LunaveraApplication.start` after the clock check; keys `app.cloud.title`, `app.cloud.message` (both language files, 833 keys each now); README bullet in "Keep the data safe". A warning only.
-- 3.47 `Csv.cell` / `Csv.canRunAsFormula`: apostrophe only for `=`, `@`, tab, CR, and for `+`/`-` unless it is followed by a digit, space or point and the rest has none of `=+-*/^&|!()<>@:;\\`. Stricter than the TODO's own proposal so the `-2+3+cmd|...` DDE form stays protected.
-- 3.49 `ExportCsv.write` writes `sep=,` after the BOM; `ProductCsv.split` skips a leading `sep=` line and uses the separator it names.
-- Tests added: `CloudFolderCheckTest` (3), `CsvTest` (+3), `ProductCsvTest` (+2): 894 `@Test` in 139 classes.
-- Run in a plain JDK (javac from the JDK 21 module, sources copied without `module-info`, `TextLengthLimiter` stubbed): the real `Csv` (15 values), `CloudFolderCheck`, and `ProductCsv` export -> `sep=` -> import in three spellings: all as expected. Not run: the JUnit classes, `ExportCsv.write` itself (needs the DAO classes, so its output was checked by reading), Maven, the start-up dialog.
-
-## Session 98: delta zips merged, the half-finished items completed (2026-10-24, code, tests and documents changed)
-- **What was merged, in order:** the merged tree of Session 93, then `changed.zip` (Session 88: 3.45, 3.60, 6.51; 3.46 is in `changed2`), `changed2.zip` (Session 89: 3.46, 3.56, 3.57, 3.63, 3.64, 3.65), `changed3.zip` (Session 90: 5.28, 5.33, 4.24), then the five items of Session 97. `BackupService` needed a three-way merge (`changed` + `changed2`, no conflict); `OrderController` and the two language files were merged by three-way too (one conflict in the language files: both sides added keys, both kept). A first overlay of `changed.zip` had put the old `MoneyParser` back over the one of `changed3.zip`; found by the check below and corrected.
-- **Checked by reading the code, not the notes** (the three zips do not hold the code of every item their notes list): 3.45, 3.46, 3.56, 3.57, 3.60, 3.63, 3.64, 3.65, 3.42 (the query), 6.48, 6.51, 5.28, 5.33, 4.24 were in the zips. **Not in any zip and written now:** 5.35 (`CustomerSearch` existed but `CustomerController.applyFilter` did not call it: it does now; `CustomerSearchTest`, 5), 3.58 (`HistoryFilter.hasReversedDates` existed but `OrderHistoryWindow` ignored it: it now shows the invalid-range text, runs no query, warns once and refuses "Xuất CSV"; `HistoryFilterTest`, 2), 3.42 (the test `EdgeCasesTest.anOrderPaidOnAFutureDay...`), 6.65 (`CrashHandler`: `MonotonicClock.millis()` and a `dialogShown` flag; 2 tests), 6.57 (`Messages` logs a missing key once; `MessagesTest.aMissingKeyIsLoggedOnlyOnce`), 6.58 (`README.md`, `docs/PACKAGING.md`, `docs/DATABASE.md` say `./mvnw`), 6.52 (comments in `DatabaseConfig` and `LunaveraApplication`), 6.53 part (`pom.xml` launcher, jlink image and zip are `lunavera`; `PACKAGING.md` follows; `jpackage` and the icon wait for one real jlink build, so 6.53 stays open).
-- **Counts:** 886 `@Test` in 138 classes; 245 ticked / 96 open by the boxes.
-- **Run here in a plain JDK:** the search rule (`CustomerSearch`), `MoneyParser` shorthand ("50k", "1,5tr", "1 triệu", "50 nghìn"; "1.500k" refused), `OrderNumber`, `LoyaltyPolicy` tiers; the two language files have the same 831 keys. **Not run:** Maven, any JUnit test, any screen; `OrderHistoryWindow`, `CustomerController`, `OrderController`, `ReportWindow` (JavaFX) were changed and never compiled here.
-- **Still the first thing to do:** `./mvnw -B clean test`.
-
-## Session 97: 6.46, 6.61, 6.63, 5.29, 5.30 done (2026-10-24, code, tests and documents changed)
-- **Base of this session:** `changed3.zip` holds only 15 source files and the two documents (Sessions 90-96 as written in `progress.md`); the files of Sessions 94-96 (`CustomerSearch`, `HistoryFilter`, `CrashHandler`, `OrderHistoryWindow`, `pom.xml`, ...) were **not** in it. The five items were done on the merged tree of Session 93 plus those 15 files. This was corrected in Session 98 (all zips merged).
-- **6.46:** `Async.deliver` wraps every success callback of `Async.run` / `runOrdered`; an exception is logged and one notice (`async.refresh.title`, `async.refresh.message`) says the work is saved but the screen must be reopened. `AsyncDeliverTest` (3).
-- **6.61:** `TestDatabaseSupport` deletes its temp home in a shutdown hook (best effort).
-- **6.63:** `LoyaltyPolicy.tierFor` / `tierName` and the constants `SILVER_FROM`, `GOLD_FROM`; `CustomerController` uses them; two new tests in `LoyaltyPolicyTest` (boundaries 0, 99, 100, 499, 500, negative).
-- **5.29:** the POS phone box looks up only a valid phone, 250 ms after the last key (`OrderController.phoneLookupDelay`).
-- **5.30:** `ExportCsv.write` says "close it in Excel" (key `export.file.inuse`) on a Windows sharing violation; `ReportWindow` writes through it. Two tests in `CsvTest`.
-- **Counts:** 857 `@Test` in 135 classes; 245 ticked / 96 open by the boxes (the old text said 228 / 113: 12 ticked items were not counted).
-- **Not run:** Maven, any test, any screen. Plain-JDK checks are listed in the reply of this session.
-- **Still the first thing to do:** `./mvnw -B clean test`.
-
-## Session 96: 6.65 done (2026-10-24, code and tests changed)
-- **TODO 6.65:** `CrashHandler` uses `MonotonicClock.millis()` and a separate `dialogShown` flag instead of 0 for "never shown". Two new tests in `CrashHandlerTest` (negative reading, reading of 0); they fail on the old logic and pass on the new. 850 `@Test` in 134 classes; 228 ticked / 113 open.
-- **Checked here:** `CrashHandlerTest` (3 passed, JavaFX classes stubbed). **Not run:** Maven.
-
-## Session 88
-- 3.45: `Locale.ROOT` on every case change in `src/main` (5 `fromDb` parsers plus `CustomerSearch`, `AlertUtil`, `BackupService`, `ProductController`, `AccountController`); new `model/LocaleIndependenceTest` (Turkish default locale).
-- 3.60: `CurrencyUtil` rounds half-up like `Money.toDong` and never prints "-0đ"; two new tests in `CurrencyUtilTest`.
-- 6.51: `ci.yml` got `timeout-minutes`, `concurrency`, `clean test`, surefire-report upload on failure and a `package` step. The `upload-artifact` hash is unverified.
-- Not run: Maven (no network). Only the rounding logic and the Turkish-locale behaviour were run in a plain JDK.
-
-## Session 89
-- 3.46 `ProductCsv.parseStock`; 3.56 `OrderNumber.transferNote/parseReference` used by the payment dialog and the history search; 3.57 NFC in `PasswordUtil`; 3.63 `BackupService.verifyZip` after every backup (plain and locked), new i18n key `backup.verify.failed` and a "checked" line in `admin.backup.done.message`; 3.64 `EmployeeDAO.readHireDate`; 3.65 future-dated automatic backups ignored by `isDue` and pruned first.
-- Run in a plain JDK: `OrderNumberTest`, `PasswordUtilTest` (18), the CSV stock tests. Compiled but not run: everything that needs the SQLite driver or JavaFX (BackupServiceTest, BackupPruneTest, EmployeeDetailsTest). Maven not run.
-
-## Session 90
-- 5.28 receipt points line: `LoyaltyPolicy.pointsEarnedBy`, `ReceiptText.points`, `pointsLabel` in `donthanhtoan.fxml`, `HoaDonController.showPoints` (balance read in the background), `ThermalReceipt.build(..., pointsBalance)`; keys `receipt.points`, `receipt.points.earned`.
-- 5.33 `MoneyParser.parseShorthand` (k, nghìn/ngàn, tr, triệu); the Vietnamese words are written as `\u` escapes in the Java file because `UntranslatedTextTest` forbids Vietnamese letters in code.
-- 4.24 `config/DatabaseHealth` + health line in `admin-trangchu.fxml` / `AdminDashboardController.loadDatabaseHealth`; keys `admin.health.*`; CSS `.db-health-line`.
-- Run in a plain JDK: `MoneyParserTest`, `DatabaseHealthTest`, `LoyaltyPolicyTest`, `FxmlControllerCheckTest`, `ReceiptLayoutTest`, `I18nTest`, `MessagesTest`, `CssRulesTest`, `UntranslatedTextTest` (all pass). Not run: Maven, anything with JavaFX or the SQLite driver; the three screens were not looked at.
-
-## Session 99 - 5.32, 5.34, 6.62, 6.50, 3.54
-
-- 5.32: "Save text only" button for the transfer QR (`TransferQrGuard.replaceInfo`), refused unless the picture is the accepted one.
-- 5.34: report CSV holds every product; "Updated at" label; reload when the window gets the focus back (`ReportRefresh`, `ReportDAO.allProducts`).
-- 6.62: `Locale.ROOT` on every `String.format`; `LocaleDigitsTest`; test JVM pinned to en_US in `pom.xml`; second CI run under ar_SA.
-- 6.50: dates now come from `AppClock` except the closed list in its comment; `AppClockUsageTest` guards it.
-- 3.54: streaming order export with a `.part` file (`OrderDAO.exportOrders`, `ExportCsv.writeOrders`), no row cap.
-- New i18n keys (both languages): `admin.qr.textonly*` (4), `report.loadedat`. Keys match (836 / 836).
-- Checked here: all changed non-JavaFX code compiles with JDK 21; `ReportRefreshTest`, `LocaleDigitsTest`, `ExportOrdersStreamTest`, `AppClockUsageTest` and all 14 `TransferQrGuardTest` tests pass in a stand-in runner (also the locale tests under ar_SA).
-- Not run here (no Maven, JavaFX, SQLite or MariaDB): the JavaFX dialogs/windows (`AdminDashboardController`, `ReportWindow`, `OrderHistoryWindow`), the new DAO tests in `Section4ReportsTest`, MariaDB streaming, and the CI ar_SA step. Please run `./mvnw test` and the human check for the QR dialog and the report window.
-
-## Session 104 - 6.64
-
-- 6.64: `SceneNavigator.switchScene(Stage, String)` delegates to `switchSceneAndGetController`; the validity check is one method, `mayShow`. New `SceneNavigatorTest` (3 decision tests + one source test against the duplicate coming back).
-- Not run here (no Maven or JavaFX): the new test and the JavaFX code path. The file parses; please run `./mvnw test`.
-
-## Session 105 - 6.59
-
-- 6.59: JaCoCo 0.8.12 added (`pom.xml`), `./mvnw verify` makes `target/site/jacoco/index.html`; surefire `argLine` starts with `@{argLine}`; CI runs `clean verify` and uploads `coverage-report` (Ubuntu). README updated. New `CoverageSetupTest` (3 tests, read `pom.xml`).
-- Not run here (no Maven, no network): the plugin itself and the report. Please run `./mvnw verify` once, open the report, and note the overall number here before deciding on a minimum.
-
-## Session 106 - 6.60, 5.26, 5.36
-
-- 6.60: test-side `QrDecoder` + `QrCodeAllVersionsTest` (10 tests): every one of the 40 versions is encoded and read back with its own tables; planted encoder bugs are caught.
-- 5.26: Caps Lock warning (`CapsLockState`, `CapsLockWarning`, label in `dangnhap.fxml`, four dialogs); new i18n key `capslock.warning` (both languages, 850 / 850).
-- 5.36: `SceneNavigator.newOwnedStage()` for the receipt, history and report windows; `OwnedWindowsTest` guards against a bare `new Stage()`.
-- Ran here (plain JDK 21, stand-in runner): `QrCodeAllVersionsTest` 10/10 (also failing under 4 planted bugs), `CapsLockStateTest` 6/6, `OwnedWindowsTest` 2/2.
-- Not run here (no JavaFX/Maven): the login screen and dialogs with the new label, the owned windows. Human check: type a capital letter without Shift in the login password field (line appears), press Caps Lock (line goes), switch to another program and back (line gone); open a receipt after a payment, click the till, the receipt must stay in front (Windows).
-
-## Session 107 - 4.27, 4.28, 4.44
-- **Base:** `Lunavera-Coffee-session106.zip` (5.32 was already done there in Session 99, so the 5.32 work started on the older tree was dropped).
-- **4.28 (rest of it):** automatic backups carry `images/` only every 7th time (`auto-<time>-db.zip` for the others, line `pictures: not included` in `backup-info.txt`); `BackupService.picturesDue`, `picturesIncluded`, `createBackup(target, withPictures)`; a restore from a zip without pictures keeps the current pictures; `Summary` has a new field `picturesIncluded`; key `backup.nopictures`. Tests: `BackupPruneTest` (+3), `BackupServiceTest` (+2).
-- **4.44:** `SecurityLogReader` (+ `SecurityLogReaderTest`, 8) and the dashboard button "Nhật ký bảo mật" with a read-only table and "Mở thư mục nhật ký".
-- **4.27:** `UnusedPictures` (+ `UnusedPicturesTest`, 6), `BackupService.createBeforeCleanupBackup` (`before-cleanup-*.zip`, newest 3 kept, also tidied after automatic backups and restores), dashboard button "Dọn ảnh thừa".
-- **Dashboard:** a new row of two buttons above the statistics in `admin-trangchu.fxml` (no fx:id, they only call their handlers; the unused fx:ids failed `FxmlControllerCheckTest`); 21 new keys in both languages (872 / 872).
-- **Counts:** 973 `@Test` in 152 classes and 265 ticked / 76 open by the boxes; the earlier numbers in this file (886 / 138, 245 / 96) were written before later sessions added tests and ticks.
-- **Run here in a plain JDK:** `SecurityLogReader` (every case of its test), `UnusedPictures` with stand-in classes (list, 1-hour rule, full path, confirmed delete). `BackupService` and `UnusedPictures` compile except for the missing SQLite/JavaFX libraries. **Not run:** Maven, any JUnit test, any screen (`AdminDashboardController`, the new buttons and dialogs, never compiled here).
-- **Human check:** on the dashboard press "Nhật ký bảo mật" (lines appear, the folder button opens the folder and the list stays open), press "Dọn ảnh thừa" with a picture copied by hand into the images folder (it is listed only after 1 hour; change its date to test), confirm, check a `before-cleanup-*.zip` exists and the picture is gone; make 8 automatic backups on 8 days and check that only the 1st has `images/`.
-- **Still the first thing to do:** `./mvnw -B clean test`.
-
-## Session 108 - 2A.42, 5.16, 5.27
-- **Base:** `Lunavera-Coffee-session107.zip`.
-- **2A.42:** `MariaDbBackup.tlsOptions(settings, flavour)` and `flavourOf(versionOutput)`; `dumpTo` asks `mysqldump --version` only when the connection is encrypted and refuses to start (message `db.dump.flavour.unknown`) when the program does not say MariaDB or MySQL. MySQL: `--ssl-mode=` and `--ssl-ca=`; MariaDB: `--ssl`, `--ssl-verify-server-cert`, `--ssl-ca=`. `docs/DATABASE.md` section 7 rewritten. 10 new tests in `MariaDbBackupTest`, including an end-to-end one with a stand-in script.
-- **5.16:** `BusyIndicator` (button text + spinner + disabled + waiting pointer) and `BusyCount`; used for backup, order-history export, report export (now written in the background), login (spinner added), customer and product export (pointer) and every `Async.run` that disables nodes. Keys `busy.backup`, `busy.export`.
-- **5.27:** click the quantity number to type it (`QuantityInput`: digits, at most 3); `OrderController.changeQuantity` is the one function with the stock, remove-line and payment guards, used by "+", "−" and typing.
-- **Counts:** 988 `@Test` in 154 classes; 268 ticked / 73 open.
-- **New way to check here:** `libopenjfx-java` (JavaFX 11) and `xvfb` can be installed with `apt-get`, so JavaFX classes can be compiled and small windows run headless (`xvfb-run java --module-path ... --add-modules javafx.controls`). JavaFX 11 lacks `Dialog.addEventHandler` (used twice in `AlertUtil`), so those two lines have to be removed from a scratch copy to compile. The earlier "never compiled here" notes for JavaFX code are out of date: every class in `controller/` compiled in this session.
-- **A test that fails before and after this session:** `I18nTest.noMessageLooksLikeATechnicalErrorToErrorText` lists `app.cloud.message` (both languages): the sample path `C:\Lunavera` in the text matches the drive-letter rule of `ErrorText.TECHNICAL`. Not fixed here (it is a wording choice): either word the example without a drive letter or add the key to `ONLY_TITLES` in the test.
-- **Human check:** press "Sao lưu" on the dashboard (button text, spinner, pointer), export orders and a report to CSV, sign in with a slow database, click the number in a cart line and type 12 (Enter; Esc; a number above the stock; 0), and, when a TLS server is available, a backup with `db.ssl=true` using the MariaDB `mysqldump` and the MySQL one.
-- **Still the first thing to do:** `./mvnw -B clean test`.
-
----
-
-## Session 109 - 3.62, 3.52, 6.66
-- **Base:** `Lunavera-Coffee-session108.zip`. The five items started just before that upload (6.58, 6.52, 6.48, 5.35, 6.57) were already done in it, so nothing was redone.
-- **6.66:** job `test-mariadb` in `.github/workflows/ci.yml` (`mariadb:10.11` service, health check, `./mvnw -B test -Dlunavera.test.db=mariadb -Dlunavera.test.db.password=test-password`). Name, user, host and port match `TestDatabaseSupport`; the tables carry their own utf8mb4 settings, so the image's default charset does not matter. Not run on GitHub. The line of 6.67 that sat inside 6.66's YAML block in `TODO.md` was moved below it.
-- **3.62:** `openSourceReadOnly` and `checkSource` in `SqliteToMariaDbImporter`; messages `db.import.newer`, `.damaged`, `.orphans`. Compared with `SchemaMigrations.LATEST_VERSION`, not `CURRENT_SCHEMA_VERSION` (see the note in the TODO). Version 0 only warns.
-- **3.52:** `CustomerDAO.search`, `CustomerService.search` / `Matches` / `PICKER_LIMIT`, `CustomerPickerDialog`; `OrderController.handleEditOrder` uses it. The test class is `CustomerPickerSearchTest` because `service/CustomerSearchTest` already exists.
-- **Docs:** `docs/DATABASE.md` sections 4 and 10; test count in `docs/RELEASE.md`.
-- **Counts:** 1005 `@Test` in 156 classes; 271 ticked / 70 open.
-- **How it was checked here:** this sandbox has a JRE with the `jdk.compiler` module but no `javac` launcher, no Maven, no sqlite-jdbc, no JUnit and no JavaFX (the network is off). The new classes and tests were compiled with `java -m jdk.compiler/com.sun.tools.javac.Main` against small hand-written stand-ins (`SQLiteConfig`, JUnit, the JavaFX classes the dialog uses) with `module-info.java` left out. No test was run.
-- **Human check:** open "Gắn khách hàng" in the POS with a few thousand customers (type a name without accents, a phone, an e-mail; Enter; double-click; Cancel keeps the walk-in customer); import a hand-made SQLite file that is newer, damaged, or has an order line whose product is missing, and a good one; push to GitHub and look at the `test-mariadb` job.
-- **Still the first thing to do:** `./mvnw -B clean test`.
-
----
-
-## Session 110 - 3.50, 3.51, 3.59, 3.43, 3.61, 6.7, 6.22
-- 3.50: `config/ServerLock` (GET_LOCK / RELEASE_LOCK), `DatabaseConfig.initialize` holds `lunavera-migrate` around `createAndMigrate` on MariaDB/MySQL; new key `db.migration.busy`.
-- 3.51: `SqliteSnapshotService.isLeader` (lock `lunavera-snapshot`, connection kept open), `db.snapshots` setting (`DatabaseSettings.snapshotsEnabled`), docs and `database.properties.example` updated. The thinned-retention option was not done.
-- 6.7 / 6.22: `mergeLegacyCategoryOnce` and `LegacyCategoryMergeTest` deleted; `untranslated-baseline.txt` DatabaseConfig 3 -> 1.
-- 3.59: `service/Limits` (100.000.000đ, 1.000.000 stock, 999 per line), `Cart.LINE_LIMIT`, `Cart.totalQuantity` long, `LoyaltyPolicy` clamp, checks in `ProductController`, `ProductCsv`, `ProductDAO`; keys `products.val.price.max`, `products.val.stock.max`, `csv.p.pricemax`, `pos.qty.limit.*`.
-- 3.43: `util/ImageSize` + `ImageStorage.sizeProblem`; picture pick runs in `Async`; key `image.toomanypixels`.
-- 3.61 (left over from before): tab and UTF-16 CSV (`ProductCsv.delimiterOf`, `decode`).
-- Run here (plain JDK 21, stand-in stubs for JavaFX and the SQLite driver): `ServerLockTest`, `CartTest`, `LoyaltyPolicyTest`, `LimitsTest`, `ProductCsvTest`, `ImageSizeTest`, `MoneyParserTest` (61 + 15 pass), and the structural tests (`FxmlControllerCheckTest`, `ReceiptLayoutTest`, `MessagesTest`, `CssRulesTest`, `UntranslatedTextTest`, `AppClockUsageTest`, `GitIgnoreTest`). Not run: Maven, anything needing the SQLite driver or MariaDB (the lock code was only tried against a stand-in connection) or JavaFX.
-- Found, not changed: `I18nTest.noMessageLooksLikeATechnicalErrorToErrorText` fails on `app.cloud.message` (it contains `C:\Lunavera`, which `ErrorText.looksTechnical` takes for a path). The message is shown as a warning, not an error box; add the key to `ONLY_TITLES` in that test or reword it.
-
----
-
-## Session 111 - 3.48 + 4.18
-- **Base:** `Lunavera-Coffee-session110-tidy.zip`.
-- **3.48:** `service/TableLayout` (cell from the list position, 3 columns); `OrderController.loadTablesFromDb` and `DashboardWidgets.fillTableGrid` use it; `quanlydonhang.fxml` and `admin-trangchu.fxml` lose the fixed row constraints and put the grid in a `ScrollPane` (table buttons get `minHeight` 78).
-- **4.18:** `service/TableRules`, `TableDAO.add / update / remove`, `controller/TableManagerDialog`, dashboard button `admin.tables` ("Quản lý bàn", handler `handleManageTables`, no `fx:id`); 23 new keys in both languages.
-- **Tests:** `TableLayoutTest` (6), `TableRulesTest` (6) run here and pass; `TableDAOTest` +4 not run (SQLite driver missing). 331 pure tests run in the stand-in harness: all pass except the old `I18nTest` / `app.cloud.message` failure. All changed controllers compile against JavaFX 11 (`/usr/share/maven-repo/org/openjfx`).
-- **Human check:** dashboard -> "Quản lý bàn": add a table (blank name, and a typed name), rename, change seats, try to remove a table with an open order (must refuse) and a free one (must go); look at the order screen and the home map with 3, 12 and 20 tables (3 columns, scroll bar when many).
-- **Still the first thing to do:** `./mvnw -B clean test`.
-
----
-
-## Session 112 - 4.35
-- **4.35:** `service/SecondBackupFolder` (check, copy through `.part`, keep 14, catch-up, status); `BackupService.autoBackupIfDue` calls `catchUp()` after a backup and at every hourly check; dashboard: button `backup2.button` ("Nơi sao lưu thứ hai", `handleSecondBackupFolder`) and a line `secondBackupLabel` in the health box (warning colour after 3 days / failed / never); 25 keys in both languages. The folder is a per-till setting in `ui-settings.properties`.
-- **Tests:** `SecondBackupFolderTest` (10) pass; `AppClockUsageTest` list does NOT need `SecondBackupFolder.java` any more (it now uses the backup file time). Controllers compile against JavaFX 11. `I18nTest` still fails only on the old `app.cloud.message`.
-- **Human check:** dashboard -> "Nơi sao lưu thứ hai" -> choose a USB stick (must copy at once, line shows "hôm nay"); try the data folder (refused); unplug the stick and wait for the hourly check (line turns red with the error); plug it back (copy appears, line is normal again); after 3 days without a copy the line is red.
-- **Still the first thing to do:** `./mvnw -B clean test`.
-
----
-
-## Session 113 - 3.21 + 4.19
-- **Column:** `products.reorder_level INTEGER NULL` (`SqliteSchema.LATER_COLUMNS`, `MariaDbSchema`, importer spec); no schema-version step needed, `addColumnIfMissing` already runs at every start for both databases.
-- **Rule:** `service/StockLevel` (`DEFAULT` 10, `effective`, `isLow`, `isCritical`, `problem`, `parse`); `Product.getReorderLevel / isLowStock`; `ProductDAO` stores it and counts/lists with `COALESCE(reorder_level, ?)`.
-- **Screens:** product dialog box `products.label.reorder`; product table colour by `isLowStock`; cashier badge by `isLowStock`; dashboard rows by `StockLevel`; product status filter choice `products.status.reorder` ("Cần nhập hàng"); CSV export/import column "Mức báo nhập"; 5 keys in both languages.
-- **Tests:** `StockLevelTest` (7), `ProductCsvTest` (+2), `MariaDbSchemaTest`, structural tests pass in the stand-in harness (60 run; only the old `app.cloud.message` failure). `ProductDAOTest` +3 not run (SQLite driver missing). Controllers compile against JavaFX 11.
-- **Human check:** open a product, set the level 40, save: the stock number shows red in the table when stock <= 40, the cashier card shows the "sắp hết" badge, the dashboard counts it; clear the box and it falls back to 10; choose "Cần nhập hàng" in the status filter; export, edit the last column in Excel, import into a new category.
-- **Still the first thing to do:** `./mvnw -B clean test`.
-
----
-
-## Session 114 - check of 3.48, 4.18, 4.35 (and 3.21 + 4.19 delivered with it)
-- **Checked by reading the code of `session112` again:** 3.48 (both grids use `TableLayout`, no fixed rows, scroll pane), 4.18 (dialog, DAO rules, security log), 4.35 (copy, catch-up, status). All three do what the TODO says. Two real defects found and fixed:
-  - **4.18:** a table removed on another till stayed selected in the order screen (`selectedTableNumber`), so the cashier could still start an order on a table that no longer exists, and the selected-table label always said "Bàn N" instead of the shop's own name. Now `loadTablesFromDb` drops a selection that is not in the list (and selects the first table), and the label shows `displayName()`.
-  - **4.35:** the dashboard line stamped "now" every time the newest backup was found in the second folder, so when no new backup was being made (failing backup, program not running) it still said "today". It now records the file time of the backup that is outside the PC, so the line goes red after 3 days of no new copy. Checked in a plain JDK with a 5-day-old backup: state OLD.
-- **Still open / not checked on screen:** all JavaFX screens; the `ProductDAOTest` / `TableDAOTest` cases (SQLite driver); first thing is still `./mvnw -B clean test`.
-- **Also in this zip:** 3.21 + 4.19 (session 113, see above).
-
----
-
-## Session 115 - 1.9
-- **1.9:** `users.username_key` (stored `LOWER(username)`, `utf8mb4_bin`) + unique key `ux_users_username_key` on MariaDB: `MariaDbSchema` (new databases), `SchemaMigrations.ensureMariaLoginNameKey` (older ones; skipped with a warning while a Mai/mai pair exists), called from `SchemaMigrations.upgrade` next to the staff-phone key. Tests: `MariaDbSchemaTest` (+2 asserts), `MariaDbLoginNameKeyTest` (new, MariaDB only, CI job `test-mariadb`).
-- **New way to check here:** `apt-get install mariadb-server` works in this sandbox (10.11, the same as the CI job); started with `mariadb-install-db` + `mariadbd`. The SQL of this change was run on it by hand (see the TODO note). There is still no MariaDB JDBC driver, so the JUnit tests that need a connection cannot run here.
-- **Still the first thing to do:** `./mvnw -B clean test` (and the CI `test-mariadb` job).
-
----
-
-## Session 116 - 4.40
-- **Code:** `service/SalesPatterns` (by hour, by weekday with the average per day, busiest, previous range, percent change, bar length), `service/SalesPatternsText` (hour label, weekday name, change text, the comparison paragraph), `ReportDAO.paidOrders` and `ReportDAO.categorySales`, `ReportWindow` (comparison label, busiest label, second tab with three tables, CSV sections); 38 keys in both languages (`weekday.1`-`7`, `report.cmp.*`, `report.*.title`, `report.csv.*`).
-- **Tests:** `SalesPatternsTest` 9, `SalesPatternsTextTest` 5 (pass here), `ReportPatternsDaoTest` 3 (not run: SQLite driver), the structural tests pass (only the old `app.cloud.message` failure). The two new SQL statements were tried by hand on a local MariaDB 10.11.
-- **Human check:** open the report for a month with some days of sales: the line under the totals says up/down against the month before; the second tab shows busy hours (10:00 - 11:00 etc.), the weekdays and the categories with bars; pick one day (the "previous period" is the day before); export CSV and look for the new sections.
-- **Still the first thing to do:** `./mvnw -B clean test`.
-
-## Session 117 - 4.39
-- **Code:** `service/CustomerStats` (visits, total spent, last visit per customer; regular = 5+ visits; lapsed = 30+ days; best 10 by spending; filter enum), `CustomerDAO.paidOrderRows` (one query), `CustomerController` (three sortable columns, a group drop-down built in code so there is no new `fx:id` for it), `quanlykhachhang.fxml` (three columns), `ExportCsv.customers(list, figures)` (three more columns), 8 keys in both languages (`customers.col.visits/spent/last`, `customers.group.*`, `export.customers.header.more`).
-- **Tests:** `CustomerStatsTest` 8 (pass here); `Section4ReportsTest.customerPurchaseFiguresCountPaidOrdersOnly` (not run: SQLite driver); structural tests pass (only the old `app.cloud.message` failure in `I18nTest`).
-- **Human check:** open Customers: the table shows visits, total spent and last visit; click a header to sort; pick "Top 10 by spending" or "Not back for 30+ days" in the drop-down and type in the search box at the same time; export CSV (admin) and look at the last three columns.
-
-## Session 117 - fixes after the check of 3.48, 4.18, 4.35
-- **Base:** `Lunavera-Coffee-session116.zip`. Problems numbered as in the list the owner sent.
-- **Fixed:** 1 admin check in `TableDAO.add/update/remove`; 2 `employee-trangchu.fxml` map in a `ScrollPane`; 3 `MAX_TABLES` in `TableDAO.add`; 4 names: `TableRules.namesOf` (stored, shown, both languages for a starter name) + `TextNormalizer.key` (NFC), in the box and in the DAO (`TableDAO.checkNameAndSeats`, which also checks the seats); 5 `OrderDAO.rejectIfTableIsGone`; 6 `TableRules.nameToStore`; 7 last table: `TableDAO.remove` (the DELETE counts through a derived table, which MariaDB needs) and the dialog; 8 `DashboardWidgets.emptyTablesNote` on both dashboards and the POS; 9 `TableDAO.add` retries three times on a unique or a busy error, then `tablemgr.fail.busy`; 11 `app.cloud.message` reworded.
-- **Not a defect in session 116:** 10. `SecondBackupFolder.catchUp` stores the newest backup's own file time. Three tests now pin it (an old backup is OLD, a second check does not refresh it, a new backup makes the line fresh). The line follows the file's time like `BackupService.isDue`; a backup whose NAME says old but whose file time is new (a folder copied or restored) looks fresh, as it does for the local backup check.
-- **New tests:** 9 in `TableDAOTest`, 2 in `TableRulesTest`, 3 in `SecondBackupFolderTest`. The shared test database is put back after the last-table test.
-- **Environment (new):** real JUnit 4 (`apt-get install junit4`), the project's exact SQLite driver (`https://github.com/xerial/sqlite-jdbc/releases/download/3.46.1.3/sqlite-jdbc-3.46.1.3.jar`), OpenJFX 11 and Xvfb all work here, so the whole suite can be run with `org.junit.runner.JUnitCore`.
-- **Failures left in this environment (6 of 1091):** `CustomerPickerSearchTest` (1) and `Section4ReportsTest` (3) fail the same on the session-110 zip here; `BackupServiceTest.aLogThatCannotBeFoldedIsKeptNotDeleted` fails because the sandbox runs as root; `SqliteToMariaDbImporterTest.theCopiedColumnsAreExactlyTheColumnsOfTheMariaDbTables` fails on the session-116 zip before this session's changes: the MariaDB `users` table has `username_key` (1.9), the importer's copied columns do not.
-- **Counts:** 1091 `@Test` in 164 classes.
-- **Still the first thing to do:** `./mvnw -B clean test`.
-
-## Session 113 (old-base branch) - 3.25, 3.17, 4.31, 5.31 (its 3.21 + 4.19 was not carried into the merge)
-- **Base:** `Lunavera-Coffee-session112.zip` (3.48 + 4.18, 4.35 done there; it already holds the merge of the two Session 107 lines).
-- **Schema, seven columns:** `categories.sort_order`, `products.sort_order` (both `INTEGER NOT NULL DEFAULT 0`), `products.reorder_level`, `orders.points_earned` (nullable INTEGER), `orders.cash_received`, `orders.change_given` (nullable BIGINT), `orders.transfer_ref` (nullable VARCHAR(64)). In `SqliteSchema.LATER_COLUMNS` (that also reaches an existing MariaDB, through `addColumnIfMissing`), in the `CREATE TABLE` of `MariaDbSchema`, in the importer's column lists (`sort_order` becomes 0 for an older file, like `must_change_password`). `MariaDbSchemaTest` and the importer's "exactly the MariaDB columns" test confirm both sides agree.
-- **Why every new column is null or 0 for old rows:** nothing needs a backfill and an existing shop behaves exactly as before. `sort_order` 0 for every row means "order of creation" (`ORDER BY sort_order, id`); an arrow press numbers the whole list 1..N once. `points_earned` null = an order paid before it existed, refunded with today's rule (the decision 3.25 asked for).
-- **Found and fixed on the way:** `MoneyMigration` rebuilds `products`/`orders`/`order_items` with a fixed column list, so a column added earlier in the same start disappeared for a SQLite file old enough to need it (it already lost `order_items.unit_cost`). `DatabaseConfig.addLaterColumns` runs again after it. Test: `MoneyMigrationTest.theLaterColumnsAreBackAfterTheMigrationHasRebuiltTheTables`.
-- **3.21 + 4.19 (dropped when the branches were merged):** this branch had its own version (`Product.effectiveReorderLevel()`, `ProductDAO.findNeedReorder`/`countNeedReorder`, a second "Order more at" field, `ProductReorderTest`, `ProductReorderLevelDaoTest`). The main line already had 3.21 + 4.19 done differently (`service/StockLevel`, `ProductDAO.findLowStock`/`countLowStock`, `StockLevelTest`), so only that one was kept; the other version's code, tests and language keys were removed.
-- **3.25:** both payment paths store the points; `cancelPaidOrder` takes back `points_earned` (rule only for null).
-- **3.17 + 4.31:** `PaymentResult` and `CheckoutService.Payment` carry `cashReceived` and `transferRef` (the old four-argument `Payment` still works); `OrderDAO.paymentDetails` checks and cleans them (cash below the total is refused, other methods keep none); receipt lines through `ReceiptText.paymentExtras`; history search by reference. Who confirmed and when = `paid_by` / `paid_at`.
-- **5.31:** `DisplayOrder.moved` (pure), `CategoryDAO.move`, `ProductDAO.move`, arrow buttons on both management screens (FXML + handlers), `nextSortOrder` for new rows.
-- **New tests:** `PaymentDetailsTest` 9, `DisplayOrderTest` 9, `ReceiptPaymentExtrasTest` 5 (all run); `OrderPaymentDetailsTest` 14, `SalesScreenOrderTest` 10, `LaterColumnsExistTest` 2, one case in `MoneyMigrationTest` (database, not run). (counts of that branch: 1116 `@Test` in 169 classes; 287 ticked / 54 open).
-- **How it was checked here:** the same functional JUnit stand-in as in Session 110 (annotations, `Assert`, `TemporaryFolder`, a runner) plus stand-ins for JavaFX and SQLite. Run: 133 logic tests and 57 structural tests (one known red: `I18nTest`, `app.cloud.message`). The new SQL was also run on a real SQLite engine (Python `sqlite3`) against a database built from the project's own `SqliteSchema`: the reorder list and count, the next sort number, the 16-column order insert, the 12-parameter pay update, the reference search and the renumbering. Every file of `src/main` that does not use JavaFX compiles; the JavaFX controllers were reviewed by reading their diffs.
-- **Not done / limits:** the products CSV (export and import) does not carry the reorder level or the order; the history table and the CSV export do not show cash received, change or reference; after an arrow the moved row is selected again only if it is still on the page shown; nothing was run on MariaDB.
-- **Human check:** add a product with its own level and see the dashboard list change; pay a cash order with more cash than the total and look at the receipt; pay a transfer with a reference and find it in the history by typing part of it; refund a paid order and check the customer's points; move a category and a product with the arrows and look at the sales screen; start the app on an old database (SQLite and MariaDB) and check nothing changed in the order of tabs and products.
-- **Still the first thing to do:** `./mvnw -B clean test`.
-
-## Session 118 - merge of three branches (2026-10-25, code, tests and documents changed)
-- **Branches:** (a) `Lunavera-Coffee-session117(1).zip` = the 11 table / backup fixes on the Session 116 base; (b) `Lunavera-Coffee-session117.zip` = 4.39 (and its own 4.40); (c) `Lunavera-Coffee-session113.zip` = old base (Session 112): 3.25, 3.17, 4.31, 5.31 and a second version of 3.21 + 4.19. Merged with a three-way merge per file: (a)+(b) on base 116, then the result + (c) on base 112.
-- **Conflicts:** (a)+(b): only `TODO.md` and `progress.md`. Then with (c): `SqliteSchema`, `SqliteToMariaDbImporter`, `Product`, `ProductDAO`, `ProductController`, `OrderController`, `DashboardWidgets`, `docs/RELEASE.md`, `TODO.md`, `progress.md`.
-- **Decision on 3.21 + 4.19:** main line kept (`StockLevel`, `findLowStock`/`countLowStock`), branch (c) version removed (code, two test classes, language keys). The rest of (c) kept: `sort_order` on categories and products, `points_earned`, `cash_received`, `change_given`, `transfer_ref`.
-- **Hand fixes after the merge:** `MariaDbSchema` had `reorder_level` twice in `products`; three language keys were doubled (`products.label.reorder`, `products.reorder.prompt`, `products.val.reorder.range`); `Product` had the reorder accessors twice; `DashboardStatsService` and `ProductDAO.countLowStock` were put back to the main line's calls; the old validation block in `ProductController` was removed (the main line's `StockLevel.parse` stays).
-- **Checks:** see the Session 118 paragraph in `TODO.md`. Counts: 289 ticked / 52 open; 1156 `@Test` in 173 classes; 995 keys per file.
-- **Problem 10 (age of the second backup place):** not reproduced; see `TODO.md`.
-- **Still the first thing to do:** `./mvnw -B clean test` (and the CI `test-mariadb` job), then start the app on an old SQLite file and an old MariaDB database and look at the table map, the sales screen order and a cash payment.
-
-## Session 119 - 4.15 first-run setup (2026-10-25, code, tests and documents changed)
-- **Flag:** `AppFlags.SETUP_PENDING` + `AppFlags.mark`; set by `FirstRunDialog` after the first administrator is created. Existing shops never get it.
-- **Shop name:** `config/ShopSettings` (`cachedName` never reads the database, `load` at start, `setName` saves in `app_flags` under `shopname:`; limits and cleaning like other names). Used for the window title (`LunaveraApplication`) and the first line of `ReceiptQr`.
-- **Window:** `controller/SetupWizard` (one dialog: shop name, number of tables, starter-menu reminder + check box to open the products screen); `service/SetupPlan` (pure: parse the count, plan adds and removals); hooked in `AdminDashboardController.initialize` (`showSetupWizardOrMenuNoticeOnce`).
-- **Tests added:** `SetupPlanTest` 5, `ShopSettingsTest` 5, `ShopSettingsDatabaseTest` 4, `SetupWizardTest` 4. 1174 `@Test` in 177 classes; 1010 keys per file.
-- **Run in a plain JDK:** `SetupPlan` (all cases). The JavaFX classes were only checked for project-symbol errors by comparing the compile errors before and after.
-- **Not done / limits:** no settings screen (4.7): address, phone and bank details; the shop name is not on the login screen (it is on the receipts since session 120) and cannot be changed after the wizard.
-- **Still the first thing to do:** `./mvnw -B clean test`; then start with an empty data folder: create the first administrator, log in, and look at the setup window.
-
-## Session 120 - receipt shop name and four test defects (2026-10-26)
-- **Receipt (4.15 correction):** session 119 said the receipts had no shop text to replace; they had "LUNAVERA COFFEE" in three places. `donthanhtoan.fxml` (header and footer, new `fx:id`s `shopNameLabel` and `footerShopNameLabel`, set in `HoaDonController.initialize`) and `ThermalReceipt` (printed header) now use `ShopSettings.cachedName()` in capitals.
-- **1 `OrderPaymentDetailsTest`:** `openOrder()` now inserts its own `dining_tables` row (`OrderDAO` refuses an order on a table that does not exist, 4.18).
-- **2 `SqliteToMariaDbImporterTest.theCopiedColumnsAreExactlyTheColumnsOfTheMariaDbTables`:** ignores `users.username_key` (MariaDB only, filled by the server, never copied), like `MariaDbSchemaTest`.
-- **3 `MessagesTest.theFilesArePlainUtf8...`:** the 34 `\uXXXX` escapes in the two language files (4.39 and 4.40 keys) are written as the real letters.
-- **4 `ReportPatternsDaoTest.anOrderPaidJustAfterMidnight...`:** uses 2001-06-11, so the day before is empty (the first test of the class fills 2001-06-04).
-- **Checked here:** 83 tests run and pass (language, untranslated text, FXML, CSS, clock, messages, MariaDB schema, importer columns, shop name, setup plan, customer stats, receipt QR); `I18nTest` is green now. The two database tests compile but were not run (no SQLite driver can be downloaded here).
-- **Still the first thing to do:** `./mvnw -B clean test`; open a receipt after setting a shop name in the setup window.
-
-## Session 121 - 3.36 the date filters can use an index (2026-10-27, code, tests and documents changed)
-- **The problem:** every date filter wrote `DATE(COALESCE(paid_at, order_date))`, a function around the column, so no index could serve it (`SCAN orders`).
-- **The change:** new `dao/EffectiveDay` (package-private). The same "paid day, else opened day" rule as ranges on the bare columns: `(paid_at >= ? AND paid_at < ?) OR (paid_at IS NULL AND order_date >= ? AND order_date < ?)`, with the day after the last day as the upper bound; open-ended (`from` only, `to` only) for the history. Used by `OrderDAO` (`findTodayOrders`, `countToday`, `sumRevenueToday`, `countDistinctCustomersToday`, `revenueForLast7Days`, `FilterSql`) and by all nine queries of `ReportDAO` (`bindRange` now returns the next free `?`, `topProducts` binds its limit after it). `OrderDAO.EFFECTIVE_DAY` is unchanged and is still what is selected and grouped by.
-- **Schema version 3:** `idx_orders_paid_at` on SQLite (`SchemaMigrations.createPaidAtIndex`, `LATEST_VERSION` 3; a fresh file runs steps 2 and 3). MariaDB already created the index with the table; its step 3 (`ensureMariaPaidAtIndex`, registered in `MariaDbMigrations`' own static block, because `DatabaseConfig` calls that class before `SchemaMigrations`) covers a database made before that. An older build now refuses a version-3 database, as for any version bump.
-- **Measured here (Python `sqlite3`, 300 000 orders):** one day 42 ms -> 26 ms without the new index (still a scan) -> 4.8 ms with it; seven days 46 ms -> 6 ms. Plan: `MULTI-INDEX OR` on `idx_orders_paid_at`.
-- **Same result as before:** the SQL printed by the compiled `EffectiveDay` was run against the old rule on the edge cases and on 3000 random orders with 900 random ranges: 0 differences.
-- **Tests added:** `EffectiveDayTest` (8), `SchemaMigrationsTest` +2 and three assertions moved from version 2 to the latest version. 1184 `@Test` in 178 classes.
-- **Compiled:** the five changed main classes (JDK 21 `-Xlint:all`: no error or warning in them; the only errors are in files that need the SQLite and JavaFX jars) and the two test classes (against stand-in JUnit classes).
-- **Not done / limits:** Maven, JUnit and the SQLite driver are not available here, so no test was run; the MariaDB step was never run on a server; with a `status` filter SQLite still picks `idx_orders_status`.
-- **Still the first thing to do:** `./mvnw -B clean test` (watch `EffectiveDayTest`, `SchemaMigrationsTest`, `EdgeCasesTest`, `Section4ReportsTest`, `OrderDAOTest`), and `EXPLAIN` the history query once on the real MariaDB.
-
-## Session 122 - 3.37 database set-up in one transaction (2026-10-27, code, tests and documents changed)
-- **The problem:** a new SQLite file was made by about nine auto-committed `CREATE TABLE` statements with the version number written last. Killed after the `users` table (the 3rd), the next start saw `users` and version 0, took the file for an old database and ran `MoneyMigration` on it.
-- **Checked first (real SQLite 3.45 via Python, the real `SqliteSchema.TABLES` and the migration's own SQL):** DDL and `PRAGMA user_version` roll back together; the old behaviour rebuilt `employees` and `products` with the first release's definitions (`products` lost `reorder_level` and `sort_order` until `addLaterColumns` re-added them). No data can be lost this way (nothing is stored yet at that point); the damage is a schema unlike a normal new database.
-- **The change:** `DatabaseConfig.createFreshSqliteSchema` (tables + later columns + version, one transaction) used for a SQLite file with no `users` table; `DatabaseConfig.runAtomically` (new, shared); each SQLite upgrade step and its version bump in `SchemaMigrations.upgrade` now run in one transaction; `MoneyMigration.alreadyInIntegerDong` stops the rebuild of a version-0 file whose money is already INTEGER (repairs leftovers of the old behaviour). MariaDB is unchanged on purpose (its DDL cannot be rolled back; its set-up is already repeatable). `docs/DATABASE.md` says so.
-- **Tests added:** `SchemaSetupAtomicityTest` (11 tests, see the TODO note).
-- **Compiled:** the changed main classes and the new test against stand-in JUnit classes; the only errors are in files that need JavaFX or the SQLite jar.
-- **Not run here:** every test of this session (they need the SQLite driver; Maven is not available). Please run `./mvnw -B clean test` and watch `SchemaSetupAtomicityTest`, `SchemaMigrationsTest`, `MoneyMigrationTest` and the tests that start the database (`TestDatabaseSupport`). A first start of the real app on an empty folder is the human check: it must create the database, show the first-run window, and a second start must not log "Migrated money columns".
-
-## Session 123 - 3.55 category names: the same rule on SQLite and MariaDB (2026-10-27, code, tests and documents changed)
-- **The problem:** `categories.name` is `UNIQUE` on both databases, but MariaDB compares with `utf8mb4_unicode_ci` and SQLite compares the exact text. On SQLite `Trà` and `Tra` could both exist; on MariaDB the second is refused with the server's own duplicate-key text, and copying such a SQLite shop into MariaDB stopped half-way.
-- **Checked first, on a real MariaDB 10.11 (installed in this sandbox):** case, accents and trailing spaces do not count; spaces inside a name do; and `đ` is **not** `d` (`Đỗ` and `Do` are two names). So the fold the item suggested (`VN_KEY` = `TextNormalizer.searchKey`, which maps `đ` to `d`) would be stricter than the server; it stays for search boxes only.
-- **The change:** `TextNormalizer.collationKey` (the server's rule, in Java) and `TextNormalizer.uniqueKey` (that rule on top of `key`, so extra spaces never make another name either); `CategoryDAO.rejectDuplicateName` uses `uniqueKey`; `SqliteToMariaDbImporter.checkSource` calls the new `clashingCategoryNames` (uses `collationKey`, so nothing MariaDB would accept is refused) and reports the two names with `db.import.dupcategory` (vi and en). No new unique index on SQLite (see 3.18, 14th pass). Products are unchanged: their name check is the same Java code on both databases and has no unique key, so the item's remark about `existsByNameInCategory` did not hold.
-- **Verified against the server:** 703 spellings (every Vietnamese letter, both cases, composed and with separate marks, plus phrases) - 12 614 equal pairs for `collationKey`, the same 12 614 for MariaDB; 52 spellings x 52 inserted into a `categories` table made like `MariaDbSchema`'s - 2 704 ordered pairs, 0 differences between the server's verdict and the key.
-- **Tests added (8):** `TextNormalizerTest` +4 (`collationKey` and `uniqueKey` rules; accent-only clash refused on insert and on rename with the plain message; `Đá` / `Da` allowed), `SqliteImportSourceCheckTest` +3 (clash named, capitals and trailing spaces, look-alikes MariaDB keeps apart pass), `MariaDbCategoryNameRuleTest` (new, MariaDB-only, `test-mariadb` CI job). 1203 `@Test` in 180 classes.
-- **Run here (real SQLite, sqlite-jdbc 3.46.1.3, JUnit 4.13.2, JDK 21, a stub for `javafx.scene.image.Image`):** 72 tests (`SqliteImportSourceCheckTest`, `TextNormalizerTest`, `ProductNameCheckTest`, `CategoryDAOTest`, `EdgeCasesTest`, `SqliteToMariaDbImporterTest`, `SchemaMigrationsTest`, `I18nTest`), run from the project folder: 72 tests, 0 failures (the MariaDB-only class is skipped on SQLite by design). The language files keep the same 1011 keys each.
-- **Not run here:** Maven, the tests that need JavaFX (`ProductCsvTest` among them; its dedupe still uses `key`, unchanged), and `MariaDbCategoryNameRuleTest` through JDBC (no MariaDB driver here; the same experiment was run with PyMySQL).
-- **Left open on purpose:** a SQLite shop that already holds two names the server would call equal keeps them until the owner renames one; only the import refuses it (with the two names).
-- **Still the first thing to do:** `./mvnw -B clean test`, and the `test-mariadb` CI job for `MariaDbCategoryNameRuleTest`.
-
-## Session 124 - 4.34 e-wallets as payment methods (2026-10-27, code, tests and documents changed)
-- **The need:** wallet QR payments (MoMo, ZaloPay, VNPay) had to be recorded as "Chuyển khoản", which mixes them with the bank transfers the bank statement is checked against.
-- **The change:** three new `PaymentMethod` values (`MOMO`, `ZALOPAY`, `VNPAY`; plain text column, no schema change, no migration); helpers `eWallets()`, `isEWallet()`, `needsReceivedConfirmation()`. `OrderDAO.paymentDetails` and `ReceiptText.paymentExtras` keep and print the transaction code for a transfer **and** a wallet (it lives in the existing `orders.transfer_ref`). `OrderController.openPaymentDialog`: second row of radio buttons, `buildWalletBox` (amount, optional code, "money received" tick, no bank QR), the received tick is required, the finish button text follows the chosen method. 8 new language keys per file (1019 each, same keys in both).
-- **Reports:** nothing to change in `ReportDAO.paymentSplit` (it groups by the stored text); `Section4ReportsTest` now proves the wallets are separate lines that add up to the total.
-- **Tests added (7):** see TODO 4.34. 1210 `@Test` in 180 classes.
-- **Run here (real SQLite, sqlite-jdbc 3.46.1.3, JUnit 4.13.2, JDK 21, a stub for `javafx.scene.image.Image`):** 115 tests of the payment, receipt, report, language and category classes; the only failures are the 5 of `Section4ReportsTest` that also fail on the Session 122 tree here (checked by running it on the unzipped upload). `OrderController` was only parsed (`javac` parse stage): it needs JavaFX.
-- **Not run / for a human:** open the payment dialog and look at the two rows of radio buttons and the wallet block on the till's screen size (the dialog grows and shrinks when the block appears, as for a transfer); pay one sale with each wallet and look at the report, the history and the receipt. Maven and the JavaFX tests were not run.
-- **Not done:** per-wallet QR or account text; a settings screen for the list of wallets; the dashboard (as in 4.30).
-
-
-## Session 125 - 4.7 settings screen (2026-10-27, code, tests and texts changed)
-- **The need:** the shop's address and phone were nowhere, the low-stock level (10) was fixed in code, and the shop name could not be changed after the setup window.
-- **The change:** admin dashboard button `Cài đặt` -> `controller/SettingsDialog` (shop name, address, phone; number of tables with a button to the existing table manager; shop-wide low-stock level; bank details shown with a button to the existing transfer-QR dialog). Stored in `app_flags` as `shopaddr:`, `shopphone:` and `lowstock:` (no schema change, no migration). `ShopSettings.saveAll` validates everything and writes all four values in one transaction. `StockLevel.defaultLevel()` replaces the fixed 10 for products with no level of their own (`StockLevel.DEFAULT` stays as the factory value). Address and phone are printed on both receipts.
-- **Files:** new `SettingsDialog`; changed `ShopSettings`, `StockLevel`, `DashboardStatsService`, `ProductController` (prompt), `AdminDashboardController`, `admin-trangchu.fxml`, `donthanhtoan.fxml`, `HoaDonController`, `ThermalReceipt`, both language files (same keys in both).
-- **Tests added (14):** `SettingsScreenRulesTest` 9, `SettingsScreenDatabaseTest` 5; `StockLevelTest` resets the shop level after each test.
-- **Checked here:** `ShopSettings` and `StockLevel` compiled and run in a plain JDK (all the form rules, the shop level, a refused form changing nothing): all passed. The whole main tree was compiled with the JDK's compiler: no error in the changed classes other than the missing JavaFX / SQLite jars. The JUnit tests, the database tests and the dialog itself were NOT run (no Maven, JUnit, JavaFX or SQLite driver here).
-- **Not done / limits:** see TODO 4.7 (no screen check; the account text is not refreshed after the QR dialog saves; no tax-code line; nothing on the login screen).
-- **Still the first thing to do:** `./mvnw -B clean test` (watch `SettingsScreenRulesTest`, `SettingsScreenDatabaseTest`, `StockLevelTest`, `FxmlControllerCheckTest`, `MessagesTest`, `UntranslatedTextTest`, `ReceiptLayoutTest`); then log in as the administrator, press `Cài đặt`, change the name / address / phone / level, and look at the receipt and the low-stock list.
-
-
-## Session 126 - 4.12 staff screen (2026-10-27, code, tests and texts changed)
-- **The need:** staff existed only as a side effect of an account. There was no list of the people who work at the shop, no way to keep a person who never signs in (a barista), and no place to see everyone's start date and salary in one table.
-- **The change:** new administrator screen `Quản lý nhân viên` (`quanlynhanvien.fxml`, `controller/StaffController` on the `AdminScreen` base), reachable from every administrator sidebar (new `openStaffManagement` in `AdminScreen`, `CustomerController`, `OrderController`). It lists every staff record with its login (if any), searches and filters (working / left, has a login / no login), shows a detail card (email, address, salary, login, role), adds a person without a login, edits details, and marks a person as left or working again. For a person with an account the last action goes through `AccountService.setLocked` (same transaction, "last administrator" rule, own record refused). No password or role is ever set here. No schema change, no migration, no new CSS (the screen loads `quanlytaikhoan.css`).
-- **Files:** new `model/StaffRow`, `service/StaffRules`, `service/StaffService`, `controller/StaffController`, `fxml/quanlynhanvien.fxml`; changed `dao/EmployeeDAO` (`findAllWithAccounts`), `config/SqlStatus` (`ROLE_CUSTOMER`), `AdminScreen`, `CustomerController`, `OrderController`, six FXML sidebars (new "Quản lý nhân viên" button), both language files (56 new keys each, same keys in both: 1100 each).
-- **Tests added (26):** `StaffRulesTest` 10, `StaffServiceTest` 12 (database), `StaffScreenFilesTest` 4 (sources as text); `AdminScreensTest` lists the fifth screen. 1250 `@Test` in 185 classes.
-- **Run here (JDK 21 only):** `StaffRulesTest` compiled and run on its own with two tiny stand-ins for JavaFX's `TextFormatter` and `TextInputControl`: 10 passed. The new join query was run on the real SQLite table definitions with Python's `sqlite3` (one line per person, a second account skipped, a customer-role account left out). All FXML files parse as XML; every `fx:id` of the new screen has a field and the other way round; every handler, style class, picture and language key it uses exists (checked by script, the same checks `FxmlControllerCheckTest` and `I18nTest` make). The main tree compiled with `javac` shows no error in `StaffService`, `StaffRules`, `StaffRow`, `EmployeeDAO`, `SqlStatus` (every error is a missing JavaFX or driver jar).
-- **Not run / for a human:** Maven, `StaffServiceTest` and the other database tests (no sqlite driver), `StaffController` (needs JavaFX, only read), and the screen itself. Open the screen and look at the table, the filters, the detail card and the form at the till's screen size; add a person, edit them, mark them as left and back; with an account, check the account screen shows it locked and unlocked.
-- **Still the first thing to do:** `./mvnw -B clean test` (watch `StaffServiceTest`, `StaffRulesTest`, `StaffScreenFilesTest`, `AdminScreensTest`, `FxmlControllerCheckTest`, `I18nTest`, `UntranslatedTextTest`, `SqlStatusTest`), then the screen check above.
-- **Open point:** a person added on the staff screen with no login cannot be given one later without a second staff record being made for them (the account dialog always creates its own). See TODO 4.12.
-
-
-
-## Session 127 - 4.42 barcode, 4.9 order notes, 4.5 stock log, 4.6 shift close, 4.29 former staff (2026-10-27, code, tests and texts changed)
-- **The need:** five open features from section 4: packaged goods could not be scanned, a cup could not carry "less sugar", stock was one number nobody could trace, the till had no end-of-shift count or sales per person, and a leaver's account could only be locked.
-- **The change (all in TODO 4.5, 4.6, 4.9, 4.29, 4.42):** schema: `products.code` (unique when set), `order_items.note`, `employees.anonymised_at` (all in `LATER_COLUMNS` and `MariaDbSchema`), tables `stock_log` and `shift_closes` in both `TABLES` lists, the unique key in `SchemaMigrations` (`ensureUniqueProductCode`, `ensureMariaProductCodeKey`), the importer copies all of them. Code: new `ProductCode`, `OrderNote`, `StockRules`, `ShiftCash`, `StockLogEntry`, `ShiftClose`, `StockLogDAO`, `ShiftDAO`, `OrderNoteDialog`, `StockLogDialog`, `ShiftCloseDialog`; changed `Product`, `OrderItem`, `Employee`, `Cart`, `ProductDAO`, `OrderDAO` (the three item inserts and two reads), `OrderItemDiff`, `ProductCsv`, `EmployeeDAO`, `AccountService` (`removeStaff`, `anonymiseStaff`), `StaffService`, `ReportDAO` (`employeeSales`), `OrderController`, `ProductController`, `StaffController`, `ReportWindow`, `SidebarExtras`, `LunaveraApplication`, `HoaDonController`, `ThermalReceipt`. 108 new language keys in both files.
-- **Design choices to confirm:** a noted line is a separate cart line; stock counts all lines of a product; the stock log has no foreign keys and copies names; a shift is the time since the previous close (not "who is on shift"); anonymising is irreversible.
-- **Tests added:** `ProductCodeTest`, `OrderNoteTest`, `CartNotesTest`, `StockRulesTest`, `ShiftCashTest` (pure), `ProductCsvTest` +3, `StockLogDAOTest`, `ProductCodeDaoTest`, `ShiftDAOTest`, `OrderNotesDaoTest`, `StaffRemovalTest` (database). Also fixed `I18nTest`: `staff.detail.email` and `staff.label.email` (both just "Email") were missing from its allow-list since Session 126, so the test failed on the upload.
-- **Run here (JDK 21 only, a tiny JUnit stand-in with real assertions, stand-ins for the JavaFX and `org.sqlite` classes the tested code names):** 74 tests passed: `ProductCodeTest`, `OrderNoteTest`, `CartNotesTest`, `StockRulesTest`, `ShiftCashTest`, `CartTest`, `ProductCsvTest`, `I18nTest`, `MessagesTest`, `UntranslatedTextTest`, `MariaDbSchemaTest`, `SqliteToMariaDbImporterTest`, `OrderItemDiffTest`. The new SQL (shift window, per-person totals, history check, unique index, foreign-key refusal, anonymising updates) was run on the real SQLite table definitions with Python's `sqlite3`. The main tree compiles with the JDK compiler except for the missing JavaFX / SQLite jars (no new error of another kind).
-- **Not run / for a human:** Maven and every database test (no sqlite driver here): `StockLogDAOTest`, `ProductCodeDaoTest`, `ShiftDAOTest`, `OrderNotesDaoTest`, `StaffRemovalTest`, `SchemaMigrationsTest`, `LaterColumnsExistTest`; MariaDB (the new key, the new tables); all JavaFX code (`OrderNoteDialog`, `StockLogDialog`, `ShiftCloseDialog`, the cart name cell, the staff buttons, the report tab) was only compiled against missing classes, never shown.
-- **Still the first thing to do:** `./mvnw -B clean test` (watch the five database test classes above, `ShiftDAOTest` in particular: it fixes the clock in the year 2200 and uses a day of its own per test), then by hand: scan or type a code on the sales screen; put "ít đường" on a line and pay; receive stock and look at the log; close a shift with the wrong cash and look at the report tab; delete a new person, and make a leaver with sales anonymous.
-- **Open points:** a cash refund after a shift closed is not taken out of that shift; the cost typed on a stock receipt does not update the product's cost; no note on a bar ticket (4.13); the account screen still only locks (deleting is on the staff screen).
-
-## Session 128 - audit of TODO.md against the tree of Session 127 (2026-10-27, documents only)
-- **Asked:** check that no item is ticked while unfinished, that nothing finished is still unticked, fix stale notes, then list what can still be done here (easiest first) and what needs a decision.
-- **Done by script and by reading:** every backticked name in the 301 ticked items looked up in the tree (all present except names deleted on purpose); every FXML handler has a method (0 missing); both language files hold the same 1208 keys (6 keys are used nowhere, listed in the TODO header); the 40 open items checked against the code for a feature that already exists (none found; take-away has half of its plumbing, see 4.25).
-- **Changed in `TODO.md`:** 4.14 ticked (several tills: built under 1.5, 3.50 and the 14th pass, never tried with two real tills); superseded "not done / still open" notes removed from 3.36 and 3.37 and 3.17; stale cross-references fixed in 4.12, 4.40, 4.22, 4.25, 4.32, 4.33, 4.2, 6.6 and the 1.5 sub-bullet; the sizes in 6.5 and 6.54 (`OrderController` 1,759 lines, `ProductController` 824 of 900); a header paragraph for Sessions 125-128; the test count in section 0 (1316 in 195 classes); one block of human checks for Sessions 119-127 in section 0. `docs/RELEASE.md` has the new test count. Counts by the boxes: 302 ticked / 39 open.
-- **Not run:** Maven, JUnit, JavaFX. No code was changed in this session.
-- **Two files for the owner** (made as documents in the chat): what can still be done here, easiest first, and the decisions needed.
-
-## Session 129 - six unused language keys deleted (2026-10-27, resources only)
-- **Asked:** delete `categories.dialog.add`, `categories.dialog.edit`, `categories.label.name`, `categories.save.fail`, `categories.val.name` and `money.digits`, which the Session 128 audit found in both language files with no reader.
-- **Checked first:** each key searched in `src` (Java, FXML, tests), README, docs: found only in the two `.properties` files; no key is built from a prefix (`"categories." + ...`), and no test lists them (`SAME_ON_PURPOSE` in `I18nTest` does not).
-- **Done:** the six lines removed from `messages_vi.properties` and `messages_en.properties` (6 each); both files keep the same keys (1202 each, compared by script). `TODO.md` header note updated.
-- **Language tests, by reading (not run):** `bothLanguageFilesHaveExactlyTheSameKeys`, `noTextIsEmpty`, `everyKeyHasTheSamePlaceholdersInEveryLanguage`, `noKeyIsDefinedTwice...` are unaffected by removing a pair; `everyKeyUsedInCodeIsInTheFile` / `...InAnFxmlFileExists` only demand that USED keys exist, and none of the six is used.
-- **Not run:** Maven, JUnit.
-
-## Session 130 - TODO 6.49, the CHANGELOG half (2026-10-27, documents only)
-- **Asked:** do the CHANGELOG half of 6.49 (no `LICENSE` yet: that is the owner's decision).
-- **Done:** new `CHANGELOG.md` (Keep a Changelog form: how to add a version, then one *Unreleased* section by theme). `docs/RELEASE.md` step 4 tells to fill it before `git tag`. `TODO.md` 6.49 notes the half done and keeps the item open for the LICENSE.
-- **Why no version section:** the zip has no `.git` folder, no tag is named in the notes, and `pom.xml` is `1.0-SNAPSHOT`; inventing `v0.9` would be a guess. The entries come from the ticked items of TODO section 4 and the notes already in `TODO.md` / `progress.md`; nothing was run.
-- **To check:** read the Unreleased text once and cut what the shop would not care about. When the first tag is made, rename *Unreleased*.
-
-## Session 131 - 6.54 controller ceilings, 6.47 ONLY_FULL_GROUP_BY, 4.22 tax-code line (2026-10-27, code, tests, CI and texts changed)
-- **Asked:** (3) a size ceiling for every controller that can only go down; (4) ONLY_FULL_GROUP_BY: read every GROUP BY, fix the loose column, a source test, the mode in the MariaDB CI job; (5) the tax-code line only of 4.22.
-- **Tools found this session:** the sandbox can download from GitHub, so the real `sqlite-jdbc` 3.46.1.3 jar was used with a small stand-in JUnit runner (annotations, `Assert`, `Assume`, a `Run` main) and one-class stubs for `javafx.scene.image.Image`; no Maven, no real JUnit, no JavaFX. Tests that load JavaFX classes still cannot run here.
-- **(3) `ControllerSizeTest`** (new, 5 tests): ceilings per file as in TODO 6.54; default 400; too big fails, too loose (more than 30 lines under) fails, a stale entry fails; bite checked by adding lines to two files and putting them back. Half of 6.54: the shared navigation base is still open.
-- **(4) ONLY_FULL_GROUP_BY:** 25 `GROUP BY` read in 7 files; `ReportDAO.topProducts` was the only loose column (now `MAX(COALESCE(p.name, oi.product_name)) AS name`). `GroupByRulesTest` (new, 3 tests) counts `GROUP BY` per file against the reviewed numbers, checks the `MAX`, and checks that the `test-mariadb` CI job turns the mode on before the tests. `ci.yml`: new step with `docker exec` and `SET GLOBAL sql_mode`. Same rows on SQLite shown in Python (old query vs new, messy data) and with `Section4ReportsTest` on the real driver (same 10 pass / 4 fail with the old and the new `ReportDAO`; the 4 fail in this runner either way). **Not checked: a real server; the CI job is the proof.**
-- **(5) Tax code:** `ShopSettings` (`TAX_PREFIX = "shoptax:"`, `cachedTaxCode`, `normalizeTaxCode`, `taxCodeProblem`, five-text `saveAll` and `problemWith`; the four-text forms keep the tax code), `ReceiptText.shopDetailLines()` used by `HoaDonController` and `ThermalReceipt`, a field on `SettingsDialog`, 4 new texts and a changed hint in both language files (same keys in both: compared by script). 9 new tests.
-- **Run here and passed:** `ControllerSizeTest` 5, `GroupByRulesTest` 3, the settings family 39 (`SettingsScreenRulesTest`, `SettingsScreenDatabaseTest`, `ShopSettingsTest`, `ShopSettingsDatabaseTest`, `StockLevelTest`), `I18nTest` + `MessagesTest` + `UntranslatedTextTest` 25.
-- **Not run:** Maven; the JavaFX tests; the settings window and the receipts on a screen; the printer; MariaDB.
-- **Counts:** 1333 `@Test` in 197 classes (counted); `docs/RELEASE.md` and the TODO section 0 line updated. `TODO.md`: 6.47 ticked, 6.54 and 4.22 stay open with half-done notes. `CHANGELOG.md` updated.
-- **First thing to do on a real machine:** `./mvnw -B clean test`, and let the `test-mariadb` job run once: if it fails on `dailySales`, `employeeSales` or `ShiftDAO.summarize`, wrap that column in `MAX()` (see the note in TODO 6.47).
-
-## Session 132 - 4.33 waste and breakage log (2026-10-27, code, tests and texts changed)
-- **The need:** milk that spoiled or a cup that was dropped never showed anywhere: the stock was typed over by hand and the loss was in no report.
-- **The change:** `StockLogEntry.WASTE`; `StockLogDAO.writeOff` (stock lowered with a guarded `UPDATE` and the log line written in one transaction; reason required; the product's cost price of that moment on the line; refused above the stock and when the product is gone; administrators only); `ReportDAO.waste` and `ReportDAO.Waste`; `util/WasteText` (summary line and three CSV rows); `ReportWindow` loads and shows it; `StockLogDialog` has the "Nhập hàng / Hao hụt" switch. 20 new texts per language file (1226 keys each, the same in both, compared by script). **No schema change and no migration.**
-- **Decisions:** the reason is free text in the existing `note` column (four suggestions in the box), so there is one waste total and no total per reason: a `reason` column would be schema version 4 on both databases; left for when the owner asks. The profit figure is not reduced by waste; the waste cost is its own line, so nothing already reported changes. A line with no cost price is counted apart, never priced at 0.
-- **Checked against a real MariaDB 10.11 (installed in this sandbox):** the SQL of `ReportDAO.waste` on a `stock_log` made like `MariaDbSchema`'s: 3 lines, 15 pieces, cost 29 000, 1 line without a cost; 23:59:59 of the day in, 00:00:00 of the next out, the day before out, receipts and edits out.
-- **Tests added (15):** `WasteLogTest` 11, `WasteTextTest` 4. 1348 `@Test` in 199 classes.
-- **Run here (real SQLite, sqlite-jdbc 3.46.1.3, JUnit 4.13.2, JDK 21, a stub for `javafx.scene.image.Image`):** 85 tests of `WasteLogTest`, `WasteTextTest`, `StockLogDAOTest`, `I18nTest`, `Section4ReportsTest`, `ProductDAOTest`, `SchemaMigrationsTest`, `SqliteToMariaDbImporterTest`; the 5 failures are the same 5 `Section4ReportsTest` ones that fail on the untouched Session 131 tree here (`customerPurchaseFiguresCountPaidOrdersOnly`, `aLineSoldWithoutACostStaysUnknownEvenIfACostIsEnteredLater`, `theStreamingOrderExportGivesTheSameRowsAsThePagedQuery`, `aDiscountedOrdersProfitIsItsRevenueMinusItsCosts`, `allProductsListsMoreThanTheTopTwenty`; not looked into). `StockLogDialog` and `ReportWindow` were only parsed.
-- **Not run / for a human:** Maven; the JavaFX tests; open "Nhập kho", switch to "Hao hụt", record one loss, look at the log table and at the line under the report summary and the CSV; `WasteLogTest` through the MariaDB driver (`test-mariadb` CI job).
-- **Not done:** waste per ingredient (4.41); a total per reason; the dashboard; refund restock (2.66).
-
-
-
-## Session 132 — TODO 4.8 and 3.4 (merge, anonymise or delete a customer)
-- **The change:** `service/CustomerMergeService` (`impact`, `merge`, `anonymise`, `delete`, `notesFor`; administrators only; each action one transaction, the guards repeated in the SQL itself); `CustomerDAO.deleteIfUnused(Connection, id)` so the delete can share the transaction, `update` and `search` skip anonymous customers; `Customer.anonymisedAt` / `isAnonymised()`; `customers.anonymised_at` (later column on SQLite, in `MariaDbSchema`) and the new table `customer_merges` on both databases, in `SqliteToMariaDbImporter.TABLES` and its first-run wipe list and in `MariaDbSchema.DROP_ORDER`; `CustomerPickerDialog.choose(title, intro)`; three buttons and their handlers in `CustomerController`; 28 texts per language file (same keys in both). **No schema version change.**
-- **Rule D21:** the project files did not contain it, so this is the rule built: a customer nothing points at (no order, no points, no login) is deleted; a customer with orders is only anonymised (name "Khách cũ #id", phone and e-mail cleared, points 0, login locked and renamed, merge-note names replaced; orders stay so the reports do not change); two rows of one person are merged. Merge and anonymise cannot be undone. Refused while the customer to remove or anonymise has an open order, and a merge is refused when the duplicate has a login account (handle it on the accounts screen first).
-- **Decisions:** the merge note keeps the duplicate's name but not its phone or e-mail (a mistyped phone can be a stranger's, 3.29); the kept customer keeps its own name; a phone or e-mail it lacks is copied from the duplicate after the duplicate is deleted (unique phone); points are added with `loyalty_points = loyalty_points + ?` and the delete only goes through if the duplicate still has the points that were read, so a payment on another till between the read and the delete gives a message to retry, not lost points.
-- **Checked here:** the merge, anonymise, delete-guard and search SQL against real SQLite 3.45 (Python `sqlite3`) on tables made from the DDL in `SqliteSchema`: 2 orders moved, duplicate deleted, points 10 + 5 = 15, phone and e-mail copied, stale-points delete matches 0 rows, second anonymise matches 0 rows, delete with orders matches 0 rows. `CustomerMergeService`, `CustomerDAO`, `SqliteToMariaDbImporter`, `SqliteSchema` and `MariaDbSchema` compiled with the JDK 21 compiler (attribution forced) with no error of their own; the only errors were the missing `org.sqlite` and JavaFX libraries.
-- **Tests added (16):** `CustomerMergeTest` (merge moves orders and points, phone and e-mail copied, merge note without phone or e-mail, same row, open order, login, anonymous, missing customer, anonymise keeps orders and clears details, locks the login, scrubs the merge notes, twice and open order, search and edit skip an anonymous customer, delete, delete refused, admin only). `LaterColumnsExistTest` lists `customers.anonymised_at`.
-- **Not run / for a human:** **none of the tests were run**: this sandbox had no Maven, JUnit, sqlite-jdbc or JavaFX and no network. `./mvnw -B clean test`; on the screen: select a duplicate, "Gộp khách trùng", pick the customer to keep, read the confirmation, then check that the duplicate is gone, the orders show under the kept customer in the history and the points added up; "Ẩn danh hóa" on a customer with orders and look at the list and an old receipt; "Xóa" on a new customer and on one with orders; MariaDB (`test-mariadb` CI job) for the new table and column.
-- **Not done:** a screen to read the merge notes (`notesFor` exists and is tested but nothing shows it); undo; moving a login account to the kept customer during a merge; refusing at payment when a till still holds a cart with a customer that was anonymised meanwhile (a till attaches only customers it can search, and those never include an anonymous one).
-
-
-## Session 132, second task — TODO 3.1 (stock re-read before the payment box), small version
-- **The change:** `OrderController.handlePayment` now calls `verifyStockThenOpenPayment()` instead of opening the payment box at once: it locks the screen with `setPaymentInFlight(true)`, runs `StockCheck.check(cart, productDAO)` on a background thread, and either opens the box or shows a warning that names every item that cannot be sold as the cart holds it, then refreshes the product tiles (`loadCategoriesAndProducts(true)`). `service/StockCheck` (new; `shortages` is pure and tested without a database) adds up the lines of one product like the payment does, treats a product switched off or deleted as unavailable (3.34), and ignores lines without a product. `ProductDAO.findByIds` (new; one `IN (...)` query). 3 texts per language (`pos.stock.recheck.short/off/footer`; the title is the existing `pos.stock.short.title`); 1257 keys in both files, same set.
-- **Decisions:** a warning only: the payment's guarded `UPDATE` stays the real protection and still fails cleanly when another till wins the last item between the check and "Xác nhận". If the re-read fails (database unreachable) the box opens anyway, because the payment will fail with its own message and a flaky connection should not stop a sale that would have worked. The cart is not changed for the cashier (no automatic lowering of quantities): the message says what to do. **D9 (reserve at add) is not in the project files and was not started.**
-- **Checked here:** `StockCheck` and `ProductDAO` compile with the JDK 21 compiler (the only errors are the missing `org.sqlite`/JavaFX libraries); `StockCheck.shortages` run for real with a small harness on the cases of the tests (two lines of one product 2+2 against 3 gives wanted 4 / available 3; a switched-off product, a sold-out one and a deleted one are named; a line without a product is ignored; exactly enough gives no shortage). `OrderController` was not compiled (JavaFX is missing) and not seen on a screen.
-- **Tests added (12):** `StockCheckTest` 9 (no database), `StockRecheckDbTest` 3 (`findByIds`; the check sees a stock lowered after the line was added; the check sees a product switched off). **Not run:** no Maven, JUnit or sqlite-jdbc here.
-- **For a human:** open two tables with the last item of a product, pay table 1, then press "Thanh toán" on table 2 and read the message; check the tile now shows "hết hàng"; lower the quantity or remove the line and pay again.
-- **Not done:** reserving stock at add (D9); a till that is already inside the payment box when another till sells the item (the payment itself refuses, as before).
-
-## Session 134 - TODO 4.25, take-away orders (2026-10-28, code, tests and texts changed; the till was NOT seen)
-- **Asked:** a "Mang đi" button on the till, the autosave for an order with no table, the table map, and probably a queue number. Needs D3.
-- **D3:** the name appears in the notes but is not defined in any file of the project; built as asked, on the reading that the shop sells take-away. Say if D3 was something else.
-- **Found in the uploaded zip, before any change:** `ControllerSizeTest` was already RED in three places: `OrderController` 1796 (ceiling 1759), `CustomerController` 542 (ceiling 421), `ReportWindow` 477 (ceiling 472). The ceilings were not raised. `OrderController` is back to 1758 by the refactor below; **`CustomerController` and `ReportWindow` are still over** and need to be split (not part of this task).
-- **Done:** see TODO 4.25. New: `TakeAwayPanel`, `TableMapButtons`, `OrderDAO.findOpenTakeAway` / `cancelOpenTakeAway`, `CheckoutService.pay(Integer ...)`; `OrderController` edits: `takeAway` / `takeAwayOrderId`, `selectTakeAway`, nullable table in `startOrderForTable` / `loadTableOrderFromDb` / `completeOrder`, the map renders the take-away buttons, the refresh no longer auto-selects table 1 while take-away is chosen, the table-status button cancels a take-away order. The three branches that filled the order labels in `loadTableOrderFromDb` are one block (same outcomes, checked by reading); the table button building moved to `TableMapButtons` unchanged.
-- **Run here and passed:** `TakeAwayOrderTest` 7, `CheckoutServiceTest` 10, `GroupByRulesTest` 3, `I18nTest`/`MessagesTest`/`UntranslatedTextTest` (language files hold the same keys). `ControllerSizeTest`: only `CustomerController` and `ReportWindow` fail, as before. The whole main tree was compiled with the JDK's compiler and the error list compared with the uploaded zip's: the only new errors are the missing JavaFX types (`Button`, `GridPane`, `Priority`, `Label`) in the two new classes.
-- **Not run / not seen:** the till with its new buttons, a take-away order from first tap to receipt, cancelling one, two tills with take-away orders open, Maven, the JavaFX tests.
-- **Test count:** 1383 `@Test` in 203 classes (counted; `docs/RELEASE.md` said 1348 before: 7 are mine, the rest came with the earlier sessions).
-- **First things to click through:** press "Mang đi" -> tap a product -> a button "Mang đi #N" appears; open a table, go back to "Mang đi #N", the lines are still there; pay it (cash) and check the receipt says "Mang đi"; start another take-away, cancel it with the table-status button; leave the till 30 seconds on "Mang đi" and check it does not jump to table 1.
-
-## Session 135 - TODO 4.32, one order paid with two methods (2026-10-28, code, tests and texts changed; the payment box was NOT seen)
-- **The need:** a table that pays part in cash and part by transfer had to be written as one method, so the report's payment lines and the shift close's cash were wrong for that order.
-- **Rule D4 (my choice, to be confirmed):** two methods = cash + one other method. One order, at most two lines.
-- **Data:** table `order_payments` (`order_id`, `method`, `amount`, unique per order and method) in `SqliteSchema`, `MariaDbSchema` (+`DROP_ORDER`), `SqliteToMariaDbImporter` (spec and first-run clear). Rows only for a split order, written in the payment transaction by `OrderDAO.insert` and `payExistingOrder(..., cashPart)`; `OrderDAO.checkCashPart` refuses cash+cash, a part <= 0 or >= the total, and fractions. `orders.payment_method` keeps the non-cash method. `Order.cashPart` is read by a subquery (`OrderDAO.CASH_PART`) in `findById` and the history query.
-- **Readers:** `ReportDAO.paymentSplit` (union of the one-method orders and the lines; the range is bound twice), `ShiftDAO.CASH_OF_ORDER` (shift close and `employeeSales`), `PaymentText` (history column, orders CSV), `ReceiptText.paymentOf` (receipt window, thermal receipt).
-- **Screen:** `SplitPaymentPanel` (tick + cash amount + "the rest" line, only while a non-cash method is chosen; its `dueLabel` is what the transfer QR and the wallet block show) and `PaymentBoxes` (the transfer and wallet blocks moved out of `OrderController`, which went from 1758 to 1674 lines; ceiling lowered to 1674). `CheckoutService.Payment` has a `cashPart`.
-- **Texts:** 6 keys in both languages (`pos.split.*`, `order.split.invalid`).
-- **Tests added (9):** `SplitPaymentTest`. 1392 `@Test` in 204 classes.
-- **Run here:** the whole suite on real SQLite; only the failures of the untouched Session 134 tree remain (listed in TODO.md).
-- **Not run / for a human:** Maven; the payment box on a screen (choose Chuyển khoản, tick the box, type 30 000: the QR shows the rest; pay; read the receipt, the history and the shift close); MariaDB (the `order_payments` DDL and the report union query); update all tills together (an old till has no `order_payments` table to read).
-- **Not done:** a split between two non-cash methods; change for the cash part; a per-method amount column in the history CSV.
-
-## Session 136 - TODO 4.36, lock the till and switch cashier with a PIN (2026-10-28, code, tests and texts changed; the lock screen was NOT seen)
-- **The need:** two or three people share a till and stay signed in as one account, so `paid_by` and discount reasons name the wrong person; the idle logout closes everything.
-- **Rule D7 (my choice, to be confirmed):** staff only; a PIN never signs in (not from the login screen, not without a password session, not into an administrator's session); 4-6 digits, not easy ones; set by the person with their password; own throttle plus switched off after 5 wrong in a row; removed by a password reset or an anonymising; administrator = password only.
-- **Data:** `users.pin_hash`, `users.pin_failures` (`SqliteSchema.LATER_COLUMNS`, `MariaDbSchema`, importer, `LaterColumnsExistTest`); `UserDAO` PIN methods (`addPinFailure` counts in one transaction); `AccountService` reset and anonymise clear the PIN.
-- **Logic:** `service/PinRules`, `service/PinService` (`setPin`, `removeOwnPin`, `signInByPin`, `unlockWithPassword`, `cashiersWithPin`); the PIN throttle is `LoginThrottle.persistent("pin")`.
-- **Screen:** `util/TillLock` (hides and disables every window's content, keeps the `Session`, refreshes the name labels), `controller/LockScreen` (PIN mode or password mode; no cancel button; "Đăng xuất"), `controller/PinSetupDialog`, two sidebar buttons in `SidebarExtras` ("Khóa" for all, "Mã PIN" for staff), `LunaveraApplication` installs the lock screen, `IdleLogout` locks before it signs out, `SessionGuard.endSession()` (signs out without the idle message).
-- **Texts:** 31 keys in both languages (`pin.*`). **Tests added (19):** `PinRulesTest` 2, `PinServiceTest` 14, `TillLockTest` 3 (1411 `@Test` in 207 classes).
-- **Run here:** the whole suite on real SQLite; only the failures of the untouched Session 135 tree remain.
-- **Not run / for a human (the screen cannot be seen from here):** press "Khóa" on the till with a cart: the window goes blank and the lock box shows; Esc and X do nothing; a wrong PIN says how many tries are left; the right PIN of another cashier opens it and the sidebar name changes; pay a sale and check `paid_by`; let the till sit idle 15 minutes (it locks; 15 more and it signs out); on Linux check that the lock box is on top and takes the keyboard (soft modality, see `AlertUtil.configure`); an administrator's lock opens with the password; the login screen refuses a PIN.
-- **Not done:** an owner's button to remove a PIN (a password reset does it); a PIN for administrators (refused on purpose); switching without a lock; the PIN check runs on the screen thread (about 0.3 s).
-
-
-
-## Session 134 — TODO 4.38 (expenses, cash taken out of the drawer, net profit)
-- **Baseline:** the uploaded session 134 tree, which already had its own take-away code (`TakeAwayPanel`, `OrderDAO.findOpenTakeAway`). The take-away edits I had started earlier on the session 132 tree were never finished or delivered and are **not** in it.
-- **The change:** table `expenses` (SQLite and MariaDB, importer spec with `spent_on` as a date and `created_at` as a time, wipe list, `DROP_ORDER`) and `shift_closes.cash_out` (later column, MariaDB create, importer). `model/Expense`; `service/ExpenseRules` (categories, validation, `netProfit`, the D8 text); `dao/ExpenseDAO` (`add`, `delete`, `find`; permissions: administrators write any expense and delete, any signed-in person writes only drawer cash dated today); `ReportDAO.expenses(from, to)`; `util/ExpenseText` (summary lines and CSV rows); `ShiftCash.expected(opening, cashSales, cashOut)`; `ShiftDAO.cashOut(from, to)` (by `created_at`, read again inside the close transaction) and `close` stores it; `ShiftClose.cashOut` (last component); `ExpenseDialog` (`show()` for administrators, `showCashOut(onSaved)` for the shift close); a "Chi phí" sidebar button for administrators in `SidebarExtras`; `ShiftCloseDialog` shows "Tiền đã lấy ra khỏi két" with a "Ghi chi từ két" button and uses it in the expected cash; `ReportWindow` shows the two lines, adds them to the CSV and a "Chi từ két" column to the shift list. 52 texts per language file (1311 keys in both, same set, no duplicates).
-- **Decision D8** is not in the project files; built as: 6 fixed categories; an administrator writes any expense and deletes; a cashier only writes drawer cash-out, dated today; the report counts by the day typed, the shift close by the time written down; net profit = gross profit - cost of waste - expenses; ingredients already in a product's cost price are not to be entered again. Deleting an expense does not change a shift already closed (it keeps its own `cash_out`).
-- **Checked here:** the new SQL on real SQLite 3.45 with tables made from the project's own DDL (totals by category and range, newest first, drawer cash-out split correctly between two shifts by `created_at`, a non-drawer expense never counted in a shift, an old shift with null `cash_out` reads as 0); `ExpenseRules` and `ShiftCash` run for real with a small harness (net profit, the six categories, whole-dong and size checks, the three-argument `expected`); the non-UI files compile with the JDK 21 compiler (the only errors are the missing `org.sqlite` and JavaFX libraries). `ExpenseDialog`, `ShiftCloseDialog`, `SidebarExtras` and `ReportWindow` need JavaFX and were **not compiled or seen**.
-- **Tests added (19):** `ExpenseTest` 7, `ExpenseRulesTest` 5, `ExpenseTextTest` 3, `ShiftDAOTest` +3 (cash out reduces the expected cash; no cash out is as before; a cash-out belongs to the shift in which it was written), `ShiftCashTest` +1; `LaterColumnsExistTest` lists the new column. **None were run** (no Maven, JUnit or sqlite-jdbc here).
-- **For a human:** `./mvnw -B clean test`; sign in as the owner: "Chi phí" in the sidebar, write rent and a drawer expense, delete one; open the report and read "Chi phí" and "Lợi nhuận ròng", export the CSV; sign in as a cashier, "Chốt ca", press "Ghi chi từ két", see the expected cash drop; close and read the new column in the report's shift list; MariaDB (`test-mariadb` CI job) for the new table and column.
-- **Not done:** editing an expense (delete and write again); recurring expenses (rent every month); a per-month chart; moving a drawer cash-out to another shift; the Vietnamese texts were written by me and are worth a read by the owner.
-
-## Session 135 - TODO 3.13, a refund no longer changes an earlier day (2026-10-28, code, schema column and tests changed; screens not seen)
-- **Asked:** do 3.13 (D1: the rule first), `cancelled_at` in both schemas and the importer, about eight revenue and count queries in `OrderDAO` and `ReportDAO`, the dashboard and the daily chart.
-- **D1 is not written in any file**; used the usual rule named in the TODO: a sale stays on its paid day, a refund is a negative line on the day it was made. Old refunds (no `cancelled_at`) are not guessed: out of the money as before.
-- **Done:** see TODO 3.13: new `dao/SalesLedger`; `orders.cancelled_at` via `LATER_COLUMNS` (no version bump), MariaDB `CREATE TABLE`, importer; `cancelPaidOrder` writes it; 12 queries moved (`ReportDAO` x8, `OrderDAO` x2 for the dashboard, `ShiftDAO.summarize`, summary legacy count); `averageOrderValue` guard.
-- **Run here and passed:** `RefundDayRuleTest` 10 (new). Regression: the 35 database-level test classes that touch reports, orders, shifts, checkout, schema or the importer were run on the OLD and the NEW code, one JVM each: the same 12 tests fail in both (all `@Test(expected=...)` cases and shared-state cases that the stand-in runner in this sandbox does not handle: `EffectiveDayTest` 1, `OrderNotesDaoTest` 1, `PaymentTotalsTest` 6, `Section4ReportsTest` 4), nothing new fails. `GroupByRulesTest`, `I18nTest`, `MessagesTest` pass; `ControllerSizeTest` still fails only on `CustomerController` (542 / 421) and `ReportWindow` (477 / 472), as in the zip I was given.
-- **Mutation check:** making a refunded sale vanish from its own day again fails 7 of the 10 new tests.
-- **Not run / not seen:** Maven and real JUnit; MariaDB (the CI job is the proof: the new SQL is a derived table with `UNION ALL`, no new `GROUP BY` and no loose column, `GroupByRulesTest` counts unchanged); the report and dashboard windows with a negative line; 6 DB test classes that could not be compiled here (JavaFX or other libraries) were not run.
-- **Left alone on purpose:** busiest hours/weekdays, menu order, `countToday`, customer totals (see TODO 3.13).
-- **For 4.2 (audit log), not started in code this session:** `cancelled_at` exists now; `cancelled_by`, `cancel_reason` and the `audit_log` table are still to do (they can go through `LATER_COLUMNS` the same way).
-- **Test count:** 1393 `@Test` in 204 classes (counted).
-
-
-## Merge of Session 135 (TODO 3.13, refund on its own day) with Session 134 (TODO 4.38, expenses)
-- **How:** a three-way merge with the session 134 upload as the common base: files changed on one side only were taken from that side (`OrderDAO`, `SalesLedger`, `RefundDayRuleTest`, `docs/RELEASE.md` from session 135; the expenses files from this branch); the eight files changed on both sides (`CHANGELOG.md`, `TODO.md`, `progress.md`, `MariaDbSchema`, `SqliteSchema`, `SqliteToMariaDbImporter`, `ReportDAO`, `ShiftDAO`) were merged line by line. Two real conflicts, both resolved by keeping both sides: the end of `SqliteSchema.LATER_COLUMNS` (`shift_closes.cash_out` and `orders.cancelled_at`, both kept) and the end of `progress.md` (both session notes kept).
-- **What to know:** `ShiftDAO.summarize` now reads the sales ledger of session 135 (a refund counts in the shift in which it was made) and `ShiftDAO.close` subtracts the drawer cash-out of 4.38 from the expected cash: both are in the merged class. `ReportDAO` has the ledger queries and the new `expenses` query; the net profit of 4.38 is built on the gross profit of the ledger.
-- **Checked here:** no conflict marker is left anywhere; the merged DAO and schema classes compile with the JDK 21 compiler (the only errors are the missing `org.sqlite`/JavaFX libraries, as before); the merged `SqliteSchema` creates every table and every one of its 18 later columns on real SQLite 3.45 (`orders.cancelled_at` and `shift_closes.cash_out` both present, table `expenses` present); a shift window with a sale, the refund of an earlier sale made in the window and a drawer cash-out gives orders 0 (one sale, one refund), revenue 300000, cash sales 300000, cash out 150000, expected 100000 + 300000 - 150000 = 250000; the two language files still have the same 1311 keys.
-- **Not run:** the Java tests of either branch (no Maven, JUnit or sqlite-jdbc here). `./mvnw -B clean test` on the merged tree is the first thing to do; the tests most likely to show an interaction are `ShiftDAOTest`, `RefundDayRuleTest`, `ReportPatternsDaoTest`, `Section4ReportsTest` and `MariaDbSchemaTest`.
-
-## Session 135 - TODO 4.16 spending loyalty points (2026-10-28, code, tests and texts changed; the till was NOT seen)
-- **The need:** points were earned and shown with a tier, but nothing at the till could use them.
-- **Decision D5 was not in the files, so I applied this rule** (all in `LoyaltyPolicy`, change the numbers there): 1 point = 1.000đ off; at most 50% of the bill after the cashier's discount, whole points; only a customer attached to the sale; points earned on what was actually paid; a refund returns the spent points after taking the earned ones back (the 3.7 "floor at 0" stays). Please say if you want another rate or share.
-- **The change:** `orders.points_redeemed` + `orders.points_value` (later-columns list, MariaDB `CREATE TABLE`, importer); the value is also in `discount`, so every total, report and receipt keeps working; `LoyaltyPolicy` (rate, share, `Redemption`, `maxRedeemable`, `redemptionProblem`, `parsePoints`, `reasonWithPoints`); `CheckoutService.Payment` has a 7th field (the old constructors still work) and checks the rule before anything is written (staff discount limit applies to the cashier's own discount only); `OrderDAO.insert` and `payExistingOrder` (new overload) take the points with a guarded `UPDATE` in the sale's transaction; `cancelPaidOrder` returns them; payment dialog row "Dùng điểm", printed receipt line "Điểm đã dùng", 14 language keys per file (1272 each, same in both).
-- **Checked on a real MariaDB 10.11:** the guarded spend (1 row allowed, 0 refused), the give-back (capped at the maximum) and an anonymous record (0 rows).
-- **Tests added (19):** `LoyaltyRedemptionRulesTest` 6, `PointsRedemptionTest` 14; `LaterColumnsExistTest` lists the two columns. 1403 `@Test` in 205 classes.
-- **Run here (real SQLite, JDK 21, JUnit 4.13.2, a stub for `javafx.scene.image.Image`):** 22 related classes, 242 tests; 13 failures, the same 13 as on the untouched Session 134 tree with the same classes (5 `Section4ReportsTest`; 1 `TableDAOTest` test that passes alone and fails only in the big run; 7 `CustomerMergeTest`, which fail in their own set-up). `OrderController` and `ThermalReceipt` were only compiled/parsed.
-- **Not run / for a human:** Maven; the JavaFX tests; open the payment dialog with a customer who has points: look at the new row, type 10, see the total and change follow, pay, look at the receipt and the order history, refund the order and look at the customer's points; the new tests through the MariaDB driver (`test-mariadb` CI job).
-- **Not done:** a settings screen for the rate and the share; a points column in the history list and CSV; a loyalty-cost line in the report; the dashboard.
-
-
-## Merge of Session 135 (TODO 4.16, spending loyalty points) into the merged tree (3.13 + 4.38)
-- **How:** the same three-way merge as before, with the session 134 upload as the common base, between the merged tree of the previous step and the 4.16 branch. Files only the 4.16 branch changed were taken from it (`OrderController`, `Order`, `CheckoutService`, `LoyaltyPolicy`, `ReceiptText`, `ThermalReceipt`, and its two test classes `LoyaltyRedemptionRulesTest` and `PointsRedemptionTest`). Eleven files were changed on both sides; five had real conflicts, all resolved by keeping both sides: the end of the `orders` table in `MariaDbSchema` (`points_redeemed`, `points_value`, then `cancelled_at`, the same order as `SqliteSchema.LATER_COLUMNS`), the `orders` entry of the importer (columns and date list now hold both), the list in `LaterColumnsExistTest` (now also lists `orders.cancelled_at`), and the three documents `TODO.md`, `docs/RELEASE.md` and `progress.md`.
-- **The two features meet in one place and the merge composed them correctly:** `OrderDAO.cancelPaidOrder` takes back the earned points, gives back the points the customer spent (rule D5, only to a customer who is not anonymous), and sets `cancelled_at` so the refund counts on its own day (3.13), all in the one transaction.
-- **Test count corrected:** `TODO.md` and `docs/RELEASE.md` now say **1432** `@Test` methods in **209** classes, counted on this merged tree with the same method that gives the 1393/204 and 1403/205 of the two branches (it also showed that my own note for 4.38 had one test too many: `ExpenseTest` has 7, so 4.38 added 19 tests, not 20; corrected in `TODO.md` and the 4.38 note above). The sentence "passes on Windows and Linux" in `docs/RELEASE.md` is the branches' own claim; it was **not** re-verified here.
-- **Checked here:** no conflict marker is left; the merged non-UI classes compile with the JDK 21 compiler (the only errors are the missing `org.sqlite` and JavaFX libraries, including `ThermalReceipt` and `AppStyle`, which are JavaFX classes); on real SQLite 3.45 the merged schema builds with all its later columns and the columns of every table equal those of `MariaDbSchema` except the known generated `users.username_key`; an order with `points_redeemed` and `points_value` is stored and `cancelled_at` stays null until a refund; the two language files have the same 1324 keys with no duplicates.
-- **Not run:** the Java tests (no Maven, JUnit or sqlite-jdbc here), and no screen was seen. `./mvnw -B clean test` on the merged tree is the first thing to do; the tests most likely to show an interaction are `PointsRedemptionTest`, `RefundDayRuleTest`, `ShiftDAOTest`, `MariaDbSchemaTest` and `SqliteToMariaDbImporterTest`.
-
-## Merge of Session 136 (4.32 split payment + 4.36 PIN lock) with Session 135 merged2 (4.16 + 3.13 + 4.38) (2026-10-28)
-- **Inputs:** `session135` (4.16 only, already inside merged2), `session135-merged2` (4.16 + 3.13 + 4.38) and `session136` (4.32 + 4.36, on the session 134 base). Three-way merge with the session 134 upload as the common base.
-- **Conflicts resolved by hand:** `MariaDbSchema.DROP_ORDER` and the importer's `clearFirstRunData` (both new tables, `order_payments` and `expenses`); `OrderDAO.payExistingOrder` (one last overload takes the redemption and the cash part; the older ones delegate); `ShiftDAO` and `ReportDAO` (the split lines and the ledger sign together: a refund of a split order takes back each method's amount on the refund day); `CheckoutService.Payment` and `OrderController` (points spent and the cash part in one result); `SidebarExtras` (the lock and PIN buttons and the "Chi phí" button); `LaterColumnsExistTest`, the two message files, CHANGELOG, TODO, progress.
-- **Test changes made by the merge:** `SplitPaymentTest` passes the new redemption argument, and its refund test now expects what rule D1 gives (the sale stays on its day and the refund cancels it on the refund day, so each method nets to nothing, and the shift window must include the refund time). `ControllerSizeTest`: the `OrderController` ceiling is 1738, the real size of the two branches together (each branch alone was lower; it is the one ceiling that had to move, so split `OrderController` next).
-- **Run here (real SQLite, JDK 21, JUnit 4.13.2, JavaFX 11 stubbed where needed):** 1459 tests run, 24 fail; these are the same 24 that fail on the untouched `merged2` tree (CustomerController/ReportWindow ceilings, ReceiptLayoutTest, CustomerMergeTest and others). No new failure comes from the merge. **1460** `@Test` in 213 classes.
-- **Not run / not seen:** Maven, MariaDB, any screen (lock screen, payment box, expenses dialog).
+# The last 20 sessions
+
+## Session 169 - TODO 4.58, accountant-style revenue book export (2026-11-04, code and tests changed; the button and the file not opened in a window or a spreadsheet)
+- **Code:** `ReportDAO.revenueBook(from, to)` and record `BookLine` (rows of `SalesLedger.forDays()`: sales on the paid day, refunds negative on the refund day); `util/RevenueBookText` builds the CSV lines (title, shop, period, header, lines, a total per month, grand total); `controller/RevenueBookExport` is the button (file chooser, busy indicator, `ExportCsv.write`); `ReportWindow` adds it beside the discount button. Keys `book.*` in both languages.
+- **Tests added:** `RevenueBookTest` 4 (lines add up to `summary().revenue()`, refund is negative on its day, month and grand totals and escaping, an empty period).
+- **Choices:** any period, not only a month; the layout (Ngày tháng, Số phiếu, Diễn giải, Số tiền, Hình thức thanh toán) is a default, not checked with the accountant; no `.xlsx`.
+- **Not done:** the accountant's sample; the window was not seen; `ReportWindow` was already over its size ceiling in the baseline and is slightly larger.
+- **Merge points:** `ReportDAO`, `ReportWindow`, `messages_*.properties`.
+
+## Session 170 - TODO 6.70, stale lines in the notes (2026-11-04, documents only; no code changed)
+- **Fixed:** `TODO.md` 6.29 (CSS count, both dates), 6.35 (`LoginThrottle` persistence exists), header counts and the test count in section 0 (1838 `@Test` in 251 classes, counted today); `COMPLETE.md` header count, the Session 46 "login delay in memory" note, 2.66's reason note; `progress.md` Sessions 110 (root claim) and 137 (4.2 audit log).
+- **Checked, nothing to fix:** 2A.24 and 2.66 no longer say what the scan quoted; the `refunds.reason` and `orders.cancel_reason` columns exist in the schema.
+- **Not done:** no re-count of figures in older session notes; the counts are by `grep` of `[x]` and `[ ]` marks, which also counts boxes inside sub-lists.
+- **Merge points:** `TODO.md`, `COMPLETE.md`, `progress.md` (all three change every session).
+
+## Session 171 - TODO 6.69, a test that every table is in docs/DATABASE.md (2026-11-04, test and document changed; no program code)
+- **Test:** `EveryTableIsDocumentedTest` (2): reads the table names from `SqliteSchema.java` and `MariaDbSchema.java` and checks each is a whole word in `docs/DATABASE.md`; a second test shows the word check (a longer name does not count). It reads the files from the project folder, as `mvn test` runs there.
+- **Document:** `docs/DATABASE.md` section 5 now describes `audit_log`; the other three tables of the scan were already named.
+- **Not done:** only the name is checked, not the columns.
+- **Merge points:** `docs/DATABASE.md`, `TODO.md`, `COMPLETE.md`, `progress.md`.
+
+## Session 172 - TODO 6.68, the standard repository files (2026-11-04, files and one test added; no program code)
+- **Added:** `.editorconfig`, `SECURITY.md`, `.github/pull_request_template.md`, `.github/ISSUE_TEMPLATE/bug_report.md`, `feature_request.md`, `config.yml`; `RepositoryFilesTest` (3).
+- **Choices:** the settings follow what the files hold (LF everywhere except `.cmd`/`.bat`, 4-space Java); the PR template lists the shared files (schemas, importer, both message files, notes) because that is where merges meet; no contact e-mail in `SECURITY.md` because the project has none.
+- **Not done:** not seen on GitHub; no `CONTRIBUTING.md`.
+- **Merge points:** none of the program files; `TODO.md`, `COMPLETE.md`, `progress.md`.
+
+## Session 173 - TODO 6.53, the packaged program's name (2026-11-04, one test added; no program code, `pom.xml` already had the names)
+- **Found:** `pom.xml` already names the launcher, image and zip `lunavera` (Session 95) and `docs/PACKAGING.md` quotes those names; nothing was left to rename.
+- **Test:** `PackagedNameTest` (2) pins the three pom settings and the names in the packaging notes.
+- **Not done:** `jpackage` installer (needs Windows + WiX); the jlink plugin run (Maven and JavaFX 21 are not available here).
+- **Merge points:** `TODO.md`, `COMPLETE.md`, `progress.md`.
+
+## Session 174 - TODO 6.44, where the starter photos come from (2026-11-04, README only; the item stays open)
+- **Done:** read the metadata of the 33 photos, the logo and the login background (Pillow for EXIF/JFIF, `strings` for C2PA). Result in the README: 3 photos (`nuoc-ep-cam.jfif`, `nuoc-ep-tao.jfif`, `tra-dao.jfif`) carry Google generative-AI content credentials and SynthID; none of the other 30 files nor the logo and background carry author, licence or source.
+- **Not done (needs the owner):** the three-row table (who made them, on what right, may they be published) is still "to be written"; nothing was guessed. If the three AI-made files are not wanted in a shared copy, replacing them needs a code change (`MenuSeedData` names every file).
+- **Merge points:** `README.md`, `TODO.md`, `progress.md`.
+
+## Session 175 - TODO 6.41, no fixed shop name in the receipt layout (2026-11-04, one FXML changed; receipt window not seen)
+- **Changed:** `donthanhtoan.fxml`: the fixed text "Lunavera Coffee" is gone from `shopNameLabel` and from `footerShopNameLabel` (both are filled in `HoaDonController.initialize` from `ShopSettings.cachedName()`).
+- **Tests:** `ReceiptLayoutTest.theFilledInValueLabelsAreEmptyInTheLayout` (a baseline failure) passes now; the 30 receipt tests pass.
+- **Merge points:** `donthanhtoan.fxml`, `TODO.md`, `COMPLETE.md`, `progress.md`.
+
+## Session 156 - TODO 4.56: "the same as last time" for regulars (2026-11-03, code, tests, texts and documents changed)
+- **Code:** `OrderDAO.lastPaidOrder` (+ `OrderService.lastOrderOf`), `Cart.addMany`, pure `RepeatOrder`, `OrderController.repeatLast`, new `controller/PosCustomerBox` (the customer boxes moved out of the controller, plus the button); `OrderController` 1,531 to 1,447 lines, ceiling set to 1,447. 8 keys in both languages.
+- **Run here:** the two SQL statements in real SQLite (5 checks); `RepeatOrderTest` 13 passed (3 breaks each failed it). **Not run / not seen:** the 2 database tests, the button and the moved customer boxes on screen.
+- **Owner's answer still needed:** is the button wanted. Easy to remove (one method in `PosCustomerBox`).
+
+## Session 157 - TODO 2.83, printing off the screen thread (2026-11-03, code, tests, texts and documents changed)
+- `PrintRunner` (+ `PrintRunnerTest` 7), `HoaDonController.handlePrint` split (`jobOf`, `showPrintOutcome`, `offScreenPage`), `PrintingOffTheScreenThreadTest` 2; `printButton` field added (the FXML id had none). Wide-paper receipts are now printed as a picture so the node is not in a window; roll receipts are unchanged. No printer in the sandbox: the real print path was not run.
+- Full suite: 1,847 tests, the same 17 failures of 2.86/2.90 (one of mine was found in the full run: `FxmlControllerCheckTest` listed `printButton` as unused; fixed by removing it from the list).
+
+## Session 158 - TODO 4.60, the pay estimate (2026-11-03, code, tests, texts and documents changed)
+- `ShopRules.Values` grew to 13 numbers (`salaryHourly`, `monthlyHours`; the older 7- and 11-number constructors still work), flags `rulesalary:` / `rulehours:`, a ComboBox and a field in `SettingsDialog`, `EarningsRules`, `TimeClockDAO.salaries()`, two columns and a note in `TimeClockDialog` (width 840). Tests: `EarningsRulesTest` 7, `EarningsEstimateTest` 3, `ShopRulesMoreTest` +2.
+- The question of the item (is `salary` monthly or hourly?) is a setting, default monthly; the owner should confirm. The CSV of 4.46 is not built, so 4.60's CSV half waits for it.
+- Full suite: 1,859 tests, the same 17 failures of 2.86/2.90, no new one; `ScreenFitCheck`: only the 6 data cells per language (the first run found my new "Rate per hour" column too narrow and the dialog too narrow for five columns; both fixed).
+
+## Session 176 - TODO 3.83, text cut through an emoji (2026-11-04, code and tests changed; no screen involved)
+- **Code:** new `util/TextClip.clip`; used in `OrderNote`, `StockRules`, `AuditRules`, `PaymentDetails`, `SecurityLog`, `TransferQrGuard`, `LoginAttemptsDAO`.
+- **Tests added:** `TextClipTest` 8.
+- **Choices:** limits stay in Java chars (matches the columns and `TextLimits`); an emoji at the limit is dropped whole.
+- **Not done:** the screens still count an emoji as 2 characters when they refuse a long paste.
+- **Merge points:** the seven classes above (one line each), `TODO.md`, `COMPLETE.md`, `progress.md`.
+
+## Session 177 - TODO 4.53, print or save the shift-close sheet (2026-11-05, tests, one fix and the four items first left out; no printer or window involved)
+- **Found in the zip (`Lunavera_Coffee_4_53_wip`):** the feature itself was in place: `service/ShiftSheet` (pure lines, `csvLines`, `csvBlock`, `fileName`), `util/ShiftSheetPage` (draws and prints through `PrintRunner` and `Async`), `controller/ShiftSheetActions` (box after a close, reprint and save buttons under the list in `ReportWindow`), `ShiftDAO.sheetExtras`, the shift block in the report CSV, 39 `shiftsheet.*` keys in both languages. Missing: the tests and the three documents.
+- **Then the four items first left out were done:** (1) **PDF:** new `util/SimplePdf` (plain PDF 1.4, one Flate RGB picture on A4, no library) and `ShiftSheetPage.pdf(lines)` (snapshot on the screen thread); `ShiftSheetActions.save` offers PDF and CSV filters, the name or the filter decides, the extension is added when missing (`ShiftSheet.savesAsPdf`, `withExtension`, `fileName(close, ext)`). (2) **A button on every row:** `listButtons` now also adds a column with Reprint and Save per row (the pair under the list stays). (3) **A database test for an order paid with two methods** (per-method split, cash part of a refund). (4) **Discounts per cashier:** `ShiftSheet.DiscountShare`, a seventh part of `Extras` (the old six-part constructor stays), `ShiftDAO.discountsByPerson` (same grouping as the shift's per-employee totals: `COALESCE(paid_by, employee_id)`), a block under the discounts line, 6 more keys (`shiftsheet.discounts.by`, `person.line`, `person.unknown`, `row.reprint`, `row.save`, `col.actions`); the save button now reads "Save the sheet (PDF or CSV)".
+- **Tests added (71):** `ShiftSheetTest` 29, `SimplePdfTest` 13 (util), `ShiftSheetPrintingSourceTest` 13 (controller, reads the sources), `ShiftSheetDatabaseTest` 16 (dao, real database).
+- **Run here:** all but the database test, with a stand-in JUnit runner on JDK 21 (no Maven, JavaFX or SQLite driver in this environment): all passed. Deliberate breaks: the old CSV label code, printing without `Async`, calling `printPage` directly, and reading the database on the screen thread each fail them. A PDF from `SimplePdf` passed `qpdf --check`, `pdfinfo` (one A4 page) and `pdftoppm` (renders; red and blue in the right order).
+- **Not run:** `ShiftSheetDatabaseTest` compiles against the sources (no unresolved symbol except the missing SQLite driver in the main code) but was not run. The ledger statements behind its scenarios (refund after the close, cash and card refund, a refund of an earlier shift's sale, discounts, per method against the shift's revenue and cash, split payments and their refund, discounts per cashier incl. the all-refunded and the no-cashier cases, a quiet window, a later refund, gift-card moves) were replayed in real SQLite 3.45 on the project's table definitions and gave exactly the numbers the tests expect. The cashier-may-read test has no SQL and was not replayed. The JavaFX parts (`ShiftSheetPage.pdf`, the row column, the file dialog) could not be compiled here: only read against the JavaFX API from memory, and pinned by the source test.
+- **Fix:** `ShiftSheet.csvLines` drops the leading "+ " or "- " of a label (new private `csvLabel`). `Csv.cell` treats "- Cash (9 orders)" and "+ Cash taken (sales, gift cards)" as formulas and put an apostrophe in front, which Excel shows; the number in the next cell already carries its sign.
+- **Choices:** the stored close is the shift's money exactly as confirmed; only refunds, discounts (and who gave them), gift cards and per-method takings are re-read for the same window, from the same ledger as the shift totals, so a refund made after the close is in the NEXT shift and a reprint equals the first print. "Who gave the discount" = the cashier who took the payment, not the person in the audit log (4.2). The sheet follows the language on screen; the customer's receipt stays English. The PDF is a picture of the page (exact Vietnamese, no font to embed; text not selectable); the CSV is the file for a spreadsheet.
+- **Not done / limits:** nothing was drawn or printed here (no JavaFX): the box after a close, the row buttons, the file dialog and a PDF opened in a viewer were not seen. A file saved under a name with no extension gets one added after the system's overwrite question. No selectable-text PDF. `ReportWindow` is exactly at its size ceiling (518 lines; this session did not touch it).
+- **Housekeeping noticed, not changed:** `CHANGELOG.md` has several empty `### Added` headings in a row under *Unreleased* (left over from merges); the Release-status block at the top of this file and the test count in `TODO.md` section 0 are older than the last sessions.
+- **Merge points:** `service/ShiftSheet`, `dao/ShiftDAO` (`sheetExtras`, new `discountsByPerson`), `util/SimplePdf` (new), `util/ShiftSheetPage` (`pdf`), `controller/ShiftSheetActions`, the two `messages_*.properties` (6 keys added, the save button renamed), the four test files, `TODO.md` (item 4.53 and one line in section 0), `CHANGELOG.md`, `progress.md`.
+- **Merged (session 183):** this entry is the one of `Lunavera_Coffee_4_53_done_v2`, which also did the four items the first version left out (PDF, a button on every row, the two-method database test, discounts per cashier). The later rewrite of `ShiftSheetDatabaseTest.readingItTwice...` (session 180) and the `ShiftSheetPage` entry in `NoJavaFxInRulesTest` are kept.
+
+## Session 178 - TODO 4.57, clear the test data before opening day (2026-11-05, code, tests, texts and documents changed)
+- **Found in the zip (`Lunavera_Coffee_4_53_done`):** nothing deleted orders; `BackupService.createBeforeCleanupBackup` (for pictures) was the model for the backup step.
+- **Code:** `service/StartSellingRules` (pure: the emptied and kept table lists, the name check), `service/StartSellingService` (`preview`, `start`: admin check, name check, backup, one transaction, one audit line), `controller/StartSellingDialog` (counts, tick-box for customers, name box, Cancel is the default button), a new section and button in `SettingsDialog` (the dashboard controller is at its size ceiling, so nothing was added there), `BackupService.createBeforeOpeningBackup` (prefix `before-opening-`, never pruned), `AuditAction.SALES_STARTED`, `AuditTarget.SHOP`, `AuditText` (target and detail), 20 keys in both languages.
+- **Tests added (19):** `StartSellingRulesTest` 10, `StartSellingDatabaseTest` 8, `AuditTextTest` +1.
+- **Run here (JDK 21, JUnit 4 from the Gradle lib, stand-in `org.sqlite` classes, no JavaFX, no Maven access):** `StartSellingRulesTest` 10 passed; `I18nTest` (14 of 15; the failing `everyKeyUsedInJavaCodeExists` names `expense.cat.` in `ExpenseRules`, bug 2.86, not this change), `MessagesTest`, `AuditTextTest`, `DialogFitUsageTest`, `ControllerSizeTest`, `EveryTableIsDocumentedTest`, `UntranslatedTextTest` passed. The wipe statements were replayed in real SQLite 3.53 (foreign keys on) on the project's table definitions: all 13 tables empty, tables freed, voucher count 0, points 0, customers removed with the login unlinked, no foreign-key violation, and without freeing the tables first the delete of the orders fails (so the first statement is needed).
+- **Bug found by my own test:** the fallback name (a shop with no name set) was compared without lower-casing, so it could never be typed; fixed in `StartSellingRules.nameMatches`.
+- **Not run:** `StartSellingDatabaseTest` (compiles against the sources; no SQLite driver here); nothing on MariaDB; the window and the new Settings section were not seen.
+- **Choices:** typed shop name (capitals and extra spaces ignored) rather than a fixed word; customers kept by default with their points set to 0, the second tick-box removes them and unlinks any old login (`users.customer_id` is a foreign key); stock numbers and the order-number counter are NOT reset (on MariaDB resetting an auto-increment commits by itself and would break the one transaction); the audit log is emptied and holds only the new line; an order open on another till is removed too, and the window says to close the other tills first.
+- **Housekeeping:** the three empty `### Added` headings in a row in `CHANGELOG.md` (noted in Session 177) are now one heading with the new entry.
+- **Merge points:** `SettingsDialog` (one section), `BackupService` (one method and one constant), `AuditAction`, `AuditTarget`, `AuditText`, both message files (appended at the end), `docs/DATABASE.md`, `docs/RELEASE.md`, `TODO.md`, `CHANGELOG.md`, `progress.md`.
+
+## Session 179 - TODO 4.61, free drinks for the staff, the owner and tastings (2026-11-05, code, tests, texts and documents changed) [parallel to 4.59 and 5.38, from `Lunavera_Coffee_4_61_done`]
+- **Found in the zip (`Lunavera_Coffee_4_57_done`):** the only way to give a drink away was a discount (a cashier's 10 % limit, an administrator's typed reason), so it showed up in the discount reports; nothing marked a bill as free.
+- **Rule D26 (my choice; the item said "ask the owner what the rule is first" and the request was "do 4.61", so I decided and kept every number in one place):** a free drink is a way of CLOSING a bill with no money, not a discount and not waste. Three kinds: a member of staff (a named person), the owner, a tasting (a note says who). An administrator has no limit. A cashier may give staff and owner drinks, at most **2 cups per person per shop day** (the owner counts as one person; a new box in Settings, 0 = cashiers may give none); a tasting is for an administrator only and needs a note (it has no person to count against). Nothing else can be on the bill (no discount, voucher, points, gift card, split, customer). The customer attached at the till is left out.
+- **Design:** `PaymentMethod.COMPLIMENTARY`; the bill is saved paid with every line at 0 (so revenue, discounts and the average bill do not move, stock is taken as for a sale, and the gross profit falls by what the drinks cost); the menu price is kept in `orders.complimentary_value`; three more new columns `complimentary_kind`, `complimentary_for`, `complimentary_note` (both databases; old SQLite/MariaDB files get them through `SqliteSchema.LATER_COLUMNS` on start).
+- **Code:** `service/ComplimentaryRules` (pure: kinds, the check, zero-price copies of the lines, note cleaning), `dao/ComplimentaryDAO` (`record` runs inside the payment's transaction: active-person check, the limit counted again from the database with `FOR UPDATE` on MariaDB, the four columns, one audit line; `totals` and `byPerson` for the report), `OrderDAO.payExistingOrder` got an overload with a before-commit hook (the existing `insert` already had one), `CheckoutService.Payment` got a `complimentary` field (the old 12-argument constructor stays) and `payComplimentary`, `controller/ComplimentaryDialog` (the window), a button in `quanlydonhang.fxml` (no fx:id) routed through the same guards as Pay (`OrderController.beginPayment`), `util/ComplimentaryText` (report line and CSV rows), `ReportDAO.Summary` carries the free totals (its 4-argument constructor stays; the average bill leaves free bills out), `ShopRules` / `ShopSettings` / `SettingsDialog` (the box, 14th rule, audited like the others), `AuditAction.COMPLIMENTARY_GIVEN` + `AuditText`.
+- **Guards:** a free bill is not offered as a split method (`SplitPaymentPanel`) or a refund method (`RefundLinesDialog`); `RefundDAO.refund` refuses its lines (no money was paid); cancelling the whole bill (administrator) works and gives the stock and the allowance back.
+- **Size ceilings:** `OrderController` 1445 -> 1438 (four long comments shortened to make room), `ReportWindow` still 518 (two pairs of lines joined).
+- **Tests added (about 31):** `ComplimentaryRulesTest` 18 (pure), `ComplimentaryDatabaseTest` 9 (real database, plain scenarios: marking, limit per person, owner as one person, administrator unlimited, tasting, inactive person, cancel gives back, no line refund, nothing else on the bill, report figures, audit line), `ComplimentarySourceTest` 5.
+- **Run here (JDK 21 compiler module, a stand-in JUnit runner, stand-in `org.sqlite` classes, no JavaFX, no Maven access):** the main sources outside the screens compile; `ComplimentaryRulesTest` 18 passed; `ComplimentarySourceTest` 5, `FxmlControllerCheckTest`, `ControllerSizeTest`, `AuditTextTest`, `MessagesTest`, `UntranslatedTextTest`, `DialogFitUsageTest`, `AppClockUsageTest`, `EveryTableIsDocumentedTest`, `PaymentRulesTest`, `SalesPatternsTextTest` passed (109 in all); `I18nTest` 14 of 15, the failing `everyKeyUsedInJavaCodeExists` (`ExpenseRules: expense.cat.`) fails the same way on the untouched `4_57_done` zip. The exact report and limit SQL was captured from the DAO and replayed in real SQLite on the project's table definitions with a free staff bill, a free owner bill (no cost) and a cancelled free bill: bills 2 / value 120.000, cups 3 / cost 24.000 / 1 cup without cost, per person correct, the limit counts only paid bills.
+- **Not run:** `ComplimentaryDatabaseTest` (compiles; no SQLite driver here); nothing on MariaDB (`FOR UPDATE` and the new columns untried); `ComplimentaryDialog`, the new button and the Settings box were not compiled against JavaFX or seen on a screen (the files parse; only JavaFX symbols are missing).
+- **Known limits:** free bills still count in "orders" (the dashboards, the per-method row "Free drink" with 0 revenue) and the cups in the product lists, only the average bill leaves them out; the shift-close sheet has no free-drink line; no separate window per person, the CSV block and the audit log have that. A receipt window still opens after a free drink (it shows 0).
+- **Merge points:** `PaymentMethod`, `AuditAction`, `AuditText`, `CheckoutService`, `OrderDAO` (one overload, one line before the commit), `RefundDAO`, `ReportDAO.Summary`, `ReportWindow` (two statements), `OrderController` (`handlePayment` and the success callback), `quanlydonhang.fxml`, `ShopRules`, `ShopSettings`, `SettingsDialog`, `SqliteSchema`, `MariaDbSchema`, both message files (appended), `docs/DATABASE.md`, `TODO.md`, `CHANGELOG.md`, `progress.md`.
+- **Merged (session 183):** taken in unchanged. Its base was `4_57_done`; the shared files were merged three-way (`OrderDAO`, `SqliteSchema`, `SettingsDialog`, `SplitPaymentPanel`, `OrderController`) and the other merge points taken as they are, because neither later branch had changed them. The text of its `OrderDAO` hook sits next to session 180's `+ 1` fix in the SQL (the Java `+ 1` of its base is not there, correctly).
+
+## Session 180 - checking 4.53 in the zip, then TODO 5.40, offer the local file when there is no database server (2026-11-05, code, tests, texts and documents changed)
+- **Checked (zip `Lunavera_Coffee_5_38_done`):** compiled the whole tree and ran every test class in one JVM (JDK 21, JavaFX 11 jars as a stand-in, sqlite-jdbc 3.46.1.3 as in the pom, time zone Asia/Ho_Chi_Minh): 2425 tests, 40 failures at first. Everything of 4.53 was there (tests, notes). Two things were wrong in 4.53's neighbourhood: `ShiftSheetDatabaseTest.readingItTwice...` inserted a NEW sale between its two reads (rewritten: an existing sale is refunded after the first read), and `NoJavaFxInRulesTest` did not list `ShiftSheetPage` (and `FitFix`, from another item).
+- **Bugs found by running the database tests for the first time, fixed:** (1) `OrderDAO.nextQueueNumber` returned `MAX(queue_no)` with no `+ 1` (its own comment says one more): the first take-away order of a day got number 0 and the second could not be saved (unique key); (2) the SQLite `vouchers` table had no `once_per_customer` column (MariaDB and `VoucherDAO` have it): every voucher lookup failed on SQLite, 48 tests; now in `SqliteSchema.LATER_COLUMNS`, so old files get it; (3) `ExpenseRules` wrote `I18n.t("expense.cat." + code)`, which `I18nTest` reads as the key `expense.cat.`: the key is now built in a variable.
+- **5.40, code:** `config/LocalFileChoice` (pure: `applies` = server dialect, no settings file, no `lunavera.db.type` property; `write` = `database.properties` with `db.type=sqlite`, `CREATE_NEW`), `AlertUtil.errorWithChoice` (Close is the default and cancel button), `StartupProblem.localFileOffer`, `LunaveraApplication` (`openDatabase()` shared by `init()` and the retry; `offerLocalFile()`: write, `DatabaseConfig.reset()`, open again, clear `startupError`; a closed box ends the program with no second box; a failed retry falls through to the ordinary box with the new cause), 5 `startup.local.*` keys in both languages, notes in `docs/DATABASE.md`, `docs/PACKAGING.md`, `database.properties.example`.
+- **Tests added (16):** `LocalFileChoiceTest` 9 (rule, file, never replaces a file, end to end on a temporary folder: no settings file gives the server dialect, after the write and a reset the local database is built), `StartupLocalFileTest` 7 (offer text in both languages, order of the start-up code, Close is the default button, `CREATE_NEW`). Three deliberate breaks (overwrite, ignore an existing settings file, open before reset) each failed them.
+- **Result now:** 2441 tests, 14 failures, none new and none in the files of 4.53 or 5.40. The 14: `TextColumnsTest` and `GroupByRulesTest` (new TEXT columns and GROUP BYs must be registered), `ProductOptionsDaoTest` 3 + `OrderOptionsDaoTest` + `OrderNotesDaoTest` (saving product options is refused with a cost message), `StartSellingDatabaseTest` 4 (unique key on `time_clock.user_id`), `StaffAnonymiseScrubTest` 2 (a booking more than 60 days ahead; an admin check), `VietnameseTextWriteTest` (an ingredient name comes back decomposed). Not looked into; some may be this sandbox.
+- **Not run:** Maven itself (a hand-made runner with the pom's driver version), real JavaFX 21, MariaDB, any screen or printer; the start-up box, the two buttons and the real no-server start were not seen. **Decision to confirm:** the button is offered on ANY start-up failure when there is no settings file and nobody set the type, not only a refused connection.
+
+## Session 181 - TODO 5.44, text that can be made bigger (2026-11-05, code, tests, generated sheets, texts and documents changed)
+- **Starting point:** `Lunavera_Coffee_5_40.zip` (has 4.57; my unfinished work on 4.59 from the earlier turn is NOT in it and was dropped: 4.59 is still open).
+- **Counted again:** 162 font-size rules in the sheets use pixels, 50 of them 10 or 11 px (TODO said 62 of 218 by another count); ten more are written in Java strings.
+- **Design:** a global second sheet was the first idea and was dropped after checking the sheets: 22 selectors have different sizes on different screens (`.page-title` 22/24/25), so one sheet would have given every screen the last file's size. Instead `service/LargeTextSheet` generates `css/large/<sheet>.css` beside every sheet with sizes (11 files, `receipt.css` skipped) plus `large/base.css`; `AppStyle.syncLargeText` adds the companions of the sheets a window loads (scene and root) while `TextSize.isLarge()`; `AppStyle.refreshAll` updates open windows; `TextSize.size(px)` for the ten code styles; a row in `SettingsDialog`; 5 keys in both languages.
+- **Tests added (13):** `LargeTextSheetTest` 8, `TextSizeTest` 5. **Run here:** both pass; `I18nTest`, `MessagesTest`, `UntranslatedTextTest`, `CssSharedRulesTest`, `FxmlControllerCheckTest`, `DialogFitUsageTest`, `ControllerLayeringTest`, `ControllerSizeTest`, `ScreensStayAwayFromTheDatabaseTest` pass. **Not mine:** `CssRulesTest.everyClassAndIdInTheStyleSheetsIsUsedBySomething` overflows the stack here on the untouched 5.40 code too (JVM stack of this sandbox; passes with `-Xss4m`), `ServiceLayerRulesTest` needs the SQLite driver.
+- **A real catch by an existing test:** `UntranslatedTextTest` found Vietnamese text in a Java string of my generator header; changed to English and regenerated.
+- **Not run / not seen:** `AppStyle` and `SettingsDialog` were never compiled (no JavaFX); nothing drawn; whether `!important` beats the FXML sheets and Modena, and whether the fixed-size screens fit, is unknown.
+- **Merge points:** `AppStyle` (companions, root listener), `SettingsDialog` (one section, one line after Save), ten one-line style edits (`OrderController`, `NoteNameCell`, `CartPromotionNote`, `PromotionPanel`, `SplitPaymentPanel`, `CapsLockWarning`), both message files (appended), `css/large/` (generated, 12 files), `TODO.md`, `CHANGELOG.md`, `progress.md`.
+
+## Session 182 - TODO 6.71, the staff guides and the README feature list (2026-11-05, documents, a test and one folder of help pages added; no program code changed)
+- **Found in the zip (`Lunavera_Coffee_5_44_done`):** the README had no list of what the program does (no gift cards, clock-in, vouchers, bookings, birthdays, loyalty, PIN lock), and `docs/` and the resources held no guide. Facts for the pages were taken from the program itself, not from the notes: the sidebar buttons from `SidebarExtras`, the labels from `messages_vi.properties` / `messages_en.properties`, who may do what from the `isAdmin()` checks (order history cancel and refund, customer merge, anonymise, export, phone change, gift card list, the audit and expense and voucher and promotion buttons are the owner's), and the defaults from `ShopRules.DEFAULTS` and `TimeClockRules.forgottenAfterHours()`.
+- **Written:** `src/main/resources/help/cashier_vi.md`, `cashier_en.md`, `owner_vi.md`, `owner_en.md` (11 and 10 sections, about 850 words each), the "What it does" list and the links in `README.md` (also a row in the folder map), `HelpPagesTest` (5 tests: the four pages exist, the README lists the features and links every page, every **bold** button name is inside some text of the message file of the same language, the two languages have the same sections, the quoted figures match the code).
+- **Run here (JDK 21, no Maven, no JUnit):** `HelpPagesTest` parses with no syntax error and its checks were replayed in a script: the 44 and 51 button names of each language are all inside message texts, the section counts match (11/11 and 10/10), the README order and links hold, the figures are in the pages. **Not run:** the JUnit test itself, and no person has read the guides yet.
+- **Not done (the item stays open in `TODO.md`, rewritten to what is left):** the "Hướng dẫn / Help" button that opens the page inside the program, the screenshots (no JavaFX or screen here), and a try-out by a real cashier. Also not covered by the guides: the English owner guide names a few buttons by their English text only because `HelpPagesTest` accepts any text that contains the name, so a name that is a loose part of a longer text would pass; tighten it if a guide ever names a button wrongly.
+- **Choices (say if any is wrong):** the pages live in `src/main/resources/help/` (as the item says, so a button can open them later) and not in `docs/`; the guides say "ask the owner" for what a cashier cannot do; defaults are quoted as defaults (the owner can change them in Settings); the cashier guide tells the cashier to report a forgotten clock-out and a lost gift card code to the owner.
+- **Merge points:** `README.md`, `TODO.md` (item 6.71 only), `CHANGELOG.md`, `progress.md`, the new `help/` folder and `HelpPagesTest`.
+
+## Session 179 - TODO 4.61, free drinks for the staff, the owner and tastings (2026-11-05, code, tests, texts and documents changed) [parallel to 4.59 and 5.38, from `Lunavera_Coffee_4_61_done`]
+- **Found in the zip (`Lunavera_Coffee_4_57_done`):** the only way to give a drink away was a discount (a cashier's 10 % limit, an administrator's typed reason), so it showed up in the discount reports; nothing marked a bill as free.
+- **Rule D26 (my choice; the item said "ask the owner what the rule is first" and the request was "do 4.61", so I decided and kept every number in one place):** a free drink is a way of CLOSING a bill with no money, not a discount and not waste. Three kinds: a member of staff (a named person), the owner, a tasting (a note says who). An administrator has no limit. A cashier may give staff and owner drinks, at most **2 cups per person per shop day** (the owner counts as one person; a new box in Settings, 0 = cashiers may give none); a tasting is for an administrator only and needs a note (it has no person to count against). Nothing else can be on the bill (no discount, voucher, points, gift card, split, customer). The customer attached at the till is left out.
+- **Design:** `PaymentMethod.COMPLIMENTARY`; the bill is saved paid with every line at 0 (so revenue, discounts and the average bill do not move, stock is taken as for a sale, and the gross profit falls by what the drinks cost); the menu price is kept in `orders.complimentary_value`; three more new columns `complimentary_kind`, `complimentary_for`, `complimentary_note` (both databases; old SQLite/MariaDB files get them through `SqliteSchema.LATER_COLUMNS` on start).
+- **Code:** `service/ComplimentaryRules` (pure: kinds, the check, zero-price copies of the lines, note cleaning), `dao/ComplimentaryDAO` (`record` runs inside the payment's transaction: active-person check, the limit counted again from the database with `FOR UPDATE` on MariaDB, the four columns, one audit line; `totals` and `byPerson` for the report), `OrderDAO.payExistingOrder` got an overload with a before-commit hook (the existing `insert` already had one), `CheckoutService.Payment` got a `complimentary` field (the old 12-argument constructor stays) and `payComplimentary`, `controller/ComplimentaryDialog` (the window), a button in `quanlydonhang.fxml` (no fx:id) routed through the same guards as Pay (`OrderController.beginPayment`), `util/ComplimentaryText` (report line and CSV rows), `ReportDAO.Summary` carries the free totals (its 4-argument constructor stays; the average bill leaves free bills out), `ShopRules` / `ShopSettings` / `SettingsDialog` (the box, 14th rule, audited like the others), `AuditAction.COMPLIMENTARY_GIVEN` + `AuditText`.
+- **Guards:** a free bill is not offered as a split method (`SplitPaymentPanel`) or a refund method (`RefundLinesDialog`); `RefundDAO.refund` refuses its lines (no money was paid); cancelling the whole bill (administrator) works and gives the stock and the allowance back.
+- **Size ceilings:** `OrderController` 1445 -> 1438 (four long comments shortened to make room), `ReportWindow` still 518 (two pairs of lines joined).
+- **Tests added (about 31):** `ComplimentaryRulesTest` 18 (pure), `ComplimentaryDatabaseTest` 9 (real database, plain scenarios: marking, limit per person, owner as one person, administrator unlimited, tasting, inactive person, cancel gives back, no line refund, nothing else on the bill, report figures, audit line), `ComplimentarySourceTest` 5.
+- **Run here (JDK 21 compiler module, a stand-in JUnit runner, stand-in `org.sqlite` classes, no JavaFX, no Maven access):** the main sources outside the screens compile; `ComplimentaryRulesTest` 18 passed; `ComplimentarySourceTest` 5, `FxmlControllerCheckTest`, `ControllerSizeTest`, `AuditTextTest`, `MessagesTest`, `UntranslatedTextTest`, `DialogFitUsageTest`, `AppClockUsageTest`, `EveryTableIsDocumentedTest`, `PaymentRulesTest`, `SalesPatternsTextTest` passed (109 in all); `I18nTest` 14 of 15, the failing `everyKeyUsedInJavaCodeExists` (`ExpenseRules: expense.cat.`) fails the same way on the untouched `4_57_done` zip. The exact report and limit SQL was captured from the DAO and replayed in real SQLite on the project's table definitions with a free staff bill, a free owner bill (no cost) and a cancelled free bill: bills 2 / value 120.000, cups 3 / cost 24.000 / 1 cup without cost, per person correct, the limit counts only paid bills.
+- **Not run:** `ComplimentaryDatabaseTest` (compiles; no SQLite driver here); nothing on MariaDB (`FOR UPDATE` and the new columns untried); `ComplimentaryDialog`, the new button and the Settings box were not compiled against JavaFX or seen on a screen (the files parse; only JavaFX symbols are missing).
+- **Known limits:** free bills still count in "orders" (the dashboards, the per-method row "Free drink" with 0 revenue) and the cups in the product lists, only the average bill leaves them out; the shift-close sheet has no free-drink line; no separate window per person, the CSV block and the audit log have that. A receipt window still opens after a free drink (it shows 0).
+- **Merge points:** `PaymentMethod`, `AuditAction`, `AuditText`, `CheckoutService`, `OrderDAO` (one overload, one line before the commit), `RefundDAO`, `ReportDAO.Summary`, `ReportWindow` (two statements), `OrderController` (`handlePayment` and the success callback), `quanlydonhang.fxml`, `ShopRules`, `ShopSettings`, `SettingsDialog`, `SqliteSchema`, `MariaDbSchema`, both message files (appended), `docs/DATABASE.md`, `TODO.md`, `CHANGELOG.md`, `progress.md`.
+- **Merged (session 183):** taken in unchanged. Its base was `4_57_done`; the shared files were merged three-way (`OrderDAO`, `SqliteSchema`, `SettingsDialog`, `SplitPaymentPanel`, `OrderController`) and the other merge points taken as they are, because neither later branch had changed them. The text of its `OrderDAO` hook sits next to session 180's `+ 1` fix in the SQL (the Java `+ 1` of its base is not there, correctly).
+
+## Session 179 - TODO 4.61, free drinks for the staff, the owner and tastings (2026-11-05, code, tests, texts and documents changed) [parallel to 4.59 and 5.38, from `Lunavera_Coffee_4_61_done`]
+- **Found in the zip (`Lunavera_Coffee_4_57_done`):** the only way to give a drink away was a discount (a cashier's 10 % limit, an administrator's typed reason), so it showed up in the discount reports; nothing marked a bill as free.
+- **Rule D26 (my choice; the item said "ask the owner what the rule is first" and the request was "do 4.61", so I decided and kept every number in one place):** a free drink is a way of CLOSING a bill with no money, not a discount and not waste. Three kinds: a member of staff (a named person), the owner, a tasting (a note says who). An administrator has no limit. A cashier may give staff and owner drinks, at most **2 cups per person per shop day** (the owner counts as one person; a new box in Settings, 0 = cashiers may give none); a tasting is for an administrator only and needs a note (it has no person to count against). Nothing else can be on the bill (no discount, voucher, points, gift card, split, customer). The customer attached at the till is left out.
+- **Design:** `PaymentMethod.COMPLIMENTARY`; the bill is saved paid with every line at 0 (so revenue, discounts and the average bill do not move, stock is taken as for a sale, and the gross profit falls by what the drinks cost); the menu price is kept in `orders.complimentary_value`; three more new columns `complimentary_kind`, `complimentary_for`, `complimentary_note` (both databases; old SQLite/MariaDB files get them through `SqliteSchema.LATER_COLUMNS` on start).
+- **Code:** `service/ComplimentaryRules` (pure: kinds, the check, zero-price copies of the lines, note cleaning), `dao/ComplimentaryDAO` (`record` runs inside the payment's transaction: active-person check, the limit counted again from the database with `FOR UPDATE` on MariaDB, the four columns, one audit line; `totals` and `byPerson` for the report), `OrderDAO.payExistingOrder` got an overload with a before-commit hook (the existing `insert` already had one), `CheckoutService.Payment` got a `complimentary` field (the old 12-argument constructor stays) and `payComplimentary`, `controller/ComplimentaryDialog` (the window), a button in `quanlydonhang.fxml` (no fx:id) routed through the same guards as Pay (`OrderController.beginPayment`), `util/ComplimentaryText` (report line and CSV rows), `ReportDAO.Summary` carries the free totals (its 4-argument constructor stays; the average bill leaves free bills out), `ShopRules` / `ShopSettings` / `SettingsDialog` (the box, 14th rule, audited like the others), `AuditAction.COMPLIMENTARY_GIVEN` + `AuditText`.
+- **Guards:** a free bill is not offered as a split method (`SplitPaymentPanel`) or a refund method (`RefundLinesDialog`); `RefundDAO.refund` refuses its lines (no money was paid); cancelling the whole bill (administrator) works and gives the stock and the allowance back.
+- **Size ceilings:** `OrderController` 1445 -> 1438 (four long comments shortened to make room), `ReportWindow` still 518 (two pairs of lines joined).
+- **Tests added (about 31):** `ComplimentaryRulesTest` 18 (pure), `ComplimentaryDatabaseTest` 9 (real database, plain scenarios: marking, limit per person, owner as one person, administrator unlimited, tasting, inactive person, cancel gives back, no line refund, nothing else on the bill, report figures, audit line), `ComplimentarySourceTest` 5.
+- **Run here (JDK 21 compiler module, a stand-in JUnit runner, stand-in `org.sqlite` classes, no JavaFX, no Maven access):** the main sources outside the screens compile; `ComplimentaryRulesTest` 18 passed; `ComplimentarySourceTest` 5, `FxmlControllerCheckTest`, `ControllerSizeTest`, `AuditTextTest`, `MessagesTest`, `UntranslatedTextTest`, `DialogFitUsageTest`, `AppClockUsageTest`, `EveryTableIsDocumentedTest`, `PaymentRulesTest`, `SalesPatternsTextTest` passed (109 in all); `I18nTest` 14 of 15, the failing `everyKeyUsedInJavaCodeExists` (`ExpenseRules: expense.cat.`) fails the same way on the untouched `4_57_done` zip. The exact report and limit SQL was captured from the DAO and replayed in real SQLite on the project's table definitions with a free staff bill, a free owner bill (no cost) and a cancelled free bill: bills 2 / value 120.000, cups 3 / cost 24.000 / 1 cup without cost, per person correct, the limit counts only paid bills.
+- **Not run:** `ComplimentaryDatabaseTest` (compiles; no SQLite driver here); nothing on MariaDB (`FOR UPDATE` and the new columns untried); `ComplimentaryDialog`, the new button and the Settings box were not compiled against JavaFX or seen on a screen (the files parse; only JavaFX symbols are missing).
+- **Known limits:** free bills still count in "orders" (the dashboards, the per-method row "Free drink" with 0 revenue) and the cups in the product lists, only the average bill leaves them out; the shift-close sheet has no free-drink line; no separate window per person, the CSV block and the audit log have that. A receipt window still opens after a free drink (it shows 0).
+- **Merge points:** `PaymentMethod`, `AuditAction`, `AuditText`, `CheckoutService`, `OrderDAO` (one overload, one line before the commit), `RefundDAO`, `ReportDAO.Summary`, `ReportWindow` (two statements), `OrderController` (`handlePayment` and the success callback), `quanlydonhang.fxml`, `ShopRules`, `ShopSettings`, `SettingsDialog`, `SqliteSchema`, `MariaDbSchema`, both message files (appended), `docs/DATABASE.md`, `TODO.md`, `CHANGELOG.md`, `progress.md`.
+- **Merged (session 183):** taken in unchanged. Its base was `4_57_done`; the shared files were merged three-way (`OrderDAO`, `SqliteSchema`, `SettingsDialog`, `SplitPaymentPanel`, `OrderController`) and the other merge points taken as they are, because neither later branch had changed them. The text of its `OrderDAO` hook sits next to session 180's `+ 1` fix in the SQL (the Java `+ 1` of its base is not there, correctly).
+
+## Session 183 - merging the five zips and 4.61 into one tree (2026-11-05, documents, tests and code taken from the branches; nothing new written)
+- **Found:** seven zips: `4_53_done_v2` (4.53 with the PDF, a button per row and discounts per cashier, built before 4.57), `4_59_done` (4.59, from 4.57), `4_61_done` (4.61, from 4.57) and the main line `5_40` -> `5_44_done` -> `6_71_done` (5.38, 5.40, 5.44, 6.71, from 4.57). Sessions 177 and 179 exist more than once because the branches were worked in parallel; each heading carries its TODO number.
+- **Trunk:** `6_71_done`. From `4_53_done_v2`: `ShiftSheet`, `ShiftDAO`, `ShiftSheetPage`, `ShiftSheetActions`, `SimplePdf`, their tests, 6 keys and 1 changed label, TODO item 53, its CHANGELOG entry, session 177's text. From `4_59_done`: the three stock-history classes, their three tests, the two dialog buttons, 17 keys. From `4_61_done`: the seven `Complimentary*` files, 37 keys and the edits to `PaymentMethod`, `AuditAction`, `AuditText`, `CheckoutService`, `OrderDAO`, `RefundDAO`, `ReportDAO`, `ReportWindow`, `OrderController`, `SplitPaymentPanel`, `RefundLinesDialog`, `SettingsDialog`, `ShopRules`, `ShopSettings`, `SqliteSchema`, `MariaDbSchema` and `quanlydonhang.fxml`.
+- **Decisions:** `OrderDAO.nextQueueNumber`: session 180's SQL `+ 1` kept, 4.59's Java `+ 1` not taken (both = +2). Bug 2.104 of 4.59 not added to the TODO (session 180 fixed it). `GroupByRulesTest`: `dao/ShiftDAO.java` 1 -> 2 (v2's `discountsByPerson`, read not run) and `dao/StockHistoryDAO.java` 1 added. The two dialogs of 4.59 were not touched by 4.61.
+- **Checked here:** the main sources outside the screens compile (JDK 21 compiler module, stand-in JUnit and `org.sqlite`); 178 test methods passed: `SimplePdfTest` 13, `ShiftSheetTest` 29, `StockHistoryTest` 6, `ComplimentaryRulesTest` 18, `ComplimentarySourceTest` 5, `ShiftSheetPrintingSourceTest` 13, `StockHistoryScreensTest` 3, `MessagesTest`, `I18nTest`, `UntranslatedTextTest`, `DialogFitUsageTest`, `ControllerSizeTest`, `ScreensStayAwayFromTheDatabaseTest`, `ControllerLayeringTest`, `AuditTextTest`, `PaymentRulesTest`, `FxmlControllerCheckTest`, `EveryTableIsDocumentedTest`. Message files: 2,148 keys each, English = Vietnamese, no duplicates, every key used in the code exists.
+- **Still red, as before the merge:** `GroupByRulesTest` (`SchemaMigrations`, `CustomerDAO`, `GiftCardDAO`, `OrderDAO`, `ReportDAO` never reviewed) and `TextColumnsTest` (order, option and promotion columns). New from 4.61 and left for the owner: `orders.complimentary_note` is typed text composed on save by `ComplimentaryRules`, but is not yet in `TextNormalization.COLUMNS` (which also rewrites old rows on start; not tried here). `orders.complimentary_kind` was registered as a fixed word, and the `ComplimentaryDAO` GROUP BYs (2) were read and registered.
+- **Not run:** Maven, JavaFX, SQLite and MariaDB are not available here, so no screen (`ComplimentaryDialog`, the free-drink button, the Settings box, the history buttons, the PDF buttons) was compiled or seen, and the database tests (`ComplimentaryDatabaseTest`, `ShiftSheetDatabaseTest`, `StockHistoryDatabaseTest`) were not run on any database. Run `./mvnw -B clean test` first.
+
+## Session 184 - TODO 6.86, progress.md keeps the last 20 sessions (2026-11-05, documents only; no program code, test or text changed)
+- **What was done:** `progress.md` (2,977 lines, 508 KB, 238 sections) was cut up by a script. It keeps the title, a new index, the Release status block, the architecture notes, "Next recommended step" and the last 20 sections headed "Session" (now 211 lines, 51 KB). The other 215 sections went, in their old order and unchanged, to `docs/history/progress-undated-early.md` (52 sections, no date in the heading: Sessions 1-56), `progress-2026-10.md` (111) and `progress-2026-11.md` (52). Each of those starts with a list of its sections and, for the first, the old "READ THIS FIRST (Session 28)" note.
+- **Choices:** "the last 20" is counted by position (the order sessions were appended in), not by number or date: the same number appears up to three times (parallel branches merged), and some sessions dated 11-03 stand after ones dated 11-04. A section goes to the month of the date in its heading; one with no date goes with the section before it; everything before the first dated heading (Session 57, 2026-10-17) is `undated-early`, because the early sessions carry no date and I did not want to invent one (the item asked for `progress-<year>-<month>.md`; this one file has a different name for that reason). The three non-session blocks stayed here, because new helpers need them.
+- **Checked:** a second script re-read all four files and compared every original section with the new ones: 238 original, none missing, none twice; the only changed text is the first bullet of Release status ("Reading order") and the word "below" in its last bullet, both because the notes moved. `diff` of the Architecture and "Next recommended step" blocks: identical. No test reads `progress.md`; the only mentions elsewhere (README, CHANGELOG, `docs/RELEASE.md`, `COMPLETE.md`, TODO items, code comments) are by session NAME, never by line number, and `docs/RELEASE.md` points at the Release status block, which stayed.
+- **Not done / for the owner:** the "211 boxes and items" at the top of `TODO.md` was not recounted (it is not clear how it was counted). Code comments that say "see progress.md, Session 7" now lead through the index to `docs/history/progress-undated-early.md`; I did not edit them. Later sessions should add their section at the bottom of `progress.md` and, when it passes about 30 sessions, move the oldest the same way.
+
+## Session 185 - TODO 3.86, the discount reason fits its column (2026-11-05, code and test changed)
+- **What was done:** `CheckoutService.joinedReason` (package-private) replaces the one-line join of reason, voucher, points and promotion notes. If the whole is over `DiscountPolicy.COLUMN_MAX_LENGTH` (new, 255) the cashier's reason is shortened by the excess so the notes stay whole; the result is then cut at 255 with `AuditRules.clip`. Promotion names (added by 4.55 after this item was written) are part of the sum and are handled the same way.
+- **Tests added (5):** `DiscountReasonLengthTest`: 200-character reason + 40-character voucher + 999,999,999 points + promotions fits; notes survive; short text unchanged; nothing is nothing; notes alone are cut at 255. **Run here:** all 5 pass (javac with stand-ins, no Maven).
+- **Not run:** MariaDB strict mode, `CheckoutServiceTest` and the other SQLite tests, a payment on a screen. Note: the clip also folds runs of spaces and trims, as `AuditRules.clip` does for the cancel reason.
+
+## Session 186 - TODO 3.82, "1tr5" and "2tr350" in money boxes (2026-11-05, code and tests changed)
+- **What was done:** `MoneyParser.parseShorthand` first tries `MILLIONS_THEN_DIGITS` (whole number, `tr`/`triệu`/`trieu`, optional spaces, 1 to 3 digits); the digits are padded on the right to thousands. Everything else is as before.
+- **Tests added (2):** `MoneyParserTest` accepted forms (10) and refused forms (`1tr5000`, `1tr5k`, `1,5tr5`, `1tr5.5`, `1tr-5`, `tr5`, `1tr5tr`). **Run here:** all 17 tests of the class pass (javac with stand-ins).
+- **Not run:** no screen; the hint text `money.notanamount` was left as it is.
+
+## Session 187 - TODO 6.74, a settings table instead of values in row names (2026-11-05, code, tests and documents changed)
+- **What was done:** table `settings(name, value)` in both schemas, `SqlDialect.createSettingsTable`, importer, `StartSellingRules.KEPT`, `DATABASE.md`. `AppFlags.valueWithPrefix/replaceValues` now use it (key = prefix without the closing `:`/`=`); old `app_flags` rows are the read fallback and are deleted by the next save of that prefix, in the same transaction. Callers (`ShopSettings`, `TransferQrGuard`) unchanged. No numbered migration, on purpose (see DATABASE.md: a new table needs none).
+- **Tests:** `SettingsTableDatabaseTest` (7: round trip of all five values with a 200-character address, replace-not-add, blank kept, old flag read, old flag moved by a save, rollback, key names); `TextColumnsTest`, `StartSellingRulesTest` updated. **Run here:** `MariaDbSchemaTest` 8, `StartSellingRulesTest` 10, `EveryTableIsDocumentedTest` 2 pass. `TextColumnsTest` and `SqliteToMariaDbImporterTest` each fail on columns that this item did not touch (`orders.channel`, `promotions.*`, `order_items.*`, complimentary columns): found in this tree, not caused by the item and not yet in the TODO.
+- **Not run:** `SettingsTableDatabaseTest` and every other SQLite/MariaDB test (no driver here).
+
+## Session 188 - TODO 6.73, the library-free test run (2026-11-05, tools, code, tests and documents changed)
+- **What was done:** `tools/run-library-free-tests.sh` copies the sources without `module-info.java`, lays `tools/standins/` (`org.sqlite` x4, `AppStyle`) over them, compiles main and then tests, dropping every file with an error until the rest compiles, and runs the remaining classes with `LibraryFreeRunner` (a failure whose cause chain shows a missing class, "No suitable driver", JavaFX or a SQLException counts as "not run here"). `-Xss16m` because `CssRulesTest` overflows the default stack here.
+- **First run: 6 real failures, all fixed:** (1) `SqliteToMariaDbImporter` lacked `complimentary_kind/for/note/value` of `orders` (real data loss on import, from the 4.61 merge); (2) `IngredientRules.clean` used `TextNormalizer.clean` (no NFC): now `nfc` (3.18 + 3.71); (3) `LargeTextSheet` `String.format` without `Locale.ROOT` (my 5.44); (4) `ComplimentaryDialog` 11 px not through `TextSize.size` (4.61 merge); (5) `TextColumnsTest`: `promotions.name`, `product_options.name`, `order_items.promo_name/size_name`, `orders.complimentary_note` added to `TextNormalization.COLUMNS`, the fixed-word columns explained; (6) `GroupByRulesTest`: every new `GROUP BY` of `SchemaMigrations` (5), `CustomerDAO` (2), `GiftCardDAO` (1), `OrderDAO` (1), `ReportDAO` (5) read, all select only grouped columns or aggregates; `REVIEWED` counts raised (read, not run on MariaDB).
+- **Result:** 1,322 passed, 0 failed, 144 tests (6 whole classes) not run because they need JavaFX or a driver. **Not run:** Maven, any SQLite/MariaDB test (including the new `SettingsTableDatabaseTest` of Session 187), the script on Windows. `TextNormalization.COLUMNS` grew: the one-time pass already ran on existing shops, so old rows of those columns are not rewritten (they are written composed by the code that saves them; not checked for every writer).
+
+## Session 189 - TODO 6.87, database rules for the tables added after 6.24 (2026-11-05, code, tests and notes changed)
+- **Found in the zip (`Lunavera_Coffee_6_73_done`):** `SchemaMigrations.DATA_RULES` had seven rules on six tables; `gift_cards`, `gift_card_moves`, `time_clock`, `vouchers`, `expenses`, `refunds`, `order_payments` and `reservations` had none. Before writing each rule I read how the code writes the table, so that no legitimate row is refused: refund rows can be 0 pieces or 0 dong (`RefundSplit.rows` adds a "rest" row with 0 pieces, `RefundMath` allows a share of 0), vouchers cannot be edited after creation (so a limit below the use count cannot happen) and `VoucherDAO` only adds a use under the limit, a clock-out is always at least a second after the clock-in (`TimeClockDAO`, `TimeClockRules`).
+- **Changed:** `SchemaMigrations` (8 rules, imports of `Reservation` and `Voucher` for the allowed values), `DataRulesTest` (8 cases), `DataRuleSqlTest` (15 or more rules, the new columns). No schema version, no migration, no new text.
+- **Run here (JDK 21 compiler module, Python's SQLite; no Maven, no JUnit, no MariaDB):** `SchemaMigrations.DATA_RULES` was compiled and printed (15 rules); the tables were created from `SqliteSchema.java`, the triggers built exactly as `ensureDataRules` builds them, and 44 statements were run: every ordinary row accepted (a refund of 0 pieces, of 0 dong, every reservation status, a 100% voucher, a used-up voucher), every bad row refused with the expected message. **Not run:** the JUnit tests themselves, anything on MariaDB (the `CHECK` text comes from the same rule as the existing ones, and `DataRuleSqlTest` checks its shape and balanced parentheses), and the startup path on a database that already holds a breaking row.
+- **Choices (say if any is wrong):** `refunds` refuses negative, not zero, amounts; a clock-out equal to the clock-in is allowed; no rule on `gift_cards.balance` above `initial_amount` (a refund puts money back on a card, never above what it spent, but that is not a row rule); `promotions`, `ingredients`, `recipes`, `product_options` and `shift_closes` have no rule yet (not in the item).
+- **Merge points:** `SchemaMigrations`, `DataRulesTest`, `DataRuleSqlTest`, `TODO.md` (item 6.87 only, count 211 to 210, one check in section 0), `COMPLETE.md`, `CHANGELOG.md`, `progress.md`.
+
+## Session 190 - TODO 3.79, a mistyped idle-minutes value no longer turns the auto-lock off (2026-11-05, code, tests and notes changed)
+- **Found in the zip (`Lunavera_Coffee_6_73_done` plus the session 189 changes):** `IdleTracker.limitFromSetting` used `Double.parseDouble`, which also accepts `NaN`, `Infinity`, exponents, `5d` and `0x10`, then turned anything `<= 0` or NaN into "off". The owner's setting (`ShopRules.idleMinutes`) is already limited to 0 to 480 by Settings (`IDLE_MAX`), so only the developer's `-Dlunavera.idleMinutes` and a hand-edited database were exposed. `IdleLogout.tick` reads the limit every ten seconds, so a warning inside `IdleTracker.limit` has to be written once per distinct text.
+- **Changed:** `IdleTracker` (`MAX_MINUTES` 1440, a strict pattern, `refused`, `warnOnce`, `forgetWarnings` for tests; `limit` treats 0 as off on purpose, a negative value or one above a day as a mistake), `IdleLogout` (INFO to WARNING for its start-up message), `IdleTrackerTest`, the README line on auto logout, notes. No new text for the screen, no database change.
+- **Run here (JDK 21 compiler module; no Maven, no JUnit):** `IdleTracker` and `MonotonicClock` were compiled and a small main class replayed every case of the new `IdleTrackerTest` plus the four old `ShopRulesMoreTest` cases with a log handler: all passed (15 refused values with exactly one warning each naming the value, 0 and its spellings, warning written once, 500-character value cut, the owner's setting). **Not run:** the JUnit tests themselves, `IdleLogout` on a screen, and a real start with a bad shortcut.
+- **Choices (say if any is wrong):** values under 1 minute are refused (the item says 1 to 1,440, and lists `0,5`), so there is no longer a way to try the lock with a 30-second limit except the existing `IdleLogout.install(Duration, millis)` used by tests; a comma is still read as a point (`1,5` is 90 seconds); the owner's setting is also checked in `limit` (a hand-edited database), not only the shortcut value.
+- **Not covered:** the `TillLock` PIN limits and other numbers read from `System.getProperty` (a quick look found none other with the same fault, but I did not search every property).
+- **Merge points:** `IdleTracker`, `IdleLogout`, `IdleTrackerTest`, `README.md`, `TODO.md` (item 3.79 only, count 210 to 209, one check in section 0), `COMPLETE.md`, `CHANGELOG.md`, `progress.md`.
+
+## Session 191 - TODO 2.86, four red tests: split CustomerController and ReportWindow (2026-11-05, code, tests and documents changed)
+- **State found (zip `Lunavera_Coffee_3_79_done`):** whole suite in the hand-made runner (JDK 21, JavaFX 11 stand-in, sqlite-jdbc 3.46.1.3, time zone Asia/Ho_Chi_Minh): 2565 tests, 13 failures. Of the four in the item, (2) the receipt label, (3) the GROUP BY list and (4) the `expense.cat.` key were already fixed; (1) the size test passed only because its ceilings had been RAISED to 485 and 518 (the file says "never raise one"; the item says 421 and 472).
+- **Done:** `CustomerMergeButtons` (new, the merge and anonymise buttons and their confirmations, moved word for word) takes `CustomerController` from 485 to 400 lines. `util/ReportCsv` (the lines of the report CSV, from one `Data` record) and `util/ReportTexts` (busiest hour, profit, payment text, category and employee names, chart maxima) take `ReportWindow` from 518 to 406. I undid the renames in the new CSV code and diffed it with the old `exportCsv` body: 0 differing lines. `ControllerSizeTest` ceilings are now 400 and 406, with a note. `ComplimentarySourceTest` and `ShiftSheetPrintingSourceTest` (mine, 4.53) pinned text in `ReportWindow`; they now look in `ReportCsv`.
+- **Three more red tests of the same kind, fixed:** `NoJavaFxInRulesTest` (`TextSize` named `AppStyle`: `TextSize.choose` now only saves and returns whether it changed, `AppStyle.chooseTextSize` does both; nothing called `choose`), `UntranslatedTextTest` (`SchemaMigrations` has 15 Vietnamese messages that are written into database triggers: baseline 7 to 15 with the reason in the file; **a decision, say if you want them in the language files instead**), `CssRulesTest` (`StackOverflowError` in some runs: the string-literal regex recursed once per character over the 2,096-character literal in `MariaDbSchema`; replaced by the unrolled form, same matches on all 347 files).
+- **Tests added (10):** `ReportCsvTest` 4 (first lines, block order, rows of every block, shifts only when there are some), `ReportTextsTest` 6.
+- **Result:** 2575 tests, 11 failures, none of them in this item: `OrderNotesDaoTest`, `OrderOptionsDaoTest`, `ProductOptionsDaoTest` 3 (saving options is refused with a cost message), `StaffAnonymiseScrubTest` 2, `StartSellingDatabaseTest` 4. **Not run:** Maven itself, JavaFX 21, a screen: the merge buttons and the report window were not seen. Item 6.86 of this list asks to tick only when `./mvnw -B clean test` is green; it is not, so the item is `[~]`.
+
+## Session 192 - TODO 6.89, when to move the platform (2026-11-06, documents and one test changed)
+- **What was done:** read the vendors' pages (Adoptium, Oracle's Java Verified Portfolio roadmap, OpenJFX/Gluon, xerial and MariaDB release notes) and wrote the decision into `docs/RELEASE.md`: stay on JDK 21 and JavaFX 21 (supported to December 2029 and September 2028), review in November 2027, start moving to 25 by March 2028. `PlatformDecisionTest` (2): the block exists with a dated decision and a next review, and names the `<release>` level of `pom.xml`.
+- **Found:** `mariadb-java-client` 3.4.1 is affected by CVE-2026-55857 (PAM "dialog" login sends the password in clear text when `sslMode=DISABLE`, which is this program's default); fixed in 3.4.3. Pinned versions are 7 patches behind for JavaFX (21.0.6 vs 21.0.13) and far behind for sqlite-jdbc (3.46.1.3 vs 3.54.1.0). **`pom.xml` was not changed:** no Maven Central here, so no build could show the new versions work.
+- **Not checked:** the figures come from web pages read on 2026-11-06 (the sqlite-jdbc page gave no years, the MariaDB 3.5.9 date is "June 2026"); no vendor advisory text was read in full.
+
+## Session 193 - TODO 5.51, the receipt names the gift card (2026-11-06, code, tests and documents changed)
+- **What was done:** `GiftCardUse` (tail of the code, paid, left) in `model/`; `Order.giftCardUses` and `paidWithGiftCard()`; `GiftCardDAO.usesForOrder(orderId)` (one grouped query for the spend per card, one sum for the balance after: the card's starting amount plus the moves of orders up to the last spend of this order, so it is the balance of that moment, not today's); `ReceiptText.paymentExtras` adds `receipt.line.giftcard` (both languages); `HoaDonController` shows the payment text through `showPaymentText` and reads the uses in the background (`loadGiftCardUses`), which is the one funnel for the receipt window, the thermal print and the history detail. A card that was refunded after the payment still shows what was left then.
+- **Tests:** `ReceiptGiftCardLineTest` (5, pure: the line, two cards, only the tail, none, split payment) and `GiftCardTest` +2 (SQLite). The SQL was replayed on Python's sqlite3 with three orders on two cards (30.000 then 20.000 on a 100.000 card gives left 70.000 and 50.000). `GroupByRulesTest`: GiftCardDAO 1 to 2 (read: all selected columns grouped or aggregated). **Run here:** the library-free run, 1346 tests, 0 failed. **Not run:** `GiftCardTest`, the window, the printer.
+- **Not done:** the line appears a moment after the window opens (it is read in the background); a receipt printed in that moment would lack it. Orders paid by a gift card before the moves table existed show nothing.
+
+## Session 194 - TODO 5.50, length limits in three dialogs (2026-11-06, code and tests changed)
+- **What was done:** `TextLengthLimiter.limit` on every box of `IngredientDialog` (name 100, unit 20, stock/min/quantity 12, cost and paid 16), `VoucherDialog` (code 40, value and minimum 16, uses 12) and `TableManagerDialog` (name 40, seats 2 digits), on the constants of the rules. New `TextLimits.MONEY_MAX` = 16 (a money box with dots and a trailing "đ"; 12 would stop "1.000.000.000" at its 13th character).
+- **Test:** `DialogTextLimitsSourceTest` reads the three sources: each text box variable must have a `limit(box,` call. **Run here:** library-free run (see the number in the last line of this session's delivery).
+- **Found, not done:** 26 more boxes in 10 other dialogs (list in `TODO.md` 5.50 and in the test). The limiter was never run (JavaFX); the limits were checked against the rules by reading.
+
+## Session 195 - TODO 5.49, the first-sign-in list of leftovers (2026-11-06, code, tests and documents changed)
+- **What was done:** `service/LeftoverRules` (pure: due once a day, earlier waiting bookings, days since the last close with a threshold of 2, a shop that never closed is not nagged); `ReservationDAO.closeBefore(cutoff, now)` (shares one private `closeThese` with `closeStale`, same audit line); `controller/FirstSignInLeftovers` (reads off the screen thread, one Alert with up to three buttons, the "mark as not come" button for administrators only); hook in `LoginController` after `ClockOffer.afterSignIn()`; 7 keys in both languages.
+- **Tests:** `LeftoverRulesTest` (5) and `ReservationDaoTest` +1 (SQLite). **Run here:** library-free run (see the delivery message).
+- **Not run:** the box itself (JavaFX), the DAO test, a sign-in. Open: the box can appear together with the clock-in question (two boxes one after the other); the lock-screen take-over by another cashier does not show the list (only a sign-in does).
+
+## Session 196 - TODO 5.48, the shift close names the tables that are still unpaid (2026-11-06, code, tests and documents changed)
+- **What was done:** `ShiftDAO.openOrders()` (one query on `orders` where `status` is OPEN, tables by number then take-away orders; no administrator needed, like `summarize`), `service/ShiftOpenOrders` (pure: `Open` record and `text`, tables first, then take-away by queue number or order number, the entries cut at 8 with "and N more", the closing sentence), `ShiftCloseDialog` (the text is read in the same try-block as the other figures and shown in an amber label above the cash boxes; the label is hidden when nothing is open; nothing is blocked). 7 keys `shift.unpaid.*` in both languages.
+- **Tests added (9):** `ShiftOpenOrdersTest` 5 (English and Vietnamese text, tables before take-away, the cut, order numbers without a thousands separator), `ShiftOpenOrdersDatabaseTest` 4 (SQLite: a table and a take-away order are listed with their amounts and the take-away number, table order, a cancelled or emptied order disappears, no administrator needed).
+- **Run here:** JDK 21, JUnit 4.13, JavaFX 11 and the real `sqlite-jdbc` 3.46.1.3, so the database tests ran. The whole suite on this zip before and after: 2591 tests with 12 failures, then 2600 tests with the same 12 failures (none new, none fixed): `OrderNotesDaoTest` 1, `OrderOptionsDaoTest` 1, `ProductOptionsDaoTest` 3, `ReservationDaoTest` 1 (the one added in session 195, never run before), `StaffAnonymiseScrubTest` 2, `StartSellingDatabaseTest` 4. `tools/run-library-free-tests.sh`: 1356 passed, 0 failed, 145 not run, 6 whole classes not run.
+- **Not done / open:** the box was never drawn (JavaFX); the close sheet of 4.53 does not list the open tables; the age of an unpaid order is not shown; not run on MariaDB (the query is a plain `SELECT` with an `ORDER BY CASE`).
+
+## Session 197 - TODO 5.47, optional sounds for a code not found, a payment refused and a booking due (2026-11-06, code, tests and documents changed)
+- **Found in the zip (`Lunavera_Coffee_5_48_done`):** no sound anywhere (no `AudioClip`, no beep); `module-info.java` and the pom had no JavaFX media. The three events: `OrderController.handleSearchEnter` (an unknown or stopped code), the `error ->` callback of `completeOrder` (a payment that could not be saved), `ReservationPanel.remind` (a booking that is due, once per booking, TODO 4.43).
+- **Choices (mine; the item left them open):** the switch is **per computer** in `ui-settings.properties` (key `alertsounds`, off by default), not a shop rule in the database, because a speaker belongs to one till (the same reasoning as the text size of 5.44); a stopped product's code also gets the low tone (the cashier needs the same signal); a bill another till changed (`StaleOrderAlert`) gets no sound (it is not a refusal and has its own box); the sound starts before the box that goes with it, so it is heard while the box is open; the low tone is one sound used for both "not found" and "refused" (the item asked for one low tone), the chime is the other.
+- **Code:** `util/AlertSounds` (no JavaFX: the `Cue` enum with its file, `isOn`, `choose`), `util/AlertPlayer` (`AudioClip`; loads and plays on a daemon thread so the screen never waits; copies the resource to a temporary file first because JavaFX media cannot open the `jrt:` address a resource has inside a jlink image; catches `Throwable` (also a missing `javafx.media` at run time) and gives up for the rest of the run after logging once; `preview` ignores the switch), `SettingsDialog` (check box in the "screen" section, two "hear it" buttons, saved with `AlertSounds.choose`), three one-line calls, `requires javafx.media`, the `javafx-media` 21.0.6 dependency, `docs/PACKAGING.md`, two WAV files made with a short script (16 kHz, mono, 16 bit: a 196 Hz tone of 0.35 s and an 880 Hz + 1318 Hz chime of 0.62 s, peaks about 45 % and 30 % of full scale).
+- **Size ceilings:** `OrderController` 1438 -> 1440 (ceiling 1445, two lines for the two calls), `SettingsDialog` 304, `ReservationPanel` 80.
+- **Tests added (10):** `AlertSoundsTest` 5 (off by default, the choice is kept and only reported when it changes, every cue has a real PCM file that is mono, 0.2 to 1 s and under 40 KB, the low tone measures about 200 Hz and the chime above 700 Hz, no sound clips), `AlertSoundWiringTest` 5 (each event plays its cue and before its box, the switch is in Settings and saved per computer, `requires javafx.media` and the pinned pom version, the player never blocks or raises).
+- **Run here (JDK 21 compiler module, a small JUnit stand-in, no JavaFX, no Maven access):** the two new test classes 10/10; `I18nTest`, `MessagesTest`, `UntranslatedTextTest`, `ControllerSizeTest`, `FxmlControllerCheckTest`, `DialogFitUsageTest`, `AppClockUsageTest`, `AdminScreensTest` passed (56 in all); the changed screen files parse and every `AlertSounds` / `AlertPlayer` symbol in them resolves (only JavaFX types are missing). The WAV files were opened with `javax.sound.sampled`, their length, size and pitch measured.
+- **Not done / not tried:** no sound was ever played (no JavaFX media, no speaker here), so the volume and the pitch were chosen on paper; `mvn` was not run, so the new dependency was not resolved and the jlink image was not built (the image will grow by the media module and its native libraries, see `docs/PACKAGING.md`); `AlertPlayer` and the new Settings controls were not compiled against JavaFX. Not covered: a sound for other refusals (a gift card with too little money, a voucher that is refused) that show a box without going through the failed-payment callback.
+
+## Session 198 - TODO 5.46, copy with one click and a right-click menu on the big tables (2026-11-06, code, tests and documents changed)
+- **Found in the zip (`Lunavera_Coffee_5_47_done`):** no `Clipboard` and no `ContextMenu` anywhere (confirmed by search); the gift card code is shown in `GiftCardDialog` and `GiftCardListDialog`, the transfer note in `PaymentBoxes`, the order number in the history list, the phone in the customer list, errors in `AlertUtil`.
+- **Code:** `util/CopyText` (pure: order number `#124`, transfer note `DH000124`, gift card code, phone, error text, table row as tab-separated cells), `util/ClipboardText` (the only user of the system clipboard), `controller/CopyMenus` (the "Sao chép" button, the `install` of a right-click menu, and the menus of the four tables). The menu entry for a window button is bound to the button (text, disabled, visible) and presses it, so the actions cannot drift from the buttons; a right click selects the row under the mouse; "Sao chép dòng" copies the columns that have a value (not the picture or button columns). `AlertUtil.show` adds a "Sao chép" button to an ERROR box, kept open by consuming the action. 8 keys `copy.*` in both languages.
+- **Choices (mine; the item left them open):** four tables = order history, customers, products, gift-card list (the ones that have row actions or codes people copy); the copy for an order is two entries, the number as shown (`#124`) and the transfer note (`DH000124`), because the first is what the list shows and the second is what a bank statement shows; a value that is not there (a customer with "-" for phone, an unsaved order) has its entry greyed rather than copying a dash; the gift-card button hides until a card is sold and when a new sale starts; the error copy is the box as shown (the support text of 5.42 is a separate thing).
+- **Size ceilings (never raised):** `ProductController` 720 (one line saved by merging `int at = ...` into the call, one added), `CustomerController` 399 (the double-click handler written on one line, one added), `OrderHistoryWindow` 415 (ceiling 415).
+- **Tests added (22):** `CopyTextTest` 9, `CopyWiringSourceTest` 13.
+- **Run here (JDK 21 compiler module, a small JUnit stand-in, no JavaFX, no Maven access):** the two new classes 22/22; the existing source tests (`ControllerSizeTest`, `ControllerLayeringTest`, `ScreensStayAwayFromTheDatabaseTest`, `AlertSoundWiringTest`, `DialogTextLimitsSourceTest`, `ReceiptLayoutTest`, `FxmlControllerCheckTest`, `AdminScreensTest`, `PrintingOffTheScreenThreadTest`, `ComplimentarySourceTest`, `I18nTest`) give the same result on the uploaded tree and on this one (all pass); four deliberate breaks each failed `CopyWiringSourceTest`; `CopyMenus`, `CopyText` and `ClipboardText` compile with `-Xlint:all` and no warning against a hand-written stand-in for the JavaFX classes they use.
+- **Not done / not tried:** nothing was clicked; the edits to the seven existing screen files were not compiled (no JavaFX); a right click selecting the row relies on an event filter that was not run; no copy on the other tables (staff, reports, stock, vouchers, expenses; one `CopyMenus.install(...)` line each) and none for the order number elsewhere (the receipt window).
+- **Merge points:** `util/CopyText`, `util/ClipboardText`, `controller/CopyMenus` (new), `util/AlertUtil` (`show`, `addCopyButton`), `controller/GiftCardDialog`, `GiftCardListDialog`, `PaymentBoxes`, `OrderHistoryWindow`, `CustomerController`, `ProductController`, the two `messages_*.properties` (8 keys appended), `CopyTextTest`, `CopyWiringSourceTest`, `TODO.md` (item 5.46 and one line in section 0), `CHANGELOG.md`, `progress.md`.
+
+## Session 199 - TODO 5.45, more keyboard shortcuts at the till (2026-11-06, code, tests and documents changed)
+- **Found in the zip (`Lunavera_Coffee_5_46_done`):** `OrderController.installShortcuts` registered only `Ctrl+F` and `Ctrl+Enter`; `OrderController` was 1440 lines against a ceiling of 1445, so the new code went into new classes.
+- **Code:** `service/PosShortcutKeys` (pure: an `Action` enum, the keys of each action, the text the help shows, the language key of each label, and `clashes()`); `controller/PosShortcuts` (puts the keys on the scene and takes them off when the scene changes, the "?" button, the help text); `OrderController.installShortcuts` is now a call to it. Keys: `Esc`, `Delete`, `+`/`-` (number pad, `-`, `=` and `Shift+=`), `F4`, `Ctrl+L`, `F1`, plus the old two. 12 new texts in both language files.
+- **Choices (mine; the item left them open):** `Delete`, `+` and `-` are skipped while a text box has the focus, because they are characters (a phone `+84`, a typed quantity); `+` and `-` use the last line when none is selected, `Delete` needs a selected line; all three go through `adjustQuantity`, so the stock check and the "remove the line?" question are the same as for the buttons; after a change the same row is selected again (refreshing the cart clears the selection and a second key press would do nothing). Not done: `F2`, `F3`, `Ctrl+P`, Up/Down (see TODO 5.45).
+- **Ceiling lowered:** `OrderController` 1445 -> 1425.
+- **Tests added (11):** `PosShortcutKeysTest` 6 (no two actions on a key, one entry per action, the old two keys kept, the typing rule, no bare letter, every label in both languages), `PosShortcutsSourceTest` 5 (needs the JavaFX jars: every key is a real `KeyCode`, a handler for every action, keys come off the old scene, the quantity keys use `adjustQuantity`, the help button).
+- **Run here (JDK 21 compiler module only, no JUnit jar, no JavaFX, no Maven):** `PosShortcutKeys` compiled and its table checked by a small main (9 actions, no clash). **Not run:** the two new test classes, the whole suite, and nothing was compiled that uses JavaFX (`PosShortcuts`, `OrderController`), so a typing slip there would show on the first `./mvnw test-compile`. No key was pressed on a real till; whether a scene accelerator fires before the focused box has seen `+` and `-` is the point to try first.
+- **Merge points:** `service/PosShortcutKeys`, `controller/PosShortcuts` (new), `OrderController` (`installShortcuts`), `messages_vi/en.properties` (`pos.key.*`), `ControllerSizeTest` (one number), `TODO.md`, `CHANGELOG.md`.
+
+## Session 200 - TODO 6.35, the tests the 7th scan asked for that were still missing (2026-11-06, code, tests and documents changed)
+- **Found in the zip (`Lunavera_Coffee_5_45_done`):** the item had been half done by the 11th pass (`AsyncOrderTest`, `PageMathTest`, `TextLengthLimiterTest`) and the rest found covered by name (`MenuSeedDataTest`, `BackupServiceTest`, `MoneyGuardTest`, `ValidationUtilTest`, `SessionGuardTest`, `IdleTrackerTest`, `LoginThrottleStoreTest`). Left: `PasswordReveal`, the wiring of `IdleLogout`, and the receipt's paid time and cancelled banner (2.44, 2.45), all inside JavaFX classes.
+- **Code (no behaviour change meant):** `ReceiptText.timeOf` and `ReceiptText.bannerKey` replace the two inline rules in `HoaDonController.setInvoiceData` (one difference: the banner text is no longer set while an open order hides the label); `IdleTracker.checkIdle(signedIn, limit)` replaces the body of `IdleLogout.tick`; `PasswordReveal.iconContent` (package-visible) replaces an inline ternary.
+- **Tests added (20):** `ReceiptHeaderTest` 7, `IdleCheckTest` 7, `PasswordRevealTest` 6.
+- **Run here (JDK 21 compiler module, a 30-line JUnit stand-in, no JavaFX, no Maven):** `ReceiptHeaderTest`, `IdleCheckTest` and `PosShortcutKeysTest` 20 of 20 green; with a cancelled order's banner removed and the clock restart after a report removed, the matching tests failed. The 13 strings `PasswordRevealTest` looks for were checked in the source with grep. **Not run:** `PasswordRevealTest` (needs the JavaFX jars to load the class), the full suite, and nothing that imports JavaFX was compiled (`HoaDonController`, `IdleLogout`, `PasswordReveal`).
+- **Not done / weak:** the source-reading tests for `PasswordReveal` and `IdleLogout` prove the lines are there, not that a click swaps the boxes or that a real window gets the filter; that needs TestFX with Monocle (versions not checked here). `tools/run-library-free-tests.sh` needs a real JUnit jar (its runner uses `JUnitCore`); the stand-in above only ran the tests by reflection.
+- **Merge points:** `util/ReceiptText`, `util/IdleTracker`, `util/IdleLogout`, `util/PasswordReveal`, `controller/HoaDonController`, `TODO.md`.
+
+## Session 201 - TODO 6.67, the screen tour for the hand-merged screens (2026-11-06, documents and one test added; no program code changed)
+- **Asked for:** 6.67 (the merge of 24 files by hand; the JavaFX screens carry the risk). **What can and cannot be done here:** the item's compile risk was closed in the 27th scan (all main files compile against JavaFX 11 jars, 231 test classes run), `FxmlControllerCheckTest` already checks the FXML wiring (controllers, handlers, ids, style classes), and this sandbox has no JavaFX, no Maven and no screen. What is left is a person opening the screens, and section 0 already had many scattered checks but no single list that guarantees every window is opened. I wrote that list instead of pretending to close the box.
+- **Written:** `docs/SCREEN_TOUR.md` (10 screens from `src/main/resources/fxml/` and 43 window classes from the controller package, each with how to open it in Vietnamese button names and who sees it; the steps: both languages, normal size and 1366 x 768, what to look for in each window, plus a reminder about the `Async.run` busy nodes); `ScreenTourTest` (4 tests: every FXML file and every window class (`*Dialog`, `*Dialogs`, `*Window`, `*Wizard`, `*Panel`, `*Pane`, `LockScreen`) is on the list; the list names nothing that is gone; both languages are asked for; 53 rows); a row in the README folder map; a check in section 0 of `TODO.md`; item 6.67 rewritten to say what is left.
+- **Run here:** the test parses with no syntax error and its checks were replayed in a script: 43 window classes and 10 screens, none missing, nothing named that is gone, 63 names checked, 53 rows. **Not run:** the JUnit test itself, and no window was opened (the "how to open" column comes from reading who calls each class and from the Vietnamese texts; a label that was renamed since is not checked against the message file, a wrong opener would only be found by doing the tour).
+- **Choices (say if any is wrong):** the item stays open (the person's pass and `./mvnw -B clean test` are not done); small message boxes are left to the existing section 0 checks; `CartLineFlow`, `PosShortcuts` and similar helpers that are not windows are not on the list.
+- **Merge points:** `docs/SCREEN_TOUR.md`, `ScreenTourTest`, `README.md` (one row), `TODO.md` (item 6.67 and one check in section 0), `CHANGELOG.md`, `progress.md`.
+
+## Session 202 - TODO 6.54, the sidebar and sign-out written once (2026-11-06, code, tests and documents changed)
+- **State found (zip `Lunavera_Coffee_6_67_done`):** the first half of 6.54 (a size ceiling for EVERY file in `controller/`, `OrderController` included) was done in session 131 and runs (`ControllerSizeTest`). What was left: the sidebar buttons and the sign-out copied into `AdminScreen`, `OrderController`, `CustomerController` and `EmployeeController` ("the third occurrence, worth extracting"), and splitting `OrderController`.
+- **Done:** `ScreenNavigation` (new, `public abstract`, so the FXML loader can call its handlers on a subclass): `openDashboard`, `openProductManagement`, `openOrderManagement`, `openCustomerManagement`, `openCategoryManagement`, `openAccountManagement`, `openStaffManagement`, `logout`, and `protected boolean confirmLeaving()` (default true). `AdminScreen` extends it (the five admin screens through it); `CustomerController`, `EmployeeController`, `OrderController` extend it; the till overrides the hook with `confirmLeaveOrder()`, which now runs before every opener and the sign-out exactly as before. Ceilings lowered: `OrderController` 1380, `CustomerController` 339. Tests that pinned the old places now read the base (`AdminScreensTest`, `StaffScreenFilesTest`, `BackupOnLeavingSourceTest`, `ClockOfferSourceTest`); `ScreenNavigationTest` (6) is new; two mutations (a copied `logout` in `EmployeeController`, no override in the till) each failed it.
+- **Behaviour change, small:** `EmployeeController`'s sign-out had no backup offer; the shared one calls `BackupDialogs.offerBeforeLeaving`, which tries the daily automatic backup (only if due) and asks nothing of a non-administrator.
+- **Also:** `AlertPlayer` and `ClipboardText` (new JavaFX helpers in `util/`) added to the screen-helper list of `NoJavaFxInRulesTest`.
+- **Result:** whole suite in the hand-made runner: 2675 tests (6 new), 14 failures before my changes and the same 14 after, 2 of them fixed by the whitelist: now 12, none in this item: `OrderNotesDaoTest`, `OrderOptionsDaoTest`, `ProductOptionsDaoTest` 3, `ReservationDaoTest` 1, `StaffAnonymiseScrubTest` 2, `StartSellingDatabaseTest` 4. **Not done:** the split of `OrderController` (1380 lines, the item stays open); Maven, JavaFX 21, a screen.
+
+## Session 203 - TODO 6.6, new columns go in numbered steps (2026-11-06, code, tests and documents changed)
+- **State found (zip `Lunavera_Coffee_6_54`):** the runner and steps 2 and 3 exist; 50 columns of Sessions 113-127 went in through `LATER_COLUMNS` at every start. The "decisions file" the item mentions is not in the project.
+- **Decision (mine, say if you want the other):** keep the 50 as they are (moving them changes no database and `MoneyMigration` needs them re-added after it rebuilds old tables), freeze the list, and make every future column a numbered step.
+- **Done:** `SchemaMigrations.addColumns`; `SqliteSchema.LATER_COLUMNS_FROZEN` and its comment; `LaterColumnsAreFrozenTest` (3); `NumberedColumnStepTest` (2); the rule in `docs/DATABASE.md`; TODO 6.6 `[~]` and a manual-check line; CHANGELOG.
+- **Not done:** no step is registered yet (no column is waiting); `NumberedColumnStepTest` and the other SQLite tests were not run (no driver here).
+
+## Session 204 - TODO 6.9, a copy before every numbered upgrade (2026-11-06, code, test and documents changed)
+- **State found (zip from session 203):** `docs/RELEASE.md` held the checklist and said nothing copies the data before a numbered step; the restore on real files was never done.
+- **Done:** `PreUpgradeBackup` (name, "has data" check, copy through `DatabaseConfig.backupTo`), called by `SchemaMigrations.upgrade` and `MariaDbMigrations.upgrade` before the first missing step; `PreUpgradeBackupTest` (2, ran); `docs/RELEASE.md` corrected; TODO 9 `[~]` plus a manual line; CHANGELOG.
+- **Not done:** the restore once for real (needs the shop's files; the date goes in the Release status block). The copy itself was not run (no SQLite driver, no `mysqldump`). The suite in the hand-made runner: 1,422 passed, 0 failed, 148 not run.
+
+## Session 205 - TODO 6.85, the database CI job is a matrix (2026-11-06, workflow, test and documents changed)
+- **Done:** `test-mariadb` in `ci.yml` became a matrix of `mariadb:10.6`, `10.11`, `11.4`, `mysql:8.0` (image, health check, client name, classic password plugin for MySQL via `ALTER USER`, `experimental` flag); MySQL has `continue-on-error`; `CiDatabaseMatrixTest` (3, ran); `docs/DATABASE.md` section 10; TODO 85 `[~]`; manual-check line; CHANGELOG.
+- **Not done:** the workflow was never run (no GitHub here); I checked only that it parses as YAML and that its steps are in the right order. Whether the code works on MySQL 8 is still unknown; docs do not claim it.
+- **Suite in the hand-made runner:** 1,425 passed, 0 failed, 148 not run.
+
+## Session 206 - TODO 6.78, mutation testing of the money classes (2026-11-06, tool, tests, pom profile and documents changed)
+- **Done:** `tools/mutation-sweep.py`; `LFT_WORK` and `LFT_BUILD_ONLY` in `run-library-free-tests.sh`; run on `RefundMath`, `LoyaltyPolicy`, `DiscountPolicy`, `MoneyParser`, `VoucherRules`, `GiftCardRules`: 99 survivors of 292 changes, 18 after the new tests, each read and judged equivalent; `pit` profile; `docs/TESTING-MUTATION.md`; TODO 78 `[~]`, manual line, CHANGELOG, README tools row.
+- **Found:** `GiftCardRules` had no database-free test; `RefundMath` had no test for the last-pieces rule when rounding comes out short, nor for a denominator of 1; vouchers had no test at the inclusive limits.
+- **Not done:** PIT (no Maven Central); the other classes of `service` and `util`. The sweep cannot see tests that need a database, so a survivor there might be caught on the owner's computer.
+- **Suite in the hand-made runner:** 1,458 passed, 0 failed, 148 not run.
+
+## Session 207 - TODO 6.79, a bug finder and a checkable release (2026-11-06, pom, workflows, documents and one test changed)
+- **Found:** the SHA-256 file already existed in `release.yml` (it covered the zip and the installer); SpotBugs, a bill of materials and a fixed build time did not.
+- **Done:** `bugs` profile (SpotBugs 4.8.6.6 + findsecbugs 1.13.0, report only) and `spotbugs-exclude.xml`; CI job `bugs` (`continue-on-error`); CycloneDX 2.9.1 pinned and run by the release workflow, `lunavera-bom.json` in the release and its checksum file; `project.build.outputTimestamp`; `docs/STATIC-ANALYSIS.md`; `docs/SIGNING.md` section 6 for the zip; `BugFinderSetupTest` (6, ran); TODO 79 `[~]` and a manual line; CHANGELOG.
+- **Said plainly:** only the jar is reproducible, not the jlink zip. Nothing was run: no Maven, no GitHub; plugin versions are from memory and may need a bump on the first run. Suite in the hand-made runner: 1,464 passed, 0 failed, 148 not run.
+
+## Session 208 - TODO 6.80, third-party notices (2026-11-06, notice file, workflow step, test and documents changed)
+- **Found:** the bill of materials half of the item was already done in 6.79; nothing named the licences outside the pom.
+- **Done:** `THIRD-PARTY-NOTICES.md`; release step "Put the licence and the notices in the program folder" (warns when `legal/` is missing); README paragraph and file-table row; `ThirdPartyNoticesTest` (4, ran); TODO 80 `[~]` and a manual line; CHANGELOG.
+- **Not decided, marked "to confirm" for an adviser:** LGPL and a jlink image; the JavaFX natives' own notices. The licence of each part is from my knowledge of the public licences, not from opening the jars (no Maven Central here). Not tried: the workflow step. Suite in the hand-made runner: 1,468 passed, 0 failed, 148 not run.
+
+## Session 209 - TODO 6.81, a coverage floor (2026-11-06, pom, workflow, tests and documents changed)
+- **Problem:** the item says to take the floors from today's JaCoCo report; there is none here (the agent and Maven are not available), and I could not measure coverage another way.
+- **Done:** `jacoco-check` at `verify` with a `PACKAGE` rule for `service`, `dao`, `util`, `config`, `model` (floors in properties, 0.30 each, **provisional**); CI summary table of measured coverage per package; `floors-baseline.properties`; `CoverageFloorTest` (3), `CoverageSetupTest` changed to expect the check goal. Also moved the `bugs` job of session 207 back below the right comment block in `ci.yml` (it had landed between the MariaDB job and its own comment).
+- **Not known:** whether JaCoCo reads `<include>` as a package name in a PACKAGE rule (written from memory); whether 0.30 is safe. Suite in the hand-made runner: 1,471 passed, 0 failed, 148 not run.
+
+## Session 210 - TODO 6.77, random test order and the tests that share state (2026-11-06, tests, one workflow and notes; no program code changed)
+- **Found in the zip (`Lunavera_Coffee_6_81_done`):** item 2.90 (the four tests that failed in the full run) was already fixed, there was no random-order job, and `TestDatabaseSupport` had no help for days or for putting tables back. The tests keep their days apart by each claiming a year in a comment, and nothing checked the claims. Reading them: **2032 was claimed by `RefundLinesTest` and by `RevenueBookTest`**, both write sales on 2032-03-03 and 2032-03-10 and count over March (and `RevenueBookTest` asserts exact counts), and `OrderChannelTest` wrote in 2032 too (May). Each class deletes its own rows after each test, so in the fixed order this passes unless a cleanup misses a row; a leftover or a change of order is what makes it fail.
+- **Changed:** `RevenueBookTest` 2032 to 2035 (all dates, the two month labels, the comment), `OrderChannelTest` 2032 to 2036, comment of `RefundLinesTest`; new `TestYearsAreOwnedTest` (3 tests), `TestDatabaseSupportHelpersTest` (5 tests), `TestDatabaseSupport` (`freshDays`, `freshDay`, `snapshot`/`restore`), `.github/workflows/random-order.yml`, README paragraph, notes.
+- **Run here (JDK 21 compiler module, my stand-in for JUnit; no Maven, no SQLite):** all changed and new files parse; `TestYearsAreOwnedTest` was run on the new tree (green) and on the old tree (red with exactly the three 2032 lines), after I first found that my claim finder read its own examples and the "history" sentence I had put in a comment as claims, and fixed that (it now reads only the years before the phrase "no other test" and skips "in this class"). **Not run:** `TestDatabaseSupportHelpersTest` and everything that needs the database (the `snapshot` SQL was written without a database to try it on: a plain `SELECT *`, `DELETE`, `INSERT` with the column list in one transaction), the moved tests `RevenueBookTest` and `OrderChannelTest` (the change is only the year, but a weekday or a leap-year assumption would show only there), and the workflow (the seed line of surefire's log is read with `grep` from memory of its wording; the summary says so when it is not found).
+- **A wider look (not changed, for a human):** the same calendar day appears in more than one database test class in 19 places that no comment claims (for example 2400-01-01 in four classes, 2026-03-10 in `TimeClockTest` and `TimeClockCorrectionTest`, 2026-11-01 in `PromotionDAOTest` and `StartSellingDatabaseTest`). Most are probably dates used as data (a hire date, an `AppClock.fix`) and not rows counted over a range; the random run will say which matter. Static state: about 40 classes start a `Session` and rely on `TestSession.admin()` in an `@After` to leave the "admin signed in" state, which is the convention here and is consistent; no leak without a restore was found by the scan except the ones those conventions already cover.
+- **Choices (say if any is wrong):** `freshDays` starts in the year 3000 (both databases keep such dates) so it can never meet a hand-picked year; the older tests were not moved onto it (the item asks for the helper and the job, and only the real collision was fixed); the random job has no JaCoCo and is `continue-on-error`.
+- **Merge points:** `RevenueBookTest`, `OrderChannelTest`, `RefundLinesTest` (comment), `TestDatabaseSupport`, the two new tests, `.github/workflows/random-order.yml`, `README.md`, `TODO.md` (item 6.77, count 209 to 208, one check in section 0), `COMPLETE.md`, `CHANGELOG.md`, `progress.md`.
+
+## Session 211 - TODO 5.43, low text contrast (2026-11-07, style sheets and one test changed)
+- **Base:** `Lunavera_Coffee_6_77_done.zip`; it had one red test (`LocaleDigitsTest`, from `TestYearsAreOwnedTest` calling `String.format` without a locale): fixed.
+- **Found:** a script over the sheets (WCAG formula) gave 59 rules under the limit (11 of them false: white text whose background is in another rule).
+- **Done:** 49 colours darkened by the smallest step that clears the limit by 0.05 (text darkened, or the button colour for white text); `CssContrastTest` (4) with an empty accepted list, checked to fail on the old sheets; TODO 43 `[~]` with a look-at-the-screen line; CHANGELOG.
+- **Not done:** white text on a background set by another rule, lookups and derive(), and icons above 3.0 but below 4.5 were not changed. No screen was looked at. Suite in the hand-made runner: 1,477 passed, 0 failed, 149 not run.
+
+## Session 212 - TODO 5.41, the program says its version (2026-11-07, code, resources, pom, tests and documents changed)
+- **Done:** `AppVersion` + `app-version.properties` (filtered by Maven for that file only); login screen, Settings, first log line of each start, crash lines, jar manifest; two language keys; `AppVersionTest` (7, ran); `docs/RELEASE.md` section on raising the version; TODO 41 `[~]` and a manual line; CHANGELOG.
+- **Not done:** the version in each backup; a real version in the pom; the security log line. Not built with Maven here, so the filtering is untested (the program says `dev` from the sources). Suite in the hand-made runner: 1,484 passed, 0 failed, 149 not run.
+
+## Session 213 - leftovers: Help buttons (6.71 a), version in log head and backup info (5.41) (2026-11-07, code, tests, documents changed)
+
+Added `HelpPages`, `HelpDialog`, two Settings buttons, i18n keys (vi/en), `HelpPagesLoadTest`, `BackupInfoVersionTest`, `LogHeadVersionTest`; `docs/SCREEN_TOUR.md` lists `HelpDialog`. Library-free suite green; not run under JavaFX or Maven. Not done: screenshots, cashier try-out, cashier-side Help, icons at 4.5 contrast, pom version.
+
+## Session 214 - TODO 4.46, the staff hours as a CSV file (2026-11-07, code, tests, texts and documents changed)
+- **Found in the zip (`Lunavera_Coffee_leftovers_done`):** `TimeClockDialog` showed the hours per person (name, hours, hourly rate, pay estimate, state; TODO 4.60) with no export, while the order history (`OrderHistoryExport`), the customer list and the report each have one; the shared writer is `ExportCsv.write` (UTF-8 with a BOM, the `sep=,` line, CRLF, a message when Excel has the file open) and cells go through `Csv.cell`.
+- **Choices (mine; the item left them open):** the button is the existing label `common.exportcsv`, in the administrator part, beside the range it exports; clicking it asks (a box with three buttons) "one line per person" or "one line per person per day", then the file; the hours are given twice, `7:30` and `7.50` (Excel may read the first as a time of day, the second adds up); the rate and the pay are plain numbers in dong with no symbol and are EMPTY, not 0, for a person without a salary (the screen shows `-`); the per-day file uses the shop's day (`BusinessDay`, TODO 4.50) so a night stretch is cut at the end of the shop day and the days add up to the person's total; an open stretch counts up to now but never past the forgotten-stretch limit, exactly as the table does; an empty range writes no file and says so; the export leaves a line in the security log.
+- **Code:** `util/StaffHoursCsv` (pure: `perPerson`, `perDay`, `decimalHours`), `controller/TimeClockExport` (the box, the file chooser, the work off the screen thread, the messages; a new file so `TimeClockDialog` only gained two lines), the button in `TimeClockDialog`, 6 new texts in both languages and the two header lines.
+- **Tests added (15):** `StaffHoursCsvTest` 12 (the header and a line per person, the rate and pay equal to `EarningsRules` for a monthly and an hourly salary, empty rate and pay without a salary, the state in words, a formula-like name and a comma in a name, the decimal hours at 0, 1, 59, 450, 6000 and negative minutes, per-day lines with empty days left out, a stretch across midnight cut and adding up, a shop day starting at 04:00, an open stretch, a range the wrong way round, both languages have the same columns), `TimeClockExportSourceTest` 3 (the button is in the administrator part with the shared label, the file goes through `ExportCsv.write` and `Async`, names go through `Csv.cell`).
+- **Run here (JDK 21 compiler module, a small JUnit stand-in, no JavaFX, no Maven):** the two new test classes 15/15 plus `I18nTest`, `MessagesTest`, `UntranslatedTextTest`, `ControllerSizeTest`, `FxmlControllerCheckTest`, `DialogFitUsageTest`, `CsvTest`, `ExportOrdersStreamTest`, `AppClockUsageTest` (67 in all, 0 failed); the two changed screen files parse and every project symbol they use resolves (only JavaFX types are missing).
+- **Not done / not tried:** the box, the file chooser and the button were never shown (no JavaFX here); no file was opened in Excel (the BOM and `sep=,` come from the shared writer, which has its own tests); `TimeClockDAO.hours` and `findBetween` were not run against a database in this session (they were not changed). Not covered: a column for the person's staff pay period or for the corrections made by hand (3.67); a total line at the end of the file (left out so the file is only rows).
+
+## Session 215 - TODO 3.85, bookings for the current minute and parties bigger than the table (2026-11-07, code, tests, texts and documents changed)
+- **Found in the zip (`Lunavera_Coffee_4_46_done`):** `ReservationRules.problem` refused `when.isBefore(now)` with seconds in `now`, and refused every party above the table's seats ("book two tables") although nothing could book two tables at once.
+- **Code:** `ReservationRules` (the minute; `problem` with the other free tables; `extraTables`, `mergeNote`, `noteWithMerge`), `ReservationDAO` (`otherFreeTables`, the new read-only `problemFor`, `add` saves the note with the tables to join), `ReservationDialog` (asks `problemFor`, shows the tables after saving), two texts in both language files (`reservation.val.capacity` changed, `reservation.merge.note` new).
+- **Choices (mine, the item left them open):** a party bigger than the table is accepted when the other tables with no booking within a slot of that time can seat the rest; the tables to join go into the note (so staff see them on the list) and the other tables are not booked; occupancy by open orders is not looked at for a future time; the note limit of 200 includes the added words.
+- **Tests:** `ReservationRulesTest` +5, `ReservationDaoTest` +4 and the "too big" case changed.
+- **Run here (JDK 21 compiler module, a small JUnit stand-in, no SQLite driver, no JavaFX):** `ReservationRulesTest` 13 of 13 green; with the old behaviour put back 4 new tests fail. `ReservationDAO` and `ReservationRules` compiled; `ReservationDaoTest` compiled. **Not run:** the DAO tests, nothing that imports JavaFX was compiled (`ReservationDialog` was read, not built).
+- **Merge points:** `service/ReservationRules`, `dao/ReservationDAO`, `controller/ReservationDialog`, `messages_vi/en.properties`, `ReservationRulesTest`, `ReservationDaoTest`, `TODO.md`, `CHANGELOG.md`.
+
+## Session 216 - TODO 3.84, Vietnamese order in the SQL-sorted lists (2026-11-06, code, tests and notes changed)
+- **Found in the zip (`Lunavera_Coffee_3_85_done`):** the lists sorted by name in SQL were `CustomerDAO.search` (with `LIMIT`), `IngredientDAO` (3 places), the low-stock products and ingredients, `TimeClockDAO.people` (`ORDER BY 2`), `UserDAO.pinHolders` and the order-history sort keys (`NOCASE`, ASCII only). A Java sort of the result would not fix the customer list, because `LIMIT` cuts after the sort, so the SQLite fix is a collation registered on every connection, as `VN_KEY` already is for the search.
+- **Changed:** new `VietnameseOrder`; `PagedTable` (its own `Collator` removed); `DatabaseConfig` (`VIETNAMESE_COLLATION`, `registerVietnameseCollation`); `SqlDialect.vietnameseOrder`; `CustomerDAO`, `IngredientDAO`, `ProductDAO`, `TimeClockDAO`, `UserDAO`, `OrderDAO`; tests `VietnameseOrderTest`, `VietnameseOrderSourceTest`, `VietnameseSortDatabaseTest`, `SqlDialectTest`; notes. No schema change, no new text for the screen.
+- **Run here (JDK 21 compiler module and a stand-in for JUnit; Python's SQLite; no Maven, no sqlite-jdbc, no database):** all 13 changed or new Java files parse; `VietnameseOrderTest` (5) and `VietnameseOrderSourceTest` (3) were run and pass, and the source test was run on the OLD tree and fails there on the four plain `ORDER BY` name lists; the JDK collator was printed for 17 names (`An, Ăn, Ân, ba, Ba, Bà, Dũng, Đào, Đặng, E, Ech, Ê, Ếch, Ơn, Ưng, Zoe, Zung`); the seven `ORDER BY ... COLLATE VN_ORDER` forms the code now builds were run on a real SQLite with an emulated collation: the customer cut at 3 gives `An, Ân, Ba` where the old query gave `An, Ba, Zung`. **Not run:** `VietnameseSortDatabaseTest` and `SqlDialectTest` (need the database or JUnit), and the one call I could not try, `org.sqlite.Collation.create(connection, name, collation)` with `protected int xCompare(String, String)` of sqlite-jdbc 3.46.1.3, written from memory of its API (it mirrors the `Function.create` call next to it; `TODO.md` section 0 says what to look for if the program does not start).
+- **Choices (say if any is wrong):** strength SECONDARY (capitals equal, marks count), which also changes `PagedTable` a little (a small letter used to come before the same capital); the tie-breaks by name in `ReportDAO` and `ShiftDAO` (after an amount) were left as they are; only the lists named in the item and the other plain name sorts found by the new source test were changed; the importer's read of an old SQLite file (`SqliteToMariaDbImporter`) was left alone.
+- **Merge points:** `DatabaseConfig`, `SqlDialect`, `PagedTable`, the six DAOs, `SqlDialectTest`, the three new tests, `VietnameseOrder`, `TODO.md` (item 3.84, count 208 to 207, one check in section 0), `COMPLETE.md`, `CHANGELOG.md`, `progress.md`.
+
+## Session 217 - TODO 3.78, two-digit years in date boxes (2026-11-07, code, tests and notes changed)
+
+Added `DateTextConverter`, `DateBoxes`, `StaffRules.hireDateProblem`, the minimum-year rule in `VoucherRules`, `date.val.early` (vi/en), `DateTextConverterTest`, `EarlyDateRulesTest`, and a `javafx.util.StringConverter` stand-in for the library-free runner (without it the new class was silently dropped and with it `StaffRules` and `VoucherRules` and their tests: the pass count fell by 41 until it was added). `AccountController` stayed under its size ceiling (505 lines). Library-free: 1,090 passed, 0 failed; not run under JavaFX or Maven.
+
+## Session 218 - TODO 3.76, longest corrected clock-out (2026-11-07, code, test and notes changed)
+
+`TimeClockRules.correctionProblem` gained "LONG" (24 hours, the constant `stretchProblem` already used); `TimeClockDAO.closeForgotten` shows the existing `time.clock.val.long` text; `ClockOutLengthTest` (3). Deviation from the TODO text (16 hours plus confirmation) is written in the item. Not run under JavaFX, a database or Maven.
+
+## Session 219 - TODO 3.75, a count is saved as the counted number (2026-11-07, code, tests and notes changed)
+
+`IngredientDAO.setCounted` (+ `Counted` record), `IngredientDialog.count` uses it and tells the person what was used since the list loaded, two i18n keys (vi/en), `IngredientTest` (database) and `IngredientCountSourceTest`. Library-free 1,095 passed, 0 failed; the database test and the window were not run.
+
+## Session 220 - TODO 3.74, a booked table asks before an order goes on it (2026-11-07, code, tests and notes changed)
+
+`ReservationRules.bookedNear` and `bookedWarning`, `controller/BookedTables`, three call sites (`TableMovePanel` transfer, two in `OrderController`, whose line count stayed at its ceiling of 1380 by changing existing lines), key `reservation.warn.booked` (vi/en), `BookedTableWarningTest` (6). Library-free 1,101 passed, 0 failed; the screens were not compiled or run (JavaFX).
+
+## Session 221 - TODO 2.103, the note under the total is a setting (2026-11-07, code, tests and notes changed)
+
+`PriceNote`, `PriceNoteText`, `PriceNoteLabel`, a Settings row, the fxml label replaced, `ShopSettings.load` calls `PriceNote.load`, three keys (vi/en), `PriceNoteTest`, `PriceNoteDatabaseTest`. `PriceNote` itself and `ShopSettings` do not compile in the library-free runner (they need the database driver), so the pure part was moved to `PriceNoteText` to be tested there. Library-free 1,104 passed, 0 failed.
+
+## Session 222 - TODO 2.102, the main method of a bill with a gift card (2026-11-07, code, tests and notes changed)
+
+`service/MainPaymentMethod` (`effective`, `stored`), `OrderDAO.storedMethod` and `SplitPaymentPanel.effectiveMethod` use it, `MainPaymentMethodTest` (5). Card plus cash staying under the card is by design and written in the item. Library-free 1,109 passed, 0 failed; the panel and the database were not run.
+
+## Session 223 - TODO 2.100, a changed line note stays in its place (2026-11-07, code, tests and documents changed)
+- **Found in the zip (`Lunavera_Coffee_2_102_done`):** `OrderItemDiff.plan` matched saved and wanted lines by product, name, NOTE, options and price only, so a line whose note changed matched nothing: its row was deleted and a new one inserted (new id, last place in `ORDER BY id`). The existing `OrderNotesDaoTest.aChangedNoteOnAnOpenOrderIsSavedAndAnUnchangedOneKeepsItsRow` expected the new-note line first and so failed by itself (confirmed by reading, not run here).
+- **Fix:** two passes. (1) Every wanted line takes the first unused saved line it matches exactly, as before. (2) Each wanted line still without a match takes the first unused saved line that differs from it ONLY in the note (same product, name, options and price) and becomes an UPDATE of that row (`Change.noteChanged`). Left over wanted lines are inserts, left over saved lines are deletes. `OrderDAO.update` now writes `quantity, line_total, note` (the note through `OrderNote.clean`, as the insert does). Exact matches go first so a loose pairing can never take the row an exact match would have kept (tested: saved "a","b" -> wanted "b","c": "b" keeps row 2, "c" takes row 1).
+- **Choice (mine):** a changed SIZE, EXTRA or PRICE stays a delete and an insert even when the note also changed: an in-place update would have to rewrite the size, extras, option cost and unit price columns (and the stamped cost) too, and the item only asked for the note case. The counters of 6.37 stay true: a plain quantity change is still one update, the same lines are no writes.
+- **Tests:** 8 new in `OrderItemDiffTest` (a note changed, added and removed is one update of the same row; note and quantity together; spacing-only difference is no change; another product, price or size is still delete + insert; exact match keeps its row; two lines with new notes pair in order; a new line beside a changed note). 6 of them FAIL on the old class (`insert 1, update 0, delete [1]`), all pass on the fix. `OrderNotesDaoTest` got the row-id assertions (the line with the new note keeps its row and place; taking the note off keeps it too).
+- **Run here (JDK 21 compiler module, a small JUnit stand-in, `tools/run-library-free-tests.sh`, no JavaFX, no database driver, no Maven):** the whole library-free suite 1074 passed, 0 failed (2 classes need a library); `OrderItemDiffTest` 16/16. The new `UPDATE order_items SET quantity = ?, line_total = ?, note = ? WHERE id = ? AND order_id = ?` was replayed in real SQLite on the project's own table definitions: the row ids and their order stay, the note changes and can become NULL.
+- **Not run:** `OrderNotesDaoTest` and `OrderDAOTest` (need the SQLite driver; `OrderDAO` is one of the files this sandbox cannot compile), nothing on MariaDB (the statement is plain SQL with one more column).
+
+## Session 224 - TODO 2.95, three number boxes read 7.5 as 75 (2026-11-07, code, tests, texts and documents changed)
+- **Found in the zip (`Lunavera_Coffee_2_100_done`):** `StockRules.parseQuantity` and `IngredientDialog.number` deleted every dot, comma and space before reading a number; run on the old code `7.5` gave 75, `1.5` 15, `0.5` 5, `2,5` 25, `12.5.1` 1251, `1 2` 12.
+- **Code:** new `service/WholeNumber.parse` (the `ProductCsv.parseStock` rule); `StockRules.parseQuantity`, `IngredientDialog.number` and `ProductCsv.parseStock` use it; the receive dialog refuses zero and negative numbers (and its preview stays empty); two texts changed in both language files (`ingredient.val.number`, `stock.val.quantity`). `IngredientDialog.number` is also what `RecipePane` (the amount in a drink) and `OptionEditDialog` (price, cost, percent) call, so they changed with it.
+- **Tests:** `WholeNumberTest` 9. **Run here (JDK 21 compiler module, a small JUnit stand-in, no JavaFX, no SQLite driver):** `WholeNumberTest`, `StockRulesTest` and `ProductCsvTest` 34 of 34 green. **Not run:** nothing that imports JavaFX was compiled (`IngredientDialog`, `RecipePane`, `OptionEditDialog`); the dialogs were changed by reading.
+- **Choices (mine):** a comma is refused everywhere, also in a box that used to take `1,000` as a thousand (the item says so; the message tells what to type); a minus sign is still read by `number` (the caller decides), and the receive box refuses it.
+- **Merge points:** `service/WholeNumber` (new), `service/StockRules`, `service/ProductCsv`, `controller/IngredientDialog`, `messages_vi/en.properties`, `WholeNumberTest` (new), `TODO.md`, `CHANGELOG.md`.
+
+## Session 225 - one main project: the other lines merged in (2026-11-07, tests and documents only)
+- **What was merged into this line (`Lunavera_Coffee_2_100_done` + TODO 2.95):** the earlier work on other copies was compared with what this line already has. TODO 3.85 (bookings) and TODO 3.84 (the Vietnamese order in SQL, here with the collation name `VN_ORDER`, `VietnameseOrderTest`, `VietnameseOrderSourceTest`, `VietnameseSortDatabaseTest`) were already in it, and so is a hand-made mutation sweep (`tools/mutation-sweep.py`, TODO 6.78, session 206). Nothing of those was overwritten.
+- **Added:** the six `*BoundaryTest` classes of a second mutation sweep (46 tests, no database). The same 365 changes were run twice on this code, with the tests that mention the six money classes and can run without a database or JavaFX: 45 survived, then 35 with the six classes added; the 10 that only they kill are listed in `docs/TESTING-MUTATION.md`. All 46 pass here. The second runner itself (`tools/mutation/`) was NOT added: `tools/mutation-sweep.py` does the same job.
+- **Run here (JDK 21 compiler module, a small JUnit stand-in, no JavaFX, no SQLite driver):** the 46 tests 46 of 46 green; the sweep above. **Not run:** the whole suite (`./mvnw -B clean test`) and anything database-backed. The harness could not run every test that mentions the six classes (15 classes of 29 compiled without the database layer), so the 45 survivors are an upper bound for the existing tests.
+- **Merge points:** `src/test/.../service/*BoundaryTest.java` (5 new), `util/MoneyParserBoundaryTest.java` (new), `docs/TESTING-MUTATION.md`, `TODO.md` (item 6.78), `progress.md`.
+
+## Session 226 - TODO 2.89, five dialogs skipped AlertUtil.configure (code, a test and documents changed)
+- **Found:** a variable-based scan of `src/main` (60 dialog constructions) finds five without `configure`/`initOwner`: `TableManagerDialog` 2, `AdminDashboardController` 3. The item said six; the transfer-QR dialog is already fine.
+- **Fix:** `AlertUtil.configured(D dialog)` (new, returns the dialog after `configure`) used where each is made; no line added (ceiling of `AdminDashboardController` is 607 and is exactly met).
+- **Test:** `DialogConfigureSourceTest` (7 methods: the whole-source scan and six cases on small sources); it failed on exactly the five before the fix. `DialogFitUsageTest` counts `configured(` as a fit. Suite: 1143 passed, 0 failed (library-free runner).
+- **Not done / not tried:** no JavaFX compile, no screen. `FileChooser`s are not dialogs of this kind and were left alone.
+
+- **Merge note (after Session 226):** 3.84 was already done on this branch (`VietnameseOrder`, the `VN_ORDER` collation, `SqlDialect.vietnameseOrder`, `VietnameseSortDatabaseTest`, `VietnameseOrderSourceTest`), so the separate 3.84 work was not merged in. Only one finding was kept: `VietnameseOrder` asked for `Collator.getInstance("vi")`, which needs `jdk.localedata`, absent from a jlink image unless asked for; its rules are now built from the root rules plus the Vietnamese ones written out (`VietnameseOrder.vietnameseCollator`, `VietnameseOrderRulesTest` 3). Suite: 1146 passed, 0 failed (library-free runner).
+
+## Session 227 - TODO 2A.36, the narrow GRANT tried on a real MariaDB server (2026-11-07, documents changed, no code)
+- **What was done:** installed MariaDB 10.11.14 from the Ubuntu packages, created the user exactly as `docs/DATABASE.md` section 2 says, and ran the app's own code against it over TCP with the MariaDB Java driver: `DatabaseConfig.initialize()` on an empty database, again on a database made older on purpose, then a sale through `StaffService`, `CategoryDAO`, `ProductDAO` and `OrderDAO` (insert, `payExistingOrder`, cash), then `MariaDbBackup.dumpTo`.
+- **Result:** no "command denied" anywhere. Empty database: 29 tables, 12 dining tables, 33 starter products. Older database (root dropped `idx_orders_paid_at` and 21 later columns and set `schema_version` to 2): the start added the columns, re-created the index and wrote version 3. Sale: order 1 PAID. Backup: 38,549 bytes, 29 `CREATE TABLE`. As that user `DROP TABLE`, `DROP DATABASE`, `CREATE USER`, `GRANT`, `CREATE DATABASE` and `SELECT` on `mysql.user` were all refused, and the 29 tables stayed. **The list in the guide is enough; nothing was added.**
+- **Changed:** `TODO.md` item 2A.36 ticked and the section 0 check for it removed; one sentence in `docs/DATABASE.md` section 2; one line under Security in `CHANGELOG.md`.
+- **How it was run (a stand-in, not the real build):** Maven Central is not reachable from the sandbox, so `javac` compiled `src/main` without `module-info.java`, with the apt packages `libmariadb-java`, `libxerial-sqlite-jdbc-java` and `libslf4j-java`, one empty `javafx.util.StringConverter` stand-in and the test `TestSession`. The database code that ran is the project's own; the screens and `./mvnw -B clean test` were not run.
+- **Not tried:** MySQL 8 and the XAMPP build of MariaDB (the 11.x or 10.4 server may differ in small things), a till on another computer with the `'lunavera'@'192.168.1.%'` user, the restore (needs the extra `GRANT` of section 6), a real start from the JavaFX window. The "207 boxes and items" in the `TODO.md` header was not recounted.
+
+## Session 228 - TODO 2A.47, easy passwords and PINs refused (2026-11-07, code, resource, tests and documents changed)
+- **Found:** the item was right: `letmein123`, `iloveyou123`, `qwertyuiop1`, `1q2w3e4r5t`, `trustno1x`, `caphe2026`, `admin2026!`, `aaaaaaaa1` passed `isValidPassword`, and `121212`, `123123`, `112233`, `000111`, `696969`, `520520` passed `PinRules.isAcceptable`.
+- **Code:** new `util/PasswordStrength` (list from `passwords/common-passwords.txt`, loaded once, falls back to the old 25 words and never throws; plus the one-repeated-character, keyboard-run and common-word rules); `ValidationUtil.isValidPassword` uses it (its private 25-word set is gone); `PinRules.isAcceptable` has the new shapes and a short list of pad patterns. Messages `password.problem.weak`, `pin.rule` in both languages.
+- **Resource:** 4,076 lines from SecLists `10k-most-common.txt` (MIT) and the first 4,000 usable lines of its copy of the NCSC 100k list, plus shop and Vietnamese words; the first lines of the file and `THIRD-PARTY-NOTICES.md` give the source. The item asked for "a few thousand"; only lines of 8+ characters with a letter and a digit matter here, so the 100,000-line source shrinks to this.
+- **Choices (mine):** (1) a keyboard run is looked for only in a password under 12 characters, by its letters, so a long phrase with `qwerty` inside is not refused; (2) a common word counts only when at most 2 letters are left once it is taken out, so `my-coffee-beans-are-roasted-7` passes and `coffee2028` does not; (3) 4 different characters is the floor (`abcabcabc` has 3 and is refused); (4) PINs already set are not re-checked, because sign-in uses `hasShape`, so nobody is locked out; (5) the NCSC-derived part is flagged *(to confirm)* in the notices, and the list can be cut back to the MIT part without a code change.
+- **Tests:** `PasswordStrengthTest` 12, `PinRulesTest` +5, `ValidationUtilTest` +1. Run here with the JDK compiler, JUnit 4 and `tools/run-library-free-tests.sh`: **1202 passed, 0 failed** (2 need JavaFX or a driver); 4 of the new checks fail on the old classes and pass on the new. `I18nTest`, `UntranslatedTextTest`, `ThirdPartyNoticesTest` still pass.
+- **Not run:** `./mvnw`, the four dialogs that show the message (account, first run, password change, PIN setup), a real login. The header count of open items in `TODO.md` was not recounted.
+
+## Session 229 - TODO 2A.46, a colleague's PIN is no longer switched off in silence (2026-11-07, code, tests, messages and documents changed)
+- **Found:** the item was right. `PinService.signInByPin` called `userDAO.clearPin` at the 5th wrong PIN and wrote only a line in the rotating text log; the owner of the PIN was never told, the audit window showed nothing, and nothing counted wrong PINs per till, so one till could go from name to name and switch off every PIN of a shift.
+- **Audit:** `AuditAction.PIN_SWITCHED_OFF` and `PIN_TILL_CLOSED` (labels and detail texts in both languages, `AuditText.detail`). `UserDAO.switchOffPinAfterWrongTries(id, username, failures)` does the PIN removal, the audit line (`AuditDAO.write`, actor = whoever is signed in on the till) and the notice flag on one connection and commits once, so there is never a PIN switched off without a line, and never a notice for a PIN that is still on.
+- **Notice:** no new column (a column would need a numbered migration, both CREATE TABLEs, the importer and the restore). The flag lives in `app_flags` as `pin_off_notice:<user id>` (new `AppFlags.markIn(connection, name)` so it joins the transaction). `PinService.takeSwitchedOffNotice(userId)` reads and removes it (shown once); `controller/PinOffNotice` shows the box. It is called from `LoginController.enterApplication` and from `LockScreen` after a password unlock; kept in its own class because `PinServiceTest.theLoginCodeDoesNotKnowThePinAtAll` forbids `PinService` in the login code. `setPin` clears the flag (a new PIN answers the notice).
+- **Per till:** new `service/TillPinCounter`: wrong PINs in a row for any names, in memory (a program is a till; MariaDB tills each count their own). 10 in a row (two names' worth) close the PIN pad for 15 minutes, worked out from the time of the last wrong PIN so it ends by itself; a right PIN or 15 quiet minutes resets it; a password unlock does NOT reset it (otherwise lock, 10 wrong, unlock, repeat would be free). `PinService` returns the new `Status.TILL_CLOSED` before touching the database, so a closed pad counts against nobody. `LockScreen`: with the pad closed the box is in password mode (new text `pin.lock.tillclosed`); when the 10th wrong PIN is typed the PIN box closes and the password box opens at once.
+- **Choices (mine):** (1) the notice does not name who typed the wrong PINs (the audit window does, for the administrator; the till is often shared and the culprit may be a stranger); (2) 10 and 15 minutes are constants in `TillPinCounter`, not settings; (3) the notice is removed when it is read, before the box is drawn, so a crash can lose it but never repeat it; (4) an administrator's password reset still removes the PIN without this notice (a different, announced action).
+- **Tests:** `TillPinCounterTest` 6 and `AuditTextTest` +1 run: **library-free suite 1209 passed, 0 failed** (was 1202; 2 need JavaFX or a driver). `PinServiceTest` +9 (audit line and actor, notice once, no notice for the typist or after a self-removal, a new PIN clears it, three names closing one till with one audit line, a closed pad refuses the right PIN and leaves bob's count at 0, reopening after 15 minutes, another till unaffected, source wiring) **compile but were not run** (no SQLite driver here). `UserDAO`, `PinService`, `AppFlags` and `AuditText` were type-checked together with the JDK compiler; `LockScreen`, `PinOffNotice` and `LoginController` could not be compiled (no JavaFX) and were read through.
+- **Not run:** `./mvnw`, `PinServiceTest`, the lock screen (closing into the password box), the notice box after a real sign-in, MariaDB. The header count of open items in `TODO.md` was not recounted.
+
+## Session 230 - TODO 2A.45, gift-card codes tried without limit (2026-11-07, code, tests, messages and documents changed)
+- **Found:** the item was right. `GiftCardDAO.findByCode` (the "Kiểm tra" button in `SplitPaymentPanel` and the balance box in `GiftCardDialog`) answered any code any number of times and left no trace.
+- **Code:** new `service/GiftCardLookupGuard` (same shape as `TillPinCounter` of Session 229): 5 unknown codes in 60 seconds, then a 60-second pause; reads `MonotonicClock`; memory only, so each till counts its own. `GiftCardDAO` has a default constructor (one shared guard for the program) and one taking a guard (tests). In `findByCode`: a text that is not a well-formed code returns empty and is not counted (it cannot be a guess); during a pause it throws `DataAccessException` with `giftcard.wait` BEFORE any database read (both screens already show `e.getMessage()`, so no screen changed); an unknown well-formed code is logged (`SecurityLog.warnLimited`, typed text through `redactTyped`) and counted; the 5th starts the pause, writes a `SecurityLog.warn` and one audit line `AuditAction.GIFT_CARD_GUESSING` (detail `5|60`, read in words by `AuditText`).
+- **Choices (mine):** (1) a right code does not reset the count, so a known card typed between guesses buys nothing; (2) the price is that a cashier who mistypes five different codes within a minute waits a minute; (3) the pause is 60 s, not "short" in the item's sense of a few seconds, because the count is per till and 5 tries a minute is already far beyond what a person types; (4) `GiftCardDAO.redeem` (paying) is NOT guarded: the screens check the code first, and it runs inside the payment's transaction, where an audit line on another connection could meet the SQLite write lock; a payment with a code that no longer exists is refused as before.
+- **Tests:** `GiftCardLookupGuardTest` 5 and `AuditTextTest` +1 run: **library-free suite 1215 passed, 0 failed** (was 1209; 2 need JavaFX or a driver). `GiftCardTest` +2 (six unknown codes: the sixth waits, even a right code waits, one audit line, the lookup works again after the pause; right codes and non-codes are not counted) **compile but were not run** (no SQLite driver). The DAO, service and text classes were type-checked with the JDK compiler.
+- **Not run:** `./mvnw`, `GiftCardTest`, the two screens showing the wait message, MariaDB. The header count of open items in `TODO.md` was not recounted.
+
+## Session 231 - TODO 2A.44, expenses and vouchers missing from the audit log (2026-11-07, code, tests, messages and documents changed)
+- **Found:** the item was right. `ExpenseDAO` (record, delete) and `VoucherDAO` (create, switch) wrote only to the text security log; `ExpenseDAO.delete` was a bare `DELETE` with no figures kept. The transfer-QR guard and `ShopSettings.saveAll` (apart from the rules) also wrote only text.
+- **Code:** `AuditAction` +6 (`EXPENSE_RECORDED`, `EXPENSE_DELETED`, `VOUCHER_CREATED`, `VOUCHER_SWITCHED`, `TRANSFER_QR_CHANGED`, `SETTINGS_CHANGED`), `AuditTarget` +`EXPENSE`, +`VOUCHER`, new `model/AuditSetting` (setting names; kept in `model` so `AuditText` does not depend on `ShopSettings` or `TransferQrGuard`, which do not compile in the library-free run). `ExpenseDAO.add` now runs in one transaction with its line; `insert` writes `EXPENSE_RECORDED` (so a delivery's expense has one too); `delete` reads the row, deletes it and writes `EXPENSE_DELETED` (old value = dong, detail `day|drawer 0/1|note`) in one transaction. `VoucherDAO.add` writes `VOUCHER_CREATED` (new value `PERCENT:10` or `AMOUNT:20000`, detail `min|from|to|max|once`); `setActive` writes `VOUCHER_SWITCHED` (`ON`/`OFF`) only when the state changes. `TransferQrGuard.Store` has a second `save` with a `Change` (`PICTURE`, `INFO`, `ACCEPTED`, old and new account text); the database store writes the line in the same transaction as the fingerprints, other stores just save. `ShopSettings.saveAll` writes one `SETTINGS_CHANGED` line per changed detail. `AuditText` reads all of it in words; 29 keys in both languages.
+- **Choices (mine):** (1) the audit line of a deleted expense does not name who wrote the expense (the `EXPENSE_RECORDED` line does, and a person's name in an old note would be one more place to scrub); (2) the second scan's names `EXPENSE_ADDED`/`VOUCHER_SAVED` became `EXPENSE_RECORDED`/`VOUCHER_CREATED` + `VOUCHER_SWITCHED`; (3) switching a voucher to the state it is already in writes nothing; (4) the shop-details lines carry the texts as typed (name, address, phone, tax code), as the security log already did; (5) the price note is not audited.
+- **Tests:** `AuditTextMoneyAndCodesTest` 9 (exact English words, both languages, a note with `|`, an old-shaped note) run in the library-free suite: **1224 passed, 0 failed** (was 1215; 2 need JavaFX or a driver). `TransferQrAuditTest` 5 and `ShopSettingsAuditTest` 3 do not compile in the library-free run (`ShopSettings`, `TransferQrGuard` never did); they were run here by hand with a throwaway `org.sqlite.Collation` stub outside the project together with `TransferQrGuardTest` and `ShopSettingsTest`: all passed. `ExpenseVoucherAuditTest` 8 (a real database: lines with figures, from the drawer, delete keeps the figures, a missing id or a refused expense writes nothing, voucher limits, switching) **compiles but was not run** (no SQLite driver).
+- **Not run:** `./mvnw`, `ExpenseVoucherAuditTest`, `TransferQrGuardDatabaseTest` (the real store with the audit line), the audit window showing the new lines, MariaDB. The header count of open items in `TODO.md` was not recounted.
+
+## Session 232 - TODO 6.75, how long each kind of data is kept (2026-11-07, code, tests, messages, documents and a test stand-in changed)
+- **Found:** the item was right that nothing was written down, but its list of what is trimmed was incomplete. Read from every `DELETE FROM` (24 places in `main`) and from the folders that prune themselves: the security-log files go after 24 months (`SecurityLogFile`), the program log is 3 x 1 MB, `ReminderLog` keeps 3 days, `before-restore` and `before-cleanup` keep the newest 3, the second backup folder 14; expenses, customers, staff, menu rows and dining tables can be deleted by hand under rules (a customer only when unused: `CustomerDAO.deleteIfUnused`); `before-opening` and `pre-upgrade` copies are never pruned. Nothing deletes `orders`, `audit_log`, `stock_log`, `time_clock`, `shift_closes`, `reservations`, `gift_cards`, `vouchers`. The size of the database file was already in the health line (4.24); only the row counts were missing.
+- **Code:** `DatabaseHealth.Health` has a sixth part `rows` (the old 4- and 5-argument constructors stay, with no rows, so nothing else changed); `COUNTED_TABLES` (8 tables), `rowCounts(Connection)` (one `COUNT(*)` each, a failing table is left out, the others still counted), `rowsText`, and `describe` adds a second line only when rows were counted. `read()` counts on its own connection, off the screen thread as before. 9 new keys in both `messages_*.properties` (`admin.health.rows`, `.orders`, `.audit`, `.stock`, `.clock`, `.shifts`, `.expenses`, `.bookings`, `.customers`), written as literals in a `switch` so `I18nTest`'s key scan sees them. No FXML change: the label already wraps and now holds two lines.
+- **Documents:** `docs/DATABASE.md` section 11 (database table, files table, what it means for personal data, and the decision for the owner); `docs/PERSONAL_DATA.md` gap 2 points to it and corrects two words of its own; `CHANGELOG.md`; `TODO.md` 6.75 and a check in section 0.
+- **Choices (mine):** (1) the eight tables counted are the ones that only grow plus `expenses` and `customers`; `order_items` and the other child tables are left out (they follow `orders`); (2) plain numbers, no thousands dots, because the English screen would read `1.234` as one point two three four; (3) **the item's last sentence, "decide once whether the owner wants a yearly export and a clean-up of the oldest audit lines", I did not decide**: it is the owner's and the adviser's (the period), so the item is `[~]` and section 11 and section 0 say what exists and what is open; (4) no deleting of audit lines was built; (5) the staff-removal rule is written as the code has it (orders, stock log, closed shifts, audit lines): `EmployeeDAO.hasHistory` does not look at `time_clock`, which I noticed and did not change.
+- **Tests:** `DatabaseHealthTest` +4 (order of the line, a real 0 shown and an unknown table not, the second line only with rows, the map is read-only), `DatabaseHealthTablesTest` 1 (every counted table is in both schemas), `DataKeptTableTest` 3 (every table with a `DELETE FROM` is named in section 11; the tables called "for ever" have none; the numbers in the file table equal the constants). **Run here** with the JDK compiler and a 30-line JUnit stand-in kept outside the project (the real JUnit jar is not available offline, so `tools/run-library-free-tests.sh` could not run): `DatabaseHealthTest` 11, `DatabaseHealthTablesTest` 1, `DataKeptTableTest` 3 and `EveryTableIsDocumentedTest` 2: 17 passed, 0 failed. `DatabaseHealthRowsTest` 1 (real database) was not run.
+- **Also changed:** `tools/standins/org/sqlite/Collation.java` (new stand-in). Item 3.84 made `DatabaseConfig` use `org.sqlite.Collation`; the stand-ins had no such class, so the library-free script would have left out `DatabaseConfig` and everything that reaches it (`DatabaseHealth` too). Session 231's note about "a throwaway `org.sqlite.Collation` stub outside the project" is the same gap.
+- **Not run:** `./mvnw`, `tools/run-library-free-tests.sh` (no JUnit jar here), `I18nTest` and `UntranslatedTextTest` (checked by a script instead: both files have the same 2,257 keys and the same placeholders for the 9 new ones), `DatabaseHealthRowsTest`, the dashboard on a screen, MariaDB. The header count of open items in `TODO.md` was not recounted.
+
+## Session 233 - TODO 6.76, random tests of the money rules (2026-11-07, six test classes and one helper added; no program code changed)
+- **Found:** the item was right: the 200,000-order check of the refund maths was run once and never kept. The rules it listed all hold; the generator in a first version of the test was wrong twice (see below), the rules were not.
+- **Added** in `src/test/.../service/`: `RandomCases` (helper, not a test: fixed seed 20261107, `-Dlunavera.propertySeed` and `-Dlunavera.propertyCase` to replay one case, the failure message names both and the command), `RefundMathPropertyTest` 3 tests (4,000 orders each: every step of a random refund keeps the rules; a whole-order refund gives back the total and all points; two steps equal one step), `SplitBillRulesPropertyTest` 2, `LoyaltyPolicyPropertyTest` 4 (with **random shop rules**: earn rate, point value, bill share, least points, tiers), `VoucherRulesPropertyTest` 2, `GiftCardSharesPropertyTest` 2, `DiscountPolicyPropertyTest` 1 (random cashier limit and role). 14 tests in all. The last two classes were not named by the item; they are the same idea on two more money rules.
+- **Choices (mine):** (1) 4,000 orders, not 200,000: the item asked for about a second; (2) a priced line is at least 1 dong and points are only spent on a bill above 0, because the shop cannot make anything else (a first generator did, and the refund test then "failed" on points spent on a bill of 0: a mistake of the test); (3) a bill of 0 or less allows no points (the first limit check forgot that); (4) the two-step rule is only claimed when the order is not finished by the two steps, because the last pieces are brought to the exact total on purpose (`RefundMath` javadoc); (5) the random run is part of the normal build, because it is fixed and fast; a run with other seeds is by hand.
+- **Run here** with the JDK compiler (`java -m jdk.compiler/com.sun.tools.javac.Main`, there is no `javac` binary here) and a 40-line JUnit stand-in kept outside the project: 14 passed, 0 failed on the fixed seed and on nine other seeds (1, 2, 3, 4, 5, 777, 99999, 424242, 31337). **Mutation check, in a scratch copy of the sources:** five deliberate changes (the last-pieces adjustment of `RefundMath` removed; refunded money shifted by one dong; `VoucherRules.discountFor` without its `min`; `maxRedeemable` without the balance limit; `GiftCardRules.shares` without handing out the leftover dong) were each caught, with a seed to replay. No change to a file under `src/main`.
+- **Documents:** `docs/TESTING-MUTATION.md` (a section on the random tests: seed, replay, when one fails for real, how to add one); `TODO.md` 6.76 and a check in section 0. No `CHANGELOG.md` line: nothing changes for the till or the owner.
+- **Not run:** `./mvnw`, `tools/run-library-free-tests.sh` (no JUnit jar here), the replay through Maven's `-D` (surefire hands user properties to the test JVM, but it was not tried here), the rest of the test suite after adding the files (the only scanning test that reads `src/test`, `TestYearsAreOwnedTest`, looks for years in dates and "no other test" claims, and the new files have neither). The header count of open items in `TODO.md` was not recounted.
+
+## Session 234 - TODO 6.84, tests for StockTaker, OrderHistoryExport and LanguageSetting (2026-11-07, three test classes added; no program code changed)
+- **Added:** `dao/StockTakerTest` 12 (see TODO 6.84 for the list; the first case is item 2.96), `util/LanguageSettingTest` 8, `controller/OrderHistoryExportSourceTest` 7. 27 tests.
+- **Run here** with the JDK compiler and the JUnit stand-in kept outside the project: `LanguageSettingTest` 8 passed, `OrderHistoryExportSourceTest` 7 passed. Changes made on purpose in a scratch copy were caught: `LanguageSetting` no longer saving, no longer refusing an unknown code, and a `catch` narrowed from `RuntimeException` (this last one first **survived**: `UiSettings` swallows file errors itself, so a data folder that is a file never reaches that `catch`; a second test uses a path with a NUL character, which `DataPaths.dataDir()` does not survive, and now kills it); `OrderHistoryExport` without the release on failure.
+- **Not run:** `StockTakerTest` (compiled against the sources only: no SQLite driver offline); `./mvnw`; MariaDB. Its set-up rows are plain SQL (`orders`, `order_items` with `size_percent`) that I wrote from `SqliteSchema`; a NOT NULL column added later by a migration would show as a failure of the set-up, not of `StockTaker`.
+- **Choices (mine):** (1) `OrderHistoryExport` is tested by reading its source because it builds a `FileChooser`; the CSV rows are already covered elsewhere (`ReportCsvTest`, the order list tests); (2) `StockTakerTest` calls `StockTaker` on its own connection and does not pay an order (that path is `IngredientTest`'s); (3) `LanguageSetting.restore()` with a remembered value the app does not know leaves the language **as it was**, not Vietnamese: at start-up that is Vietnamese, and the class comment says "unknown means Vietnamese", so I only tested the start-up case and did not change the code.
+- **Documents:** `TODO.md` 6.84 and a check in section 0. No `CHANGELOG.md` line (nothing changes for the till). The header count of open items in `TODO.md` was not recounted.
+
+## Session 235 - TODO 6.54, the payment box moves out of OrderController (2026-11-07, code and notes changed)
+- **Changed:** new `controller/PaymentDialog` (232 lines) holds the window that `OrderController.openPaymentDialog` used to build: the method, copied word for word, now takes the subtotal, the lines being paid, the attached customer, the open order and the customer service as arguments and returns `Optional<CheckoutService.Payment>`. `OrderController.openPaymentDialog` computes the subtotal, calls it and passes the result to `completeOrder`. 11 imports that only the moved code used were removed. `OrderController` 1380 to 1197 lines; the ceiling in `ControllerSizeTest` is 1197.
+- **Checked here:** compiled all of `src/main` with the JDK compiler before and after; the set of error kinds is the same apart from the new file, and every unresolved name in `PaymentDialog` is a JavaFX class (no JavaFX offline). The source tests that read `OrderController` (`ComplimentarySourceTest`, `AlertSoundWiringTest`, `ScreenNavigationTest`, `PosShortcutsSourceTest`) look for text that is still there; `DialogFitUsageTest` counts the dialog and its `AlertUtil.configure` together in the new file.
+- **Not run:** `./mvnw`, JavaFX, the box on a screen (a check is in section 0 of `TODO.md`).
+- **Still open (6.54):** `OrderController` must reach 900 lines. Next: the product catalog block and the table map.
+
+## Session 236 - TODO 6.21, the till's database calls move into PosService (2026-11-07, code, tests and notes changed)
+- **Changed:** new `service/PosService` with `menu`, `productsForSale`, `recentUnitsSold`, `tableMap`, `stockShortages` and `markSeated`. `OrderController` calls it in the seven places where it called `categoryDAO`, `productDAO`, `tableDAO`, `orderDAO`, `ReportDAO` and `ReservationDAO`; the two fields nobody used any more (`productDAO`, `categoryDAO`) and their imports are gone. `OrderController` 1197 to 1196 lines, ceiling 1196.
+- **Added:** `controller/TillCallsNoDaoTest` 3 (reads the source: no call on a DAO in the till, the six `posService` calls are there, the removed fields are gone) and `service/PosServiceTest` 4 (each answer equals the DAO's own).
+- **Checked here:** all of `src/main` compiled with the JDK compiler: `PosService` has no error at all, and the only unresolved names in `OrderController` are JavaFX classes, the same as before. `TillCallsNoDaoTest` compiled and run with a 15-line stand-in for JUnit: 3 passed; with `orderDAO.findOpenTakeAway();` put back in `loadProducts` in a scratch copy the first case failed.
+- **Not run:** `./mvnw`, JavaFX, `PosServiceTest` (needs the SQLite driver). A check is in section 0 of `TODO.md`.
+- **Still open (6.21):** about 30 other classes in `controller` call a DAO directly; `PosCustomerBox` still takes a `CustomerDAO`.
+
+## Session 237 - TODO 6.54, the menu side of the till moves out of OrderController (2026-11-07, code, tests and notes changed)
+- **Changed:** new `controller/ProductCatalog` (273 lines) holds the category chips, the product tiles, the search box with the scanner Enter, the best-sellers switch and the lists of products and categories (`setUp`, `reload`, `loadRecentSales`, `render`, `refreshProducts`, `products`, `findById`, `onSale`). The methods were cut from `OrderController` and pasted in; only the names of the till's own state were replaced: a tap goes to a callback (`handleQuickAddProduct`), "a payment is being saved" and "the id of the order on screen" are suppliers. `OrderController` 1196 to 1008 lines (ceiling 1008); three imports only the moved code used were removed.
+- **Tests:** `AlertSoundWiringTest` reads `ProductCatalog` for the scanned-code sound; `TillCallsNoDaoTest` expects three of the six `posService` calls in `ProductCatalog` and forbids DAO calls there too; new `ProductCatalogSourceTest` 3 (the menu code is in the catalog, the lists are gone from the till, the catalog names no till state).
+- **Checked here:** all of `src/main` compiled with the JDK compiler; the only unresolved names in `ProductCatalog` and `OrderController` are JavaFX classes (the first compile caught one call to `handleQuickAddProduct` left in the catalog; fixed). Three source test classes ran with a small stand-in for JUnit: `TillCallsNoDaoTest` 3, `ProductCatalogSourceTest` 3 and `AlertSoundWiringTest` 5 passed.
+- **Not run:** `./mvnw`, JavaFX, the screen (a check is in section 0 of `TODO.md`).
+- **Still open (6.54):** `OrderController` is 108 lines above 900. Next: the table map block, about 190 lines.
+
+## Session 238 - TODO 6.54, the table map moves out of OrderController (2026-11-07, code, tests and notes changed)
+- **Changed:** new `controller/TableMapView` (166 lines) holds the loading and drawing of the table map (`load`), the highlight, the three labels of the selected table (`showSelected`) and the tables as last read (`table`, `has`, `firstTableNumber`, `all`). The methods were cut from `OrderController` and pasted in; the till's own state is replaced by `State` (selected table, new take-away on screen, take-away order id) read through a supplier when the map is drawn, five callbacks (a table, a take-away order, the bookings box, the moves box, "drawn") and the `ReservationPanel` it already had. What the till does after a draw (drop a removed table, pick the first, stamp a background refresh) stays in `OrderController.afterTableMapLoaded`. The view is built in `initialize` before the first `loadTablesFromDb()`. `OrderController` 1008 to 940 lines (ceiling 940); `LinkedHashMap` import removed.
+- **Tests:** `BookedTableWarningTest` reads `TableMapView` for "the map remembers the bookings it drew"; `TillCallsNoDaoTest` expects `posService.tableMap()` in `TableMapView` and forbids DAO calls there; new `TableMapViewSourceTest` 4 (the map code is in the view; the till holds none of the lists; the view is built before the first load; the view names no till state).
+- **Checked here:** all of `src/main` compiled with the JDK compiler. `TableMapView` compiles with no error when four JavaFX classes it uses (`Node`, `Label`, `Button`, `GridPane`) are given 5-line stand-ins, so its calls into `TakeAwayPanel`, `ReservationPanel`, `TableMovePanel`, `TableMapButtons` and `BookedTables` are type-checked. `OrderController` has only JavaFX names unresolved. Source tests run with a stand-in for JUnit: `TillCallsNoDaoTest` 3, `TableMapViewSourceTest` 4, `ProductCatalogSourceTest` 3, `AlertSoundWiringTest` 5 passed; building the view after the first load in a scratch copy made `TableMapViewSourceTest` fail.
+- **Not run:** `./mvnw`, JavaFX, `BookedTableWarningTest` (it needs the whole project to compile), the screen (a check is in section 0 of `TODO.md`).
+- **Still open (6.54):** `OrderController` is 40 lines above 900; the exemption in `ControllerSizeTest` stays until it is not.
+
+## Session 239 - TODO 6.54, the last 40 lines leave OrderController (2026-11-07, code, tests and notes changed)
+- **Changed:** new `controller/TableStatusActions` (about 90 lines, no state) holds `toggle` (mark a table in use or empty; on the take-away screen cancel the unpaid take-away order; the "who may empty it" check, the confirmation when the cart has lines, the background save and the two boxes) and `detail` (capacity and status). `OrderController.handleToggleTableStatus` and `handleTableDetail` are now a few lines each, with one small helper `tableOnMap()`. `OrderController` **940 to 899 lines**, under the 900 rule for the first time since 6.54 was written (it was 1,759 on 2026-10-27).
+- **Tests:** `ControllerSizeTest`: ceiling of `OrderController` 899, `THE_BIGGEST` deleted, the test that allowed one class above 900 is now `noCeilingIsOverNineHundredNotEvenTheTillScreens`. `ScreenTourTest`: `PaymentDialog` was not on `docs/SCREEN_TOUR.md` (`everyWindowClassIsOnTheTour` had been red since session 235 and the earlier notes did not see it, because the stand-in runner ran without a database and the line was lost in its output); a row was added and the pinned count is 55 rows (10 screens, 45 windows). The sentence in `CHANGELOG.md` about the tour now says 45 windows.
+- **Checked here:** (1) all of `src/main` compiled with `javac` against JavaFX 11 from the Ubuntu package `openjfx` and the SQLite, MariaDB and slf4j jars; the only two errors are `Dialog.addEventHandler` in `AlertUtil`, which exists from JavaFX 12, so they were adapted in a scratch copy only and the project files were not changed for it; `OrderController` and `TableStatusActions` compile and `javap` shows the two `@FXML` handlers and `tableOnMap`; (2) the library-free suite with SQLite on the class path: **1710 passed, 0 failed**, 156 not run (need JavaFX or a driver), 7 classes not run; (3) the source tests that read `OrderController` (`TillCallsNoDaoTest`, `AlertSoundWiringTest`, `ScreenNavigationTest`, `ScreenTourTest`, `ControllerSizeTest`) all pass.
+- **Not run:** `./mvnw`, JavaFX 21, the screen (new check in section 0). The FXML names the two handlers (`#handleToggleTableStatus`, `#handleTableDetail`); they are still public methods of `OrderController`, so the screen loads as before.
+- **Status of 6.54:** the rule is met in code; the item is `[~]` until `./mvnw -B clean test` is green and the till checks of sessions 235, 237, 238 and 239 have been done. Not in this item: 6.21 (about 30 other screens still call a DAO directly) and 6.5 (payment logic still partly in `OrderController`).
+- **Counts:** `TODO.md` header now 156 boxes and items (120 + 10 + 14 + 12) and 42 `[~]` items.
+
+## Session 240 - TODO 6.21, the money and cash screens move behind services (2026-11-08, code, tests and notes changed)
+- **Started with:** a look at whether the three items done in the earlier sessions (2A.45 gift-card guessing, 2A.46 switched-off PIN, 2A.44 audit lines for expenses, vouchers, settings and the transfer QR) are in this zip: they are (`TillPinCounter`, `GiftCardLookupGuard`, the six new `AuditAction`s, each written by its DAO in the same transaction). 2A.45 to 2A.47 are in COMPLETE.
+- **Done:** five new services, each a thin front for the DAOs the screen used to build, with the same method names so the screens only changed type and import: `ExpenseService`, `VoucherService`, `GiftCardService`, `ComplimentaryService`, `ShiftService`. Eight screens use them: `ExpenseDialog`, `VoucherDialog`, `PromotionPanel`, `GiftCardDialog`, `GiftCardListDialog`, `SplitPaymentPanel`, `ComplimentaryDialog`, `ShiftCloseDialog`. The one piece of logic that sat in a screen, "which staff can a free drink go to" (still working here, not anonymised), is now `ComplimentaryService.choosable`, tested without a database.
+- **Choices (mine):** (1) the rules, the permission checks, the audit lines and the gift-card guess guard were NOT copied into the services; they stay in the DAOs, so the guard still counts every way in and nothing is checked twice or less (`GiftCardService` builds a `GiftCardDAO`, which shares the one per-till guard); (2) a screen may still name a record owned by a DAO (`ShiftDAO.Summary`, `GiftCardDAO.Row`): the new test forbids making and calling a DAO, not naming a type; (3) I chose this group because it is the money and cash path and was fresh from 2A.44 to 2A.46; the remaining screens (reports, accounts, categories and products, reservations, settings, stock) are further batches.
+- **Tests:** `ScreensUseServicesTest` 2 (reads the eight screens: no `new ...DAO(`, no call on a DAO, each asks its service) and `ComplimentaryServiceTest` 2. **Library-free suite with SQLite on the class path (as in Session 239's check): 1714 passed, 0 failed** (1710 before, plus these 4), 156 not run, 7 classes not run. The five services compiled with the stand-ins; the eight screens could not be compiled (no JavaFX here), so their diff was read line by line: only imports, the type of one local variable each, `ExpenseDAO.DEFAULT_LIMIT` to `ExpenseService.DEFAULT_LIMIT`, and the staff loop in `ComplimentaryDialog`.
+- **Not run:** `./mvnw`, JavaFX, the database, the eight screens (new check in section 0).
+- **Status of 6.21:** stays open: about 27 other classes in `controller` still make or call a DAO (list in `TODO.md`). Counts: `TODO.md` header now 157 boxes and items (121 + 10 + 14 + 12), 42 `[~]` items.
+
+## Session 241 - TODO 6.21, the floor and the clock move behind services (2026-11-08, code, tests and notes changed)
+- **Done:** `TableService` grew `findAll`, `add`, `update`, `remove`, `transfer`, `merge` (the move/merge work of `TableMoveDAO`); new `ReservationService` and `TimeClockService`, thin fronts with the DAOs' own method names, so the screens changed only type, import and, in two places, a field name. Nine screens: `TableManagerDialog`, `TableMovePanel`, `EmployeeController`, `ReservationDialog`, `ReservationPanel`, `BookedTables` (the static badge text is `ReservationService.badgesOf`), `TimeClockDialog`, `TimeClockCorrectionDialog`, `TimeClockExport` (its parameter is now a `TimeClockService`; `TimeClockExportSourceTest` still passes).
+- **Choices (mine):** (1) as in Session 240 the rules, permission checks and audit lines stay in the DAOs; (2) the fields called `tableDAO` were renamed `tables` because the guard test looks for a call on anything named `...DAO`, and a service held in a field with that name would have hidden a real DAO call later; (3) the existing two-argument `TableService` constructor is kept for its tests.
+- **Tests:** `ScreensUseServicesTest` now lists 17 screens (no `new ...DAO(`, no call on a DAO, each asks its service). **Library-free suite with SQLite on the class path: 1714 passed, 0 failed**, 156 not run, 7 classes not run (the new test has more cases, not more methods). The three services compiled with the stand-ins; the nine screens could not be compiled (no JavaFX) and their diff was read.
+- **Not run:** `./mvnw`, JavaFX, the database, the nine screens (new check in section 0).
+- **Status of 6.21:** stays open: about 18 classes still make or call a DAO (list in `TODO.md`). Counts: `TODO.md` header now 158 boxes and items (122 + 10 + 14 + 12), 42 `[~]` items.
+
+## Session 242 [6.5 line] - TODO 6.5, the payment logic that was left in the screens moves to services (2026-11-08, code, tests and notes changed)
+- **Started with:** a check of the items done earlier in this project (6.75, how long each kind of data is kept; 6.76, the random tests of the money rules): both are in this zip (`DataKeptTableTest`, `DatabaseHealthTest` and the six `*PropertyTest` classes with `RandomCases`) and marked `[~]` in `TODO.md`, waiting for `./mvnw` and the owner's decision.
+- **Found:** the 6.5 text said the payment dialog's rules, the order start/load/autosave and the cart were already out; what its last pass still named as on the screen was the split box's amounts and gift-card arithmetic ("the natural next move is a `SplitPaymentRules`"), the voucher lookup in `PromotionPanel`, and the decisions inside `completeOrder` and `beginPayment`.
+- **Done:** (1) `SplitPaymentRules` (new, pure): `otherMethods`, `typed`, `gift`, `giftOk`, `valid`, `due`, `effectiveMethod`, `lines`, `problem` (an enum, the panel words it), `showsRest`, `offerFor`; `SplitPaymentPanel` builds an `Input` from its fields (`input()`) and shows the answers, 325 to 267 lines. One deliberate difference: `lines()` now returns an empty list when the box is not valid, where the panel's own method relied on the caller checking `problem()` first (the only caller, `PaymentDialog`, already did). (2) `VoucherRules.lookup` and `PaymentRules.usableDiscount` / `voucherTakes` / `remaining` replace the private arithmetic and the voucher branch of `PromotionPanel.apply`. (3) `PaymentFlowRules` (new, pure): `canStart`, `receiptLines`, `screenAfter`; `OrderController.beginPayment` and `completeOrder` ask it; the `shown` variable is gone, `receipt` replaces it in both places it was used. `OrderController` 899 to 894 lines, `ControllerSizeTest` ceiling 894.
+- **Choices (mine):** (1) the arithmetic moves, the checks at save time stay where they are: `OrderDAO.checkLines` and `CheckoutService` still verify everything again, so a mistake in the new rules cannot save a wrong payment; (2) `catalog.refreshProducts()` is now called once before the switch in `completeOrder` instead of inside each branch: in the old code it was called in every branch, and in the clearing branch before `cart.clear()`, as it still is; (3) the `pay` / `paySplit` choice in `completeOrder` stays: it is one line and a service method for it could only be tested with a database; (4) `ComplimentarySourceTest` was changed to read `SplitPaymentRules.java`, because the free-drink exclusion it looked for in the panel moved with the rule; (5) not moved: building the controls, `loadTableOrderFromDb`, `syncOpenOrderToDb`, `changeQuantity`, `seatReservation`, `startSplit`.
+- **Tests:** `SplitPaymentRulesTest` 14, `PaymentFlowRulesTest` 9, `PromotionTotalsTest` 7 (named so, because `dao/PaymentTotalsTest` exists), `PaymentLogicInServicesSourceTest` 3. **Run here** with the JDK compiler and a small JUnit stand-in kept outside the project (the real jar is not available offline): those four classes passed (33), and so did the source tests that read the changed screens (`ScreenNavigationTest`, `AlertSoundWiringTest`, `ControllerSizeTest`, `TillCallsNoDaoTest`, `ScreensUseServicesTest`, `ComplimentarySourceTest`, `TableMapViewSourceTest`, `ProductCatalogSourceTest`). A run of every test class that compiles without JavaFX or a driver (252 classes): **1,677 passed, 4 failed**; the 4 are `UnitCostBackfillTest` (2, no SQLite driver) and `NoJavaFxInRulesTest` (2: it sees the stand-in JavaFX file and the driver); none touches this work. Deliberate breaks of `SplitPaymentRules` (`<=` for `<` in two checks, the card-used-twice test) and of `PaymentRules` (the discount limit, the voucher ignoring the typed discount) each failed a test, and the files were restored.
+- **Checked by reading:** `SplitPaymentPanel`, `PromotionPanel` and `OrderController` cannot be compiled without JavaFX; their diffs were read line by line: only the calls to the new classes, the removed private methods, an import each and, in `OrderController`, the two `switch` statements, whose cases were compared with the old `if` chains (including that `activeOpenOrder == openOrder` is read before `activeOpenOrder` is set to null).
+- **Not run:** `./mvnw`, `tools/run-library-free-tests.sh` (no JUnit jar here), JavaFX, the screen (new check in section 0), `PosShortcutsSourceTest` (needs JavaFX), `CheckoutServiceTest` and `OrderServiceTest` (database).
+- **Status of 6.5:** `[~]`. Counts: `TODO.md` header now 158 boxes and items (123 + 10 + 13 + 12) and 43 `[~]` items.
+
+## Session 243 [6.5 line] - TODO 6.5, the five methods the last pass left on the till screen (2026-11-08, code, tests and notes changed)
+- **Looked at:** `loadTableOrderFromDb`, `syncOpenOrderToDb`, `changeQuantity`, `seatReservation`, `startSplit`. Each mostly reads the screen and calls a service; the decisions inside them were small and are now services. `startSplit` has none (it calls `SplitBillRules.split` and holds two fields for the length of the box) and was left.
+- **Done:** `OrderScreenRules` (new, pure): `isStale` (late answer for another table or take-away order, TODO 2.55), `shown` (serving or not, which order-number text, customer name and phone text, whether the customer box and the cart total show), `canSeat`, `isSaved`, `somethingSelected`; `Cart.decideQuantity` with the enum `QuantityMove` (unchanged, line limit, stock, ask before removing, set). `OrderController` uses them in six places (the two copies of "something is selected" and the two of "the order is saved" now call one rule each); 894 to 882 lines, `ControllerSizeTest` ceiling 882.
+- **Choices (mine):** (1) the walk-in text is read before the rule is asked, so it is read even when the table is free and nothing shows it; harmless; (2) in `changeQuantity` the stock is looked up through a supplier so it is read only when it was before (the number goes up and the ceiling allows it), and the product is looked up a second time only to word the refusal; (3) the labels, the cart table and the order of calls (screen, service, screen) stay in the controller.
+- **Tests:** `OrderScreenRulesTest` 10, `CartQuantityMoveTest` 5, `PaymentLogicInServicesSourceTest` +1 (4 now). **Run here** with the JDK compiler and the JUnit stand-in kept outside the project: every test class that compiles without JavaFX or a driver (254 classes): **1,693 passed, 4 failed**, the same 4 as in Session 242 (`UnitCostBackfillTest` 2, no SQLite driver; `NoJavaFxInRulesTest` 2, it sees the stand-in file and the driver). Breaking `isStale`, `canSeat` and `decideQuantity` on purpose failed a test each; restored.
+- **Checked by reading:** `OrderController` cannot be compiled without JavaFX; the diff was read: the switch statements keep every old branch and message, the lambda in `changeQuantity` captures only the unchanged parameters, and the `Customer known` local that the rule replaced is not used further down.
+- **Not run:** `./mvnw`, `tools/run-library-free-tests.sh` (no JUnit jar here), JavaFX, the screen (clause (6) added to the section 0 check of 6.5).
+- **Status of 6.5:** `[~]`. Counts unchanged: 158 boxes and items, 43 `[~]`.
+
+## Session 243 [6.14 line] - TODO 6.14, five dialogs stop reading the database on the screen thread (2026-11-08, code, a test and notes changed)
+- **Found:** the zip is the state after session 242; both of my earlier items are in it (6.76 with its six property tests, 6.84 with its three test classes), still `[~]` until a real `./mvnw` run. 6.14 said "16 calls left"; a scan of the screen classes (calls on a DAO, or on a service method that reaches the database, outside the first argument of `Async.run`) found **84 in 30 files**. The old count was a script from an earlier pass: it did not know the dialogs added since, and it missed `new SomeDAO().method()` written inline.
+- **Changed (screens, five files):** `VoucherDialog`, `ExpenseDialog` (the window; the cash-out box is an OK-button filter and stays), `PromotionDialog` (also split: `show()` loads the categories and products in the background, `open(...)` builds the window when they are here), `StockLogDialog` (waste and receipt; the receipt is two background steps with the cost question on the screen thread between them; a small record `Written(after, fresh)` carries the stock and the product back), `IngredientDialog` (list and all changes through one helper, renamed `inBackground`; it reads the text boxes before, `count()` now shows its note in the callback). Same pattern everywhere: values read from the boxes into `final` locals first, `Async.run(work, onSuccess, onError, button)`, the button held while it runs, the old messages in the old places.
+- **Test added:** `controller/DatabaseOffTheScreenThreadTest` (4 tests): the per-screen ceiling `STILL_ON_SCREEN_THREAD` (70 calls, 30 screens now), a screen with fewer calls must lower its number, the five moved dialogs must stay moved, and the scanner itself on five small examples (a call on the screen thread, inside `Async.run`, in its callback, inline, and in a comment or string). Run here with the JDK compiler and the JUnit stand-in: **4 passed**; run on the original sources of this zip: **2 failed** (five dialogs over their ceiling; the moved ones named), so the test bites.
+- **Choices (mine):** (1) only the clear cases moved: a list read, a save with its own button, and the two-step receipt; the saves inside OK-button filters stay, as the old note decided; (2) the till (`ProductCatalog.refreshProducts`, `PaymentDialog`, `PromotionPanel`) and the shift close need the window to be built in two steps or the caller to wait, and I cannot try a screen here, so they are listed, not touched; (3) `SessionGuard.validateNow()` is counted as a database call (it re-reads the account) and is in the list for seven screens; (4) `IngredientDialog`'s helper is called `inBackground` so the scan can recognise it by name; (5) an error from a background step is shown with `getMessage()` as before, but any exception now reaches the box, not only `DataAccessException`.
+- **Compiled, not run:** the five screens were compiled against the sources with every JavaFX type missing; no error mentions a changed line (the only errors left are anonymous JavaFX subclasses the stand-in cannot resolve). That does not check a lambda-capture or JavaFX-call mistake as the real compiler does; the diffs were read line by line for that. **Not run:** `./mvnw`, `tools/run-library-free-tests.sh`, the screens (new check in section 0).
+- **Status of 6.14:** `[~]`. Counts: `TODO.md` header now 158 boxes and items (124 + 10 + 12 + 12) and 44 `[~]` items.
+
+## Session 243 [6.15 line] - TODO 6.15, a check for jlink before the first real build (2026-11-08, tool, test and notes changed; no real build was possible)
+- **Started with:** a check of the two items from the last hand-over, 5.39 (print the receipt without the dialog) and 5.42 (a support zip for the administrator). Both are **still open** in this zip: there is no `ReceiptPrinting` and no `SupportBundle`, and `HoaDonController.handlePrint` still always calls `showPrintDialog`. Nothing of them was delivered; they stay `[ ]`.
+- **Found:** this machine has the JRE of OpenJDK 21 but no `jmods`, no JavaFX, no Maven, no PowerShell and no network, so neither `mvn javafx:jlink` nor a hand-made jlink build could be repeated (the 2026-11-03 one had the jmods). `docs/PACKAGING.md` already records that run (165 lines now); the text of 6.15 in `TODO.md` still said the file had 53 lines and that no build was ever made, which was out of date.
+- **Found by reading, not by building:** the 2026-11-03 build removed `requires org.mariadb.jdbc;` because the driver was not there, so the MariaDB driver was never put through jlink. `mariadb-java-client` 3.4.1 is expected to declare only `Automatic-Module-Name` and no `module-info.class`. If so, `javafx:jlink` fails on it, and so would `release.yml`. The jar could not be looked at here, so this is an expectation.
+- **Done:** (1) `tools/ModuleCheck.java` (new, JDK only, one file): lists every jar as `REAL`, `AUTOMATIC` or `NO-MODULE`, resolves the `requires` lines of `module-info.java` over the jars on top of the running JDK and says `OK` (exit 0) or `BLOCKED` with the automatic modules in that result (exit 1; 2 for wrong use). (2) `docs/PACKAGING.md`: a new step before the build, a section "If the check lists an automatic module" with three ways out (a descriptor added with `moditect`, leave MariaDB out of the packaged image, run from the class path; **none tried**), the first-build steps renumbered, and the pom's `javafx-maven-plugin` settings compared with the plugin's parameter names (all valid, and in the `default-cli` execution that `mvn javafx:jlink` uses). (3) `TODO.md`: 6.15 got a dated pass and stays open, the section 0 check names the new step, the header says "after session 243" (the counts did not change). (4) README: one more row text for `tools/`.
+- **Choices (mine):** (1) no change to `pom.xml` or `module-info.java`: a fix for the MariaDB driver cannot be tried without Maven, and a wrong pom would break `./mvnw test`, so the three ways out are written down and the owner picks one after the check has said whether the problem is real; (2) the check is a plain `java` file and not a Maven plugin, so it runs on the shop's Windows machine before anything else is installed; (3) it follows modules a required module needs (as `sqlite-jdbc` needs `slf4j`), because that is how jlink meets them.
+- **Tests:** `ModuleCheckTest` 11: real, automatic and plain jars labelled; blocked when the program requires an automatic module directly or through a real one; not blocked by an automatic jar nobody requires; comments and `java.*` lines ignored; a missing module reported; no `module-info`; one jar instead of a folder; wrong use; the project's own `module-info.java` read. **Run here** with the JDK compiler and a small JUnit stand-in kept outside the project: 11 passed. The first run found a real mistake in the tool (two `requires` on one line were missed, which gave a false `OK`), fixed by not tying the pattern to the start of a line.
+- **Not run:** `./mvnw`, `tools/run-library-free-tests.sh` (no JUnit jar here), the tool on the project's real dependencies, any jlink build, Windows.
+- **Status of 6.15:** stays `[ ]`: the real `javafx:jlink` build with JavaFX 21 and one upgrade on the shop's Windows machine are still to be done. Counts: `TODO.md` header unchanged at 158 boxes and items (123 + 10 + 13 + 12) and 43 `[~]` items.
+
+## Session 242 [6.21 line] - TODO 6.21, stock and kitchen move behind services (2026-11-08, code, tests and notes changed)
+- **Done:** new `IngredientService`, `ProductOptionService`, `StockService` (thin fronts, same method names as the DAOs; rules, permissions and audit lines stay in the DAOs) and `ProductService.findAll/findById`. Six screens switched: `StockLogDialog`, `StockHistoryDialog`, `IngredientDialog`, `RecipePane` (its constructor takes the service), `OptionsPane`, `CartLineFlow`.
+- **Tests:** `ScreensUseServicesTest` lists 23 screens; its call pattern got `(?<!new )` so that building a record like `new IngredientDAO.RecipeLine(...)` is not counted as a DAO call. `StockHistoryScreensTest` now expects the service instead of the DAO. **Library-free suite: 1714 passed, 0 failed**, 156 not run, 7 classes not run. The services compiled (only missing-library errors remain elsewhere); the six screens could not be compiled (no JavaFX) and the diff was read.
+- **Not run:** `./mvnw`, JavaFX, the database, the six screens (new check in section 0).
+- **Status of 6.21:** stays open: about 12 classes still make or call a DAO. Counts: `TODO.md` header 159 (123 + 10 + 14 + 12), 42 `[~]`.
+
+## Session 243 [6.21 line] - TODO 6.21 finished in code: no screen makes or calls a DAO (2026-11-08, code, tests and notes changed)
+- **Done:** new `PromotionService`, `ReportService`, `AuditService`, `OrderHistoryService`, `RefundService`, `ReceiptPrintService` (thin fronts, DAO method names kept; rules, permissions and audit lines stay in the DAOs); small additions to `CategoryService`, `CustomerService`, `ProductService`, `ShiftService`, `ReservationService`, `GiftCardService`, `TimeClockService`, `AccountService`, `IngredientService`. Twenty-two files switched: `PromotionDialog`, `CustomerController`, `ProductController`, `CategoryController`, `AccountController`, `LoginController`, `AuditLogWindow`, `OrderHistoryWindow`, `OrderHistoryExport`, `ReportWindow`, `RevenueBookExport`, `ShiftSheetActions`, `FirstSignInLeftovers`, `SetupWizard`, `SettingsDialog`, `AdminDashboardController`, `HoaDonController`, `RefundLinesDialog`, `PosCustomerBox`, `OrderController`, `ClockOffer`, `DashboardWidgets`.
+- **Choices (mine):** (1) the fields that held a DAO now hold the screen's existing service (`customerService`, `categoryService`, ...), so no field is called `...DAO` while holding a service; (2) `OrderController` now builds `new CheckoutService()` and `new OrderService()` with their own DAOs instead of sharing three DAO objects (the DAOs keep no state); (3) three files (`HoaDonController`, `ReportWindow`, `OrderHistoryWindow`) use the full class name instead of an import, because `ControllerSizeTest` holds them at their line ceilings; (4) `SessionGuard` and `TransferQrGuard` (util, not screens) still use `UserDAO` and the static `AuditDAO.write` on purpose.
+- **Tests:** `ScreensUseServicesTest.noScreenMakesOrCallsAnyDao` reads every file in `controller/` plus `ClockOffer` and `DashboardWidgets` (comments and imports skipped); the expected-service table grew to 43 screens; `OrderHistoryExportSourceTest` follows the rename. **Library-free suite: 1715 passed, 0 failed**, 156 not run, 7 classes not run. The services compiled with the stand-ins (the first compile found two mistakes in generated code, fixed); the screens could not be compiled (no JavaFX), so the diff and every name left behind were checked by search.
+- **Not run:** `./mvnw`, JavaFX, the database, the moved screens (new check in section 0).
+- **Status of 6.21:** now `[~]`: done in code, waiting for the green build and the checks. Counts: `TODO.md` header 159 (124 + 10 + 13 + 12), 43 `[~]`.
+
+## Session 244 - the five lines merged into one project (2026-11-08, code, tests and notes changed)
+- **What was merged:** the five zips `Lunavera_Coffee_6_5_screen_done` (sessions 242 and 243, TODO 6.5), `_6_14_partly_done` (243, 6.14), `_6_15_modulecheck` (243, 6.15), `_6_21_done` (242 and 243, 6.21) and `_6_21_batch4_done` (242, 6.21). All five hold sessions up to 241 unchanged, then go their own ways, so the session numbers 242 and 243 each exist more than once; the headings above carry the name of their line in square brackets. The common ground was taken as the base and each line's own files were laid over it.
+- **The second 6.21 line was not merged.** `_6_21_done` and `_6_21_batch4_done` both finish 6.21 from the same starting point, with the same method (thin services, same names as the DAO methods) but different class names (`AuditService` and `StockService` against `AuditLogService`, `StockLogService` and `StockHistoryService`) and `OrderController` almost line for line the same (6 lines differ). Both cannot stand, so the one that the audit already described (`AuditService`, `StockService`, the guard test over every screen) is in. What the other line records and this one does not: its checks ran with a real SQLite jar and JavaFX 11, so all of `src/main` was type-checked, and the whole suite gave 3018 passed, 18 failed (the same 18 on the untouched upload: `AuditHooksTest`, `IngredientTest`, `OrderOptionsDaoTest`, `ProductOptionsDaoTest` 3, `ReservationDaoTest`, `StaffAnonymiseScrubTest` 2, `StockTakerTest` 2, `PasswordChangeServiceTest`, `PinServiceTest` 2, `StartSellingDatabaseTest` 4), not investigated. Its `ScreensUseServicesTest` also forbids a DAO held in a field or a parameter, which this one does not.
+- **Files that only one line had touched:** taken from that line (the 6.5 line: `PaymentFlowRules`, `SplitPaymentRules`, `OrderScreenRules`, `Cart`, `PaymentRules`, `VoucherRules`, `SplitPaymentPanel`, `PromotionPanel` and their tests; the 6.14 line: `ExpenseDialog`, `VoucherDialog`, `DatabaseOffTheScreenThreadTest`; the 6.15 line: `tools/ModuleCheck.java`, `ModuleCheckTest`, `docs/PACKAGING.md`, `README.md`; the 6.21 line: the new services and its screens and helpers). Which side had changed a file was settled by comparing the five versions: where three lines agree, that is the starting version.
+- **Files both sides had changed, merged by hand:** (1) `OrderController`: the 6.5 line's file (877 after the merge) with the 6.21 line's changes laid over it (three DAO fields and two imports gone, `PosCustomerBox` takes the `CustomerService`, `CheckoutService` and `OrderService` built without arguments). (2) `PromotionDialog`, `StockLogDialog`, `IngredientDialog`: a three-way merge (`git merge-file`) of the 6.21 line, the 6.14 line and their common version; `IngredientDialog` merged without a conflict, the other two had 3 and 4 and were settled by taking the 6.14 line's structure (the work in `Async.run`) with the 6.21 line's service calls in it. (3) `ControllerSizeTest`: the 6.5 line's file, ceiling of `OrderController` 877. (4) `TODO.md`, `progress.md`, `CHANGELOG.md`: by hand; the counts in the header of `TODO.md` were recounted from the file (127 + 10 + 11 + 12 = 160 open, 45 `[~]`).
+- **What the merge found:** `DatabaseOffTheScreenThreadTest` failed on the merged tree, and the failure was a false one: its table of service methods that reach the database did not know the services of the 6.21 line, so the screens that switched to them seemed to have lost 20 calls (50 in 25 screens). The table was extended with the 71 methods those services added (17 services); the count is exactly the 70 in 30 screens of the 6.14 line again. The extended scan also saw one call it used to miss (the history button of `StockLogDialog`, written with a full class name), which was moved into `Async.run`; that is the one change beyond the merge itself. Six calls through older service methods are still not counted (listed in the note of 6.14).
+- **Checked here:** the library-free suite (`tools/run-library-free-tests.sh`, with the JDK compiler and a small stand-in for JUnit written for this check, no SQLite driver, no JavaFX): **1824 passed, 3 failed, 140 not run, 126 classes not run**. The 3 are `AccentedDataFolderTest`, which fails the same way on the untouched `_6_21_done` upload with the same stand-in (there: 1760 passed, 3 failed, once the pictures and sounds are in place) and has nothing to do with this work. So 64 more tests pass than in the 6.21 line alone (the 6.5 line's, the 6.14 line's and the 6.15 line's). All of `src/main` was compiled with the JDK compiler: no unresolved name is a project class; the only errors are the JavaFX ones.
+- **Not run:** `./mvnw`, JavaFX, a database, the screens (new check in section 0, which names the four places where two lines touched one file).
+- **Status:** 6.54, 6.5, 6.21: `[~]`. 6.14: `[~]` but PART DONE (70 calls in 30 screens still on the screen thread). 6.15: still `[ ]` (the pre-flight check for jlink exists, no real build was possible).
+
+## Session 247 - the merged project checked against my own items (2A.36, 2A.46, 2A.47, 6.54, 6.21) (2026-11-08, one compile error, one code order, two test fixes)
+- **Found by compiling (first time since the merge):** `StockLogDialog` did not compile: the new local `ProductService products` has the same name as the parameter `List<Product> products` (2 errors, `variable products is already defined`). Renamed the service to `productService` (4 lines). This came from the `_6_21_done` line, which was never type-checked; with it `src/main` compiles against JavaFX 11 (the two JavaFX-12 lines of `AlertUtil` adapted in a scratch copy only).
+- **Found by running the database tests (never run before in this project, only the library-free ones were):** four failures that were mine. (1) `PasswordChangeService`: the default password `Admin@123` is "easy" since 2A.47 (common word `admin` with a tail), so the person was told WEAK instead of IS_DEFAULT; the default-password check now comes first (`PasswordChangeServiceTest.theDefaultPasswordCanNeverBeChosen`). (2) `AuditHooksTest.changingYourOwnPasswordIsLogged` used `Qwe45678r!`, whose letters `qwer` are a keyboard run, so the new rule refused it; the test now uses `Tn58-Jv27-Kd`. (3) and (4) `PinServiceTest` (2A.46): two tests read the audit log while a cashier was signed in, and `AuditDAO.find` is administrators-only; they now read it as an administrator and sign the cashier in again (`auditLines`).
+- **Result:** JDK 21, JUnit 4, JavaFX 11 (apt) and the project's `sqlite-jdbc` 3.46.1.3: **3102 tests, 16 failed** (was 20 on the merged zip, 21 on the untouched base: the one that went in between is `ScreenTourTest`, fixed by 6.54). None of the 16 is new and none touches my items: `StartSellingDatabaseTest` 4 (a `time_clock.user_id` UNIQUE constraint when tests share one database), `IngredientTest`, `StockTakerTest` 2, `ProductOptionsDaoTest` 3, `OrderOptionsDaoTest` (messages from the DAOs' own checks: negative stock, price rules), `ReservationDaoTest` and `StaffAnonymiseScrubTest` 2 ("booking at most 60 days ahead" / "90 minutes around that time": dates in the tests have been overtaken by the clock), `NoJavaFxInRulesTest` 2 (`DateBoxes` and `DateTextConverter` in `util` import JavaFX). Not investigated further.
+- **Not run:** `./mvnw`, JavaFX 21, MariaDB, any screen.
+
+## Session 248 - audit section 1 finished: names that no longer exist are noted in their items (2026-11-08, documents only)
+- **Done:** a short "Name check 2026-11-08" note at the end of seven `COMPLETE.md` items (2.35, 2A.38, 2A.43, 3.17, 3.64, 6.30, 6.36) saying that `PaymentResult`, `EmployeeDAOTest`, `UserMessage` and `SqlErrors` are not classes any more and where the feature lives, and that `LunaveraLogo`, `LoginBackground` and `QuanLyTaiKhoanRoot` are files or an FXML id. The audit (section 1) now has the recount (382 items), these names and the ten ticked items that name no class, each checked by finding its feature.
+- **Not run:** any test; no program code changed.
+
+## Session 249 - audit section 1 checked again: members, paths, keys and properties (2026-11-08, documents only)
+- **Started with:** the merged project (Session 248). My own items (2A.44 and the third batch of 6.21) are in it: all six audit actions, `AuditSetting`, the four test classes and `ScreensUseServicesTest` pass on real SQLite. The 6.21 work is the `6_21_done` line's (`StockService`, `AuditService`, ...), not my duplicate services.
+- **Found:** the audit's Section 1 only looked up class names. A scan of every backticked token in the 382 ticked items found: 61 unresolved CamelCase names (all explained: JDK or JavaFX classes, plain words, or the project names the audit lists); 768 `Class.member` citations to project classes, of which 51 (23 distinct members, 25 items) did not resolve; two language keys and one system property that no longer exist. Every one has a successor, was deleted as its item asked, or is a description of the old code. No ticked item is "not started". `PageBar.java` (6.35) is a file name, not a method.
+- **Done:** a "Name check 2026-11-08" note at the end of 21 more `COMPLETE.md` items (the other items with a stale name already explained it) (2.3, 2.16, 2.26, 2.36, 2.70, 2.87, 2A.8, 2A.26, 2A.43, 3.12, 3.29, 3.43, 4.11, 4.39, 4.49, 4.56, 5.29, 6.22, 6.34, 6.48, 6.63) saying what the name is today. Each replacement was looked up in the code first (for example `PictureCheck.pictureProblem`, `OrderDAO.lastPaidOrder`, `DatabaseSettings.mariaDbUrl`, `AccountService.anonymiseStaff`). No program code or test changed. The audit file has a new subsection under Section 1.
+- **Not run:** nothing needed the program; the scan is a script (Python, outside the project). **Not checked:** that the cited features work (only that they exist or are explained).
+
+## Session 250 - the last gaps in audit section 1 ("marked completed but not started") closed (2026-11-08, notes and comments only)
+- **Found by re-checking the merged project:** 792 `Class.member` citations in the 382 ticked items; the only unexplained one was `LoyaltyPolicy.MIN_POINTS` in 4.16 (now the setting `ShopRules.minPoints()`, read through `LoyaltyPolicy.minPoints()`); and `employee-trangchu.css`, cited in 5.11 and 6.29, was deleted in 6.29 but the audit said every cited path exists.
+- **Done:** a "Name check 2026-11-08" note on 4.16, 5.11 and 6.29 in `COMPLETE.md`; the three CSS header comments no longer say "Used by employee-trangchu.css". No code changed.
+- **Checked:** library-free suite run again after the edits (see the audit, section 1). Not run: `./mvnw`.
+
+## Session 251 - audit section 2 ("done, but TODO.md not updated") finished (2026-11-08, notes only)
+- **Done:** (1) the 1.7 parent box no longer says it waits for the in-app switch and the fit check (both sub-boxes are done in code; only the person's screen check remains, in section 0). (2) The section 7 note "Linux only: dialogs trap the mouse" no longer says six dialogs skip `configure`: 2.89 is done in code and `DialogConfigureSourceTest` guards it. (3) Item 3.18 moved from `[ ]` to `[~]`: the MariaDB username index exists, and the one part not built (a case-insensitive unique rule for category names on SQLite) is on purpose. This was my choice; the owner may still want it closed differently.
+- **Counts:** `TODO.md` header 159 (127 + 10 + 10 + 12), 46 `[~]`. No code changed.
+
+## Session 252 [6.15 moditect line] - 6.15 the MariaDB driver through moditect, and the items 5.39 and 5.42 (2026-11-08, code, tests and notes; nothing was run under Maven, JavaFX or a database)
+- **Started with:** the request to use `moditect-maven-plugin` for the MariaDB jar and finish 5.39 and 5.42. The earlier hand-over of 5.39 and 5.42 had been lost (never wired or delivered), so they were rebuilt from the first draft of their pure classes.
+- **6.15 (still `[ ]`, untried):** (1) pom profile `modular-image` (off by default): `maven-dependency-plugin` copies the runtime jars except `mariadb-java-client` to `target/modules/`; `moditect add-module-info` writes the driver there with a descriptor (name `org.mariadb.jdbc`, exports all, `requires` by jdeps, `addServiceUses`); `moditect create-runtime-image` links `target/lunavera/` (launcher `lunavera` = module/class, `jarInclusionPolicy` APP); `maven-antrun-plugin` zips it to `target/lunavera.zip`. (2) `release.yml` builds with `-Pmodular-image` instead of `javafx:jlink` and runs `tools/ModuleCheck.java target/modules` and `tools/ImageCheck.java target/lunavera` before the installer. (3) `tools/ImageCheck.java` (new): asks the image's own `bin/java` for its modules, checks both drivers say `provides java.sql.Driver` (a missing line means "No suitable driver"), warns when the MariaDB module has no `uses`, checks the launcher, prints the size. (4) `docs/PACKAGING.md`, `docs/SIGNING.md`, `THIRD-PARTY-NOTICES.md` (the LGPL note: the image holds the driver jar with one added file), `TODO.md`, `CHANGELOG.md`.
+- **Found while writing it:** `release.yml` runs `Remove-Item target/lunavera.zip -ErrorAction Stop`, which would have failed if a build made no zip: the profile makes one. An XML comment may not contain two hyphens (my first draft broke the pom; `ModularImageProfileTest` now guards it).
+- **Untried guesses, all written down in `docs/PACKAGING.md` with a way out each:** the plugin versions (moditect 1.2.2.Final, dependency 3.8.1, antrun 3.1.0), `addServiceUses` inside `moduleInfo`, `jarInclusionPolicy` APP, the launcher given as `module/class`, jdeps producing the `provides` line from `META-INF/services`. `ImageCheck` exists to catch the last one at once.
+- **5.39 (now `[~]`):** `util/ReceiptPrinting` (settings per computer in `ui-settings.properties`: where / printer name / paper 58 or 80 mm or as the printer says / after a payment / copies 1 to 5; every choice is put right; `decide`, `useRoll`, `rollWidth` are pure). `HoaDonController`: `print(forceDialog)`, `handlePrintWithOptions`, `printAfterPayment`, `showPrintOptionsButton`; the new package-private `controller/ReceiptPrinterJob` opens the job (and now holds `jobOf` and `offScreenPage`, moved out): the dialog is skipped only when a printer is chosen, falls back with a message when it is gone; the paper setting forces the roll layout and its width; `OrderController` asks for the automatic print on the payment path only. Receipt FXML: the hidden "In có tùy chọn..." button. `SettingsDialog`: a new section with five boxes, validation for a named printer without a name, saved next to the text size and the sounds. 25 new texts in both languages. **Not built:** "never" for after a payment (the receipt window is the confirmation, 5.21). **Name clash found by compiling:** my enum `After` hid JUnit's `@After` in the test, so it is `AfterPayment`.
+- **5.42 (now `[~]`):** `service/SupportReport` (pure: filter, tail, last crash, facts sheet) and `service/SupportBundle` (administrator only; temp file then move; zip with `support-info.txt`, `last-crash.txt`, `logs/`; row counts of every table from the database's own list, names checked before they reach a statement; no table contents, no security log, no data-folder path; the save goes to the security log). There is **no separate crash file** in the program, so `last-crash.txt` is the newest "Unhandled error" record of the app log. The sheet and the screen text say that free text in a log cannot be checked. Settings: a "Lưu thông tin để hỗ trợ..." button (file box, work off the screen thread).
+- **Tests (run here with the JDK compiler and a small JUnit stand-in kept outside the project):** `ImageCheckTest` 8, `ModularImageProfileTest` 8, `ReceiptPrintingTest` 11, `SupportReportTest` 11, `PrintAndSupportWiringTest` 5, plus the 11 of `ModuleCheckTest` from session 243: all pass. The wiring test was checked by breaking the code three ways (the options button, the history reopening, the paper width): each was caught, and the files were restored byte for byte. `SupportBundleDatabaseTest` 5 (the item's own test) **compiles against the real classes but was not run** (no SQLite driver here).
+- **Not run:** `./mvnw` (so no compile of the controllers, no `I18nTest`, no `UntranslatedTextTest`, no coverage floors), `tools/run-library-free-tests.sh`, any printer, a window, a database, the profile. The controllers were only checked for syntax (javac reports no parse errors; the rest of its errors are the missing JavaFX types).
+- **Counts:** `TODO.md` header now 158 boxes and items (125 human checks, 10, 11, 12) and 45 `[~]` items: 5.39 and 5.42 moved from open to `[~]`, and each got one human check in section 0.
+- **Two things the existing tests said (run here, found before they could fail your build):** (1) `ControllerSizeTest`: my first version made `HoaDonController` 475 lines (ceiling 400) and `OrderController` 900 (ceiling 894). Split: the printer code moved to `ReceiptPrinterJob` (`HoaDonController` is 392 lines now) and the `OrderController` edit was redone with no net lines (895 as before). (2) `NoJavaFxInRulesTest.onlyTheScreenClassesUseJavaFx` **already failed in the uploaded 6_5 zip**, before this session: `DateBoxes` and `DateTextConverter` (item 3.78) use JavaFX but were not in its `SCREEN_HELPERS` list. Both names were added to the list; nothing else about that test changed. Its other test needs the real `sqlite-jdbc` jar, so it could not run here.
+- **Regression run here:** the new and changed tests, plus every existing test that reads the pom, the workflow, the notices, the language files or the sources and can run without JavaFX or a database (`PackagedNameTest`, `BugFinderSetupTest`, `ThirdPartyNoticesTest`, `CoverageSetupTest`, `WorkflowPinningTest`, `LibraryFreeScriptTest`, `I18nTest`, `MessagesTest`, `UntranslatedTextTest`, `ControllerSizeTest`, `NoJavaFxInRulesTest`): all pass except the one that needs the SQLite jar. About 25 other source-reading tests need JavaFX or JUnit features the stand-in lacks and were not run.
+
+## Session 253 - the 6.15 / 5.39 / 5.42 line merged into the current project (2026-11-08, merge, one test and notes changed)
+- **What was merged:** `Lunavera_Coffee_6_15_5_39_5_42.zip` into `Lunavera_Coffee_section2_done.zip` (the five lines already merged in Session 244, notes through Session 251). The common base is `Lunavera_Coffee_6_15_modulecheck.zip`: the new zip is that state plus one session (the MariaDB driver through moditect for 6.15, and items 5.39 and 5.42), 11 files added and 15 changed. A three-way merge by file: 8 of the 15 changed files were not touched by the current project and were taken from the new line (`release.yml`, `THIRD-PARTY-NOTICES.md`, `docs/PACKAGING.md`, `docs/SIGNING.md`, `pom.xml`, `HoaDonController`, the two language files, the `.fxml`); `CHANGELOG.md`, `OrderController` and `NoJavaFxInRulesTest` merged without a conflict; four files conflicted and were settled by hand.
+- **Conflicts settled:** (1) `TODO.md` header counts: recounted. (2) `TODO.md` item 6.15: the new line's longer text (it adds the moditect pass) with the current project's item 21 line (6.21, `[~]`) kept. (3) `progress.md`: the new line's entry added after Session 251 as **Session 252 [6.15 moditect line]** (it was Session 244 there, a number the merge of the five lines already uses); eight mentions of "session 244" that belong to it, in `TODO.md` (items 5.39 and 5.42, their section 0 checks, the packaging check) and `docs/PACKAGING.md`, were renamed to 252; the mentions of 244 that mean the five-line merge were left. (4) `SettingsDialog`: the imports. The new line added `SupportBundle` (the support-info button, 5.42) and the 6.21 line had removed the `TableDAO` import (the screen now uses `TableService`): `SupportBundle` kept, `TableDAO` dropped.
+- **One fix to the new line, not a merge problem:** `PrintingOffTheScreenThreadTest` (TODO 2.83) counted `.printPage(` calls per controller file and allowed one, in `HoaDonController`; 5.39 moved that one call into the new `ReceiptPrinterJob` and wrote `ReceiptPrinterJob.jobOf(job, page)` in `HoaDonController`, and the test was not updated, so both of its tests failed (also in the new zip on its own). It now allows the one call in `ReceiptPrinterJob.java` and looks for the new wording; what it protects is unchanged (a screen prints through `PrintRunner`, off the screen thread when the page is not in a window).
+- **Counts after the merge:** `TODO.md` header 159 boxes and items (129 human checks, 10 in section 1, 8 numbered open items, 12 ideas) and 48 `[~]` items: 5.39 and 5.42 went from `[ ]` to `[~]` (two new section 0 checks), 6.15 stays `[ ]`. Language files: 2,282 keys each, same set. `OrderController` is still 877 lines, the ceiling in `ControllerSizeTest`.
+- **Tests run here** (JDK compiler and the JUnit stand-in kept outside the project; the stand-in got `assertEquals` with a delta and `Assume` for this): every test class that compiles without JavaFX (379 classes): merged tree **1,808 passed, 28 failed**; the same run on the `6_15_modulecheck` tree: 1,743 passed, 29 failed. The failing sets differ in two entries only: `SupportBundleDatabaseTest` (new, needs the database driver, skipped here) and `NoJavaFxInRulesTest.onlyTheScreenClassesUseJavaFx` (failed on the old tree, passes now). Every other failure is the same on both trees and comes from this machine: no SQLite driver (the database tests), no `mysqldump` (`MariaDbBackupFolderTest`), this JVM cannot make file names with Vietnamese letters (`AccentedDataFolderTest`). New tests that ran and passed: `ModuleCheckTest` 11, `ImageCheckTest` 8, `ReceiptPrintingTest` 11, `SupportReportTest` 11, `PrintAndSupportWiringTest` 5, `ModularImageProfileTest` 8, `PrintingOffTheScreenThreadTest` 2.
+- **Not run:** `./mvnw`, `tools/run-library-free-tests.sh` (no JUnit jar here), JavaFX, a real `jlink` build or the moditect profile (still untried: 6.15 stays open), a receipt printer, the support zip on a screen, the database tests.
+
+## Session 254 - audit section 1 ("marked completed but not started") checked again on the merged project (2026-11-08, code, a test and notes)
+- **Asked:** verify that audit section 1 is fully complete, with everything that can be done here done. **Found:** the structure holds (382 ticked items in `COMPLETE.md`, all `[x]`, no number twice, none also in `TODO.md`, none ticked in `TODO.md`) and an independent re-run of the name, member, path and language-key checks agrees with the audit (every unresolved name is a renamed, deleted or run-time name that its item explains). **But the "stale wording inside ticked items" check had missed 13 items** whose own text still says "Still open" or "Not done" about something that was done later in code, and 2 real remainders.
+- **Stale, now carrying a dated check note in `COMPLETE.md`** (proved from the code each time): 2.62 (backup at logout: `SessionGuard`, `BackupDialogs`, `LunaveraApplication`, `BackupOnLeavingSourceTest`), 2.8 (`SecondBackupFolder`), 2.66 (`refunds.reason`), 2.83 (`PrintRunner`, `PrintingOffTheScreenThreadTest`), **3.13 (ticked with "NOT done ... tell me which rule you want" and no later note; it is done: `orders.cancelled_at`, `SalesLedger`)**, 4.12 (`StaffController`), 4.26 (`TransferQrDialog` preview), 4.30 (`DashboardStatsService.todayByMethod`), 4.60 (`StaffHoursCsv` uses `EarningsRules`); and notes for the remainders in 3.17, 4.37 and 2A.6.
+- **Done in code here:** item 2.85's last part, the restore message names a kept unfoldable log: `BackupService.keepUnfoldedLog` now returns a boolean, the result text adds `backup.restored.unfolded` (both languages), `UnfoldedLogNoteTest` (3 tests, no database). CHANGELOG line added.
+- **Not done, now tracked as TODO 6.90 so they are not hidden in ticked items:** the SQLite index on `refunds` and the history mark (4.37; a schema version 4 needs the SQLite driver to try), the cash and change columns in the history table and CSV (3.17), `wrapperSha256Sum` of the Maven wrapper jar (2A.6; the jar in the repository is 3.1.0, the properties name 3.3.2; needs a network), a default refund reason by product type (2.66). About 50 other "Not done" notes in ticked items say "on purpose", name a limit or point to an idea with its own number; they were read and left as they are.
+- **Test added:** `util/NotesConsistencyTest` (4): every COMPLETE item is ticked and numbered once; TODO has only `[ ]` and `[~]` items, none also in COMPLETE; a ticked item that says "Still open", "NOT done" or "Not started" must carry a dated check or a DONE note. On the original merged notes it fails for 3.13 (the other stale items contain an unrelated "DONE" word, so the rule is looser than the 13 found by reading); on these notes it passes.
+- **Run here** (JDK compiler plus a JUnit stand-in kept outside the project): `NotesConsistencyTest` 4, `UnfoldedLogNoteTest` 3, `MessagesTest`, `I18nTest`, `PosShortcutKeysTest` (the language bundles with the two new keys), and my earlier 6.76, 6.84 and 6.14 tests: **68 passed, 0 failed**. **Not run:** `./mvnw`, anything that needs the SQLite driver or JavaFX, so "done" still means the code, tests and notes exist, not that the whole suite passes.
+- **Counts:** `TODO.md` header now 161 boxes and items (130 human checks, 10, 9, 12) and 48 `[~]` items.
+
+## Session 255 - audit section 1 verified once more, with a real build and the whole test run (2026-11-09, one code fix, a test and notes)
+- **Asked:** is audit section 1 ("marked completed but not started") fully complete; if not, finish it. **Method:** the project of `Lunavera_Coffee_audit1_checked.zip` compiled against JavaFX 11 (apt `openjfx`, two JavaFX-12 lines of `AlertUtil` adapted in a scratch copy only) and **every** test class run (3158 tests, SQLite 3.46.1.3 from the project's own version), then the item checks redone over the **whole text** of each item (an item is several lines; the first scan of this session read only the first line and was thrown away).
+- **Holds, checked again:** 382 numbered items in `COMPLETE.md`, all `[x]`; 57 in `TODO.md` (9 `[ ]`, 48 `[~]`), none ticked, none in both files, none twice. Unresolved `Class.member` citations: 28, every one explained inside its item (20 carry a "Name check", 8 say deleted, replaced or gone in their own text: 2.101, 2A.33, 6.7, 6.23, 6.35, 6.56). Unresolved paths and keys: `qr-transfer.png` (a file the shop adds at run time), `CONTRIBUTING.md` (6.68 says it was not made), `javafx.fxml` (a module name), `backup.lastManual` (a settings-file key), CSS and `app.bat` names (files that exist or are generated). The words "not started" occur only in 2.1, 6.7 and 6.17 and none is a status.
+- **The 46 ticked items that cite no existing class and no file** (the early ones, mostly "DONE in code, session N"): 34 have identifiers or labels that are in the project (`util/ScreenFit`, `ux_customers_phone`, `idx_orders_*`, `Xóa`, `Sửa` and so on; this shows a trace, not that the feature works); the other 12 were looked up one by one and found: 2.39 (`ScreenFit`), 2A.15 (`Session.clear()` in `SessionGuard` and `ScreenNavigation`), 3.4 (`CustomerMergeService`), 3.6 (`ValidationUtil.PHONE_PATTERN`), 3.9 (`pos.customer.nophone`), 3.19 (`ProductFormRules`: negative cost refused, cost above price comes back as a question), 5.2 (`date.today`, `date.thisweek`), 5.5 (`pos.remove.title`), 5.7 (`PosShortcuts`); 3.7 and 3.11 are owner decisions with no code to find, and 4.13 was closed by the owner (D12).
+- **Found and fixed (item 6.83):** the one red test that was about a ticked item. `NoJavaFxInRulesTest.everythingElseCompilesWithoutJavaFx` fails on this project: `VoucherRules` and `StaffRules` use `DateTextConverter.EARLIEST`, and that class needs JavaFX. New `util/DateLimits` (JavaFX-free: `EARLIEST`, `PATTERN`); `DateTextConverter` takes its two constants from it; the two rule classes use `DateLimits`. `DateLimitsTest` (2). Dated note added to item 6.83 in `COMPLETE.md`. (`onlyTheScreenClassesUseJavaFx`, red in Session 247, is green now.)
+- **The other 14 red tests** are not about section 1 items and were not changed: `StartSellingDatabaseTest` 4, `IngredientTest`, `StockTakerTest` 2, `ProductOptionsDaoTest` 3, `OrderOptionsDaoTest`, `ReservationDaoTest`, `StaffAnonymiseScrubTest` 2. They also fail on the untouched base of Session 247; the messages point at dates the clock has passed and at tests sharing one database file.
+- **Not run:** `./mvnw`, JavaFX 21, MariaDB, any screen. "Fully complete" for section 1 means: what the ticked items cite exists, is explained, or is now fixed; it does not mean the features work.
+
+## Session 256 - audit section 2 re-checked on `Lunavera_Coffee_audit1_complete.zip` (2026-11-09, one note changed)
+- **Checked:** 6.82 and 6.83 are in `COMPLETE.md` with their tests; the birthday idea is out of section 7 and recorded in `COMPLETE.md` (Session 144); the 1.7 sub-box is ticked and its parent text is current; the Linux dialogs note names `AlertUtil.configure` in `AdminDashboardController` and `TableManagerDialog`; 3.18 is `[~]`; the `TODO.md` header (161 boxes and items, 48 `[~]`) matches the file; no open or `[~]` item says it is done while still described as open.
+- **Found and fixed:** the note at the top of `TODO.md` (line 7) still said "Item 3.18 stays open ... the owner decides"; it now says 3.18 was moved to `[~]` in Session 251 and the owner may still tick or reopen it. No code changed.
+- **Checked here:** library-free suite 1831 passed, 0 failed (156 not run, 7 classes not run). Not run: `./mvnw`. File counts of this zip: 408 main, 448 test Java files.
+
+## Session 257 - item 6.14, second part: 14 more calls off the screen thread (2026-11-09)
+- **Done:** `StockHistoryDialog`, `ProductCatalog.refreshProducts` and `ShiftCloseDialog.show` now read in the background (`Async.run`); four helpers that were only ever called from `Async.run` carry the new `@OffScreenThread` mark. `DatabaseOffTheScreenThreadTest` understands the mark (a marked method is background; a call to it from the screen thread is counted) and has a unit test for it. Pins: 70 calls in 30 screens before, **56 in 24** now.
+- **Not done, and why:** `AdminDashboardController` file operations (at its ceiling, needs an extraction first), `PaymentDialog`, `OptionsPane`, `RecipePane`, `ReservationDialog`, `PromotionPanel`; the calls kept on the screen thread on purpose. Item stays `[~]`.
+- **Checked here:** library-free suite 1832 passed, 0 failed (156 not run, 7 classes not run). **Not run:** `./mvnw`; none of the changed screens was compiled (no JavaFX here) or opened. New section 0 box for the three moved screens.
+
+## Session 258 - item 6.14: the zip did not compile, the moved dialogs tried in a real window, `OptionsPane` moved (2026-11-09, code, notes and a tool)
+- **Started with:** `Lunavera_Coffee_6_14_part2.zip` (Session 257). With JDK 21, JavaFX 11 jars, the real `sqlite-jdbc` 3.46.1.3 and, new this session, Xvfb with the JavaFX native libraries (`libopenjfx-jni`), so a real window can be opened here.
+- **Bug found and fixed:** `ShiftCloseDialog.open(Opening opening)` declared `BigDecimal opening` again in two lambdas: a compile error, so the whole project did not build. The parameter is now `loaded` (lines 69-78 only). Nothing earlier could show it: Session 257 compiled without JavaFX types.
+- **Tried for real:** a scratch program (kept as `tools/try-screens/TryDialogs.java` and `try-one.sh`, not part of the build) opens a dialog in a JavaFX window, waits, lists the tables and combo boxes and how many rows they hold, and counts database connections by thread through a spy JDBC driver. Result on a seeded database: `VoucherDialog`, `ExpenseDialog`, `PromotionDialog`: 1 connection on the screen thread each (`SessionGuard.validateNow`, as the item says) and the rest in the background; `StockLogDialog`, `IngredientDialog`: 0 on the screen thread; the lists fill (vouchers 1 row, expenses 1, products 33, categories 4). Running two dialogs one after the other in the same process stalled the second (harness issue, not looked into); each alone is fine.
+- **Moved:** `OptionsPane` (4 calls: the products, the options of the chosen product, save, copy to the category) into `Async.run`. The "empty list" and "remove the last option" questions stay on the screen thread, the pane is held while the background step runs, and a late answer for a product that is no longer chosen is dropped. `save()` no longer returns a boolean; the copy now runs as the step after a successful save. Tried live: 0 connections on the screen thread, 5 in the background, 2 rows shown. `DatabaseOffTheScreenThreadTest`: `OptionsPane` removed from its list (52 calls in 23 screens left, was 56 in 24).
+- **Result:** full suite with real SQLite and JavaFX 11: **3147 passed, 14 failed, 0 not run**; the same 14 as before this session (`IngredientTest`, `OrderOptionsDaoTest`, `ProductOptionsDaoTest` 3, `ReservationDaoTest`, `StaffAnonymiseScrubTest` 2, `StockTakerTest` 2, `StartSellingDatabaseTest` 4), not looked into.
+- **Still on the screen thread (52 calls, 23 screens):** `SessionGuard.validateNow()` in the admin windows; the saves in OK-button filters (on purpose); `LockScreen`, `PinSetupDialog`, `PasswordChangeDialog` (the hash); the till (`ProductCatalog`, `PaymentDialog`, `PromotionPanel`, `OrderController`, `OrderHistoryWindow`); `ShiftCloseDialog` 2, `ReservationDialog` 5, `RecipePane` 9, `SetupWizard` 5, `AdminDashboardController` 3 and a few single calls. `RecipePane` and `ReservationDialog` were looked at and not moved: their reads and saves are tangled with unsaved-change questions and would need a larger rewrite than I could try with confidence.
+- **Not done / not tried:** pressing Save and Copy on the options tab (a message box opens, the harness does not click it); `./mvnw`; MariaDB; the item stays `[~]`.
+
+## Session 259 - item 6.14: is it complete (no), and three more calls off the screen thread (2026-11-09, code, a test and notes; no JavaFX here)
+- **Started with:** `Lunavera_Coffee_6_14_part3.zip` (Session 258) and the question whether 6.14 is complete. It is not: `DatabaseOffTheScreenThreadTest` passes on the zip as received and pins 52 calls in 23 screens. This environment has JDK 21 and Xvfb but **no JavaFX and no JDBC driver** (no network, no package to install), so no screen could be opened and nothing could be tried the way Session 258 did.
+- **Sorted the 52** (the test's own listing, call by call): 9 saves in OK-button filters (stay on purpose), 7 `SessionGuard.validateNow()` at window open, 7 sign-in and PIN calls that hash, 6 first-start-only calls, 3 clear cases (moved now), and 20 movable ones that were left. The earlier notes did not give this split; it is now in the TODO item.
+- **Moved (52 to 49):** `ShiftCloseDialog` cash-out total re-read after the cash-out box (`Async.run`, button held); `ProductController.importProductsCsv` (the CSV parse with its per-row `existsByNameInCategory` question runs in `Async.run`; the preview and the question are the new `confirmCsvImport`); `AccountController.openAccountDialog` reads the person's record in the background and then calls `showAccountDialog` (the old body). Local names in the new lambdas (`freshCashOut`, `failure`, `employee`) were chosen not to clash with anything in scope (the Session 258 bug). `ProductController` is at its 720-line ceiling and `AccountController` at 507 (ceiling lowered); both were kept there by compacting the edit, not by raising a ceiling.
+- **Left, and why:** `RecipePane` 9 and `ReservationDialog` 5 (tied to unsaved-change questions, as Session 258 found), `AdminDashboardController` 3 (file operations; the class is at its ceiling), `PromotionPanel` 2 and `PaymentDialog` 1 (the points balance shapes the whole box, so it has to be read in `OrderController` before the box opens; that class is at its ceiling too). None of them could be tried here, and a wrong guess in a payment dialog costs more than the delay it removes.
+- **Checked:** the source compiled with all JavaFX types missing, before and after: 4,841 error lines both times, identical messages for the three files; a planted mistake in each new call raised the count (for `AccountController` only after replacing the table argument by `null` in a scratch copy: with the unresolved `TableView` type the checker skips that call, which is a limit of this check). Tests that run here (254 classes): 1,818 passed, 28 failed before and after, the same 28, all from this machine. `DatabaseOffTheScreenThreadTest`, `ControllerSizeTest`, `ScreensUseServicesTest`, `TillCallsNoDaoTest`, `ScreensStayAwayFromTheDatabaseTest`: 17 passed.
+- **Header count corrected:** the `TODO.md` header said 162 after Session 258 although its own parts (132 + 10 + 9 + 12) add up to 163; with the new human check it is now **164** (133 + 10 + 9 + 12), recounted from the file (section 1's 10 is the count of its owner boxes, not the 12 raw `[ ]` marks, two of which are notes inside a bullet and one the old problem statement).
+- **Docs:** `README.md` (the rule "a service runs off the screen thread" now says where it is not yet kept and which test counts it), `TODO.md`, `progress.md`, `CHANGELOG.md`. `docs/history/` is the old record and was not touched. **Not run:** `./mvnw`, JavaFX, a database, the three screens (one new human check in section 0 names what to look at). **Status of 6.14:** `[~]`; 20 calls in 5 screens are what is left, and a person with a window to try them in is what they need.
+
+## Session 260 - are 6.54, 6.21, 6.5, 6.14 and 6.15 complete (no), and work on 5.39 (2026-11-09, one fix, one test class, notes; no JavaFX here)
+- **Started with:** `Lunavera_Coffee_6_14_part4.zip` (Session 259). This environment: JDK 21 only, no JavaFX, no JDBC driver, no Maven, no JUnit jar (a small stand-in kept outside the project), so the screens cannot be compiled or opened and the database tests cannot run.
+- **Verdict on the five (`TODO.md` statuses unchanged):** **6.54** `[~]` and **6.21** `[~]` and **6.5** `[~]`: done in code; what guards them runs here and passes (`ControllerSizeTest`, `ScreensUseServicesTest`, `TillCallsNoDaoTest`, `ScreensStayAwayFromTheDatabaseTest`, `PaymentLogicInServicesSourceTest`, `OrderScreenRulesTest`: part of 42 tests run, 0 failed); the rule tests that need the model classes with JavaFX (`SplitPaymentRulesTest`, `PaymentFlowRulesTest`, `CartQuantityMoveTest`, `PromotionTotalsTest`) do not compile here and were run in Session 258 (3147 passed, 14 failed, the 14 are not these). They close with `./mvnw -B clean test` and the till checks of section 0: **nothing more can be done here**. **6.14** `[~]`: **not complete**, 49 calls in 23 screens (`DatabaseOffTheScreenThreadTest` passes with that number): 9 saves in OK-button filters (on purpose), 7 `SessionGuard.validateNow()`, 7 sign-in and PIN calls that hash, 6 first-start-only, and 20 movable (`RecipePane` 9, `ReservationDialog` 5, `AdminDashboardController` 3, `PromotionPanel` 2, `PaymentDialog` 1). I did not move those 20: they need a window to try them in, and a guess in a payment or reservation window costs more than the delay it removes (the same judgement as Sessions 258 and 259). **6.15** `[ ]`: still open; `ModularImageProfileTest`, `SupportReportTest` and `ModuleCheckTest` pass here (30 tests), but a real `jlink` build with JavaFX jmods and an upgrade on the shop computer are not possible here.
+- **5.39 (the work of this session):** read the code of `ReceiptPrinting`, `ReceiptPrinterJob`, `HoaDonController.print` and the Settings section; logic found sound except one edge: `ReceiptPrinting.rollWidth` returned 0 for a 58 or 80 mm roll when the printer reported no printable width, which would lay the receipt out zero wide. Now it uses the roll's own width (CHANGELOG line). New `util/ReceiptPrintingPropertyTest` (5 tests, 6.76 style; `RandomCases` made public so another package can use it): choice always makes sense, a print never goes to a printer the computer does not have, ask and "Print with options" always open the dialog, a roll is never zero wide, hand-edited settings always load as a good choice. 10 seeds pass; four deliberate breakages caught. **Not built, unchanged:** "never" after a payment (the choice "wait for Print" is the same thing; the receipt window is the confirmation, 5.21). Item stays `[~]`; the printer check is in section 0.
+- **Run here:** `ReceiptPrintingPropertyTest` 5, `ReceiptPrintingTest` 11, `PrintAndSupportWiringTest` 5, the 42 guard tests above, `ModularImageProfileTest`/`SupportReportTest`/`ModuleCheckTest` 30. **Not run:** `./mvnw`, JavaFX, a printer, any screen.
+
+## Session 261 - items 5.42, 6.44, 6.71 and 2A.4 checked; the cashier Help entry for 6.71 coded (2026-11-09)
+- **5.42:** `SupportReport`, `SupportBundle`, the Settings button and the security-log line are all in the source; nothing left that code can do. Only the section 0 box (save a bundle, open the zip, check it holds no table contents and no security log) remains.
+- **6.44:** nothing to do in code. The README table needs who made the 33 photos and on what terms; only the owner knows. Not invented.
+- **6.71:** **coded:** a Help button in the sidebar for every signed-in person (`SidebarExtras.addHelpButton`): administrator gets the owner guide, anybody else the cashier guide. Test added to `HelpPagesLoadTest`. Still open: screenshots (no JavaFX or screen here) and a real cashier trying the guide. New section 0 box.
+- **2A.4:** passphrase backup and `docs/PERSONAL_DATA.md` (draft notice, eight adviser questions) exist; the adviser's answers are the only thing missing.
+- **Also:** this zip already holds the other line's 6.14 work (Sessions 258 to 260); my unfinished edits to `RecipePane`, `OptionsPane` and `ReservationDialog` from the older tree were not carried over.
+- **Checked here:** library-free suite 1838 passed, 0 failed (156 not run, 7 classes not run). Not run: `./mvnw`; the new button was not compiled (no JavaFX) or seen.
+
+## Session 262 - item 6.14: 18 more calls off the screen thread (2026-11-09)
+- **Moved (49 to 31 calls, 23 to 20 screens):** `RecipePane` 9, `ReservationDialog` 5, `AdminDashboardController` 3 (restore chain extracted to the new `RestoreFlow`; its ceiling lowered 607 to 569), `PromotionPanel` voucher lookup 1.
+- **Not moved, and why:** the `PromotionPanel` constructor (auto promotions) and the `PaymentDialog` points balance: the box is built inside a blocking `ask` that `OrderController.startSplit` wraps in a `finally` clearing the split state, and `OrderController` is at its ceiling; making it asynchronous without that rewrite would clear the state too early. The rest are the kinds kept on purpose.
+- **Checked here:** library-free suite 1838 passed, 0 failed (156 not run, 7 classes not run). Compiled with JavaFX missing before and after: the only new messages in the five touched files are the missing JavaFX types. **Not run:** `./mvnw`, JavaFX, a database, any of the screens. New section 0 box.
+
+## Session 263 - item 6.14: the two that needed a rewrite (2026-11-09)
+- **Rewritten (31 to 29 calls, 20 to 18 screens):** `PaymentDialog.ask` reads the automatic promotions and the points balance in the background (`preload`, `@OffScreenThread`) and then builds the box; it hands the payment to a callback. `PromotionPanel` gets the promotions and the priced-at moment as arguments. `OrderController.openPaymentDialog` locks the screen while it reads, keeps the split pieces in locals and calls `completeOrder(payment, part, rest)`; the file stays at 877 lines.
+- **Left:** the kinds kept on purpose (OK-button saves, `SessionGuard.validateNow`, sign-in and PIN hashing, first start). Item stays `[~]`.
+- **Checked here:** library-free suite 1838 passed, 0 failed. Compiled with JavaFX missing: no new compiler message in `PaymentDialog`, `PromotionPanel`, `OrderController`. **Not run:** `./mvnw`, JavaFX, a database, the till. New section 0 box (the payment box is the most important screen to try).
+
+## Session 264 - items 6.32 and 6.8, the two habit items (2026-11-10)
+- **6.32:** the list of cases was checked again; the one case without a test, "`summary` and `dailySales` agree for a PAID order without `paid_at`", now has `EdgeCasesTest.summaryAndDailySalesAgreeForAPaidOrderWithoutAPayTime`. It compiles; it needs the SQLite driver and was **not run**. If it fails, the two reports really disagree.
+- **6.8:** both notes files updated for this session. Library-free suite: 1838 passed, 0 failed (156 not run, 7 classes not run).
+- Both boxes stay open on purpose: they are rules for every session, not tasks.
+
+## Session 265 - section 3 of the audit re-checked on the current tree (2026-11-10)
+- Every item of section 3 was checked against the code and the tests: statuses in `TODO.md` match (`[~]`: 5.39, 5.42, 6.5, 6.14, 6.21, 6.54; `[ ]`: 2A.4, 6.8, 6.15, 6.32, 6.44, 6.71), the test counts the audit names match the `@Test` counts and every named class is in the run, `OrderController` is 877 lines at its ceiling, no controller is over 900, pom and the four workflow files parse.
+- One wrong number fixed: `SupportBundleDatabaseTest` has 6 tests, not 5 (`TODO.md` 5.42 and the audit).
+- Nothing else in section 3 can be advanced here: what is left needs `./mvnw`, JavaFX, a Windows build, a printer, the photo owner, an adviser or a real cashier.
+
+## Session 266 - item 6.90 (a): refunds index on SQLite and the history mark (2026-11-10)
+- **Done:** schema **version 4**: `SchemaMigrations.createRefundIndexes` (SQLite) and `ensureMariaRefundIndexes` (MariaDB step 4), `LATEST_VERSION` 4. The history marks an order with refunded lines ("· part refunded", `OrderSummary.linesRefunded`, an `EXISTS` on `refunds` that uses the new index). Tests: two new in `SchemaMigrationsTest`, one in `RefundLinesTest`; the version-3 expectations in `SchemaMigrationsTest` now follow `LATEST_VERSION`. `docs/DATABASE.md` and `docs/PACKAGING.md` (the footer text to look for) say v4; the recorded 2026-11-03 run keeps v3.
+- **Checked here:** the two `CREATE INDEX` statements and the `EXISTS` query ran correctly in Python's SQLite (the plan uses `idx_refunds_order`); library-free suite 1838 passed, 0 failed; the three touched test classes compile. **Not run:** the tests that need the SQLite driver (so the new migration tests and the history test were never executed), MariaDB, JavaFX. New section 0 box.
+- **Still open in 6.90:** (b) cash-given and change columns in the history table and its CSV, (c) `wrapperSha256Sum` (needs a network), (d) default refund reason by product type (needs a product kind).
+
+## Session 267 - item 6.90 (b) and (d) (2026-11-10)
+- **(b) 3.17:** the history table has "Cash given" and "Change" columns and the CSV two more at the end; the texts come from the new `util/HistoryText` (empty, not zero, when nothing was kept). `OrderHistoryWindow` stayed under its ceiling because the discount text moved into `HistoryText`. `HistoryTextTest` (4 tests, they run here).
+- **(d) 2.66:** `service/RefundDefaults` (pure): "made to order" = the product has a recipe (`RefundDAO.RefundableLine.madeFromRecipe`, read with an `EXISTS` on `recipes`; run in Python's SQLite). Refunding such a line starts with "put back into stock" unticked and a reason filled in; the cashier's own tick or text is not overwritten. The whole-order cancel was moved from `OrderHistoryWindow` into the new `OrderCancelFlow`, which reads the suggestion in the background and passes it to `RefundDialog.ask(orderId, total, key)`. `RefundDefaultsTest` (5 tests, they run here). No new column: an explicit "packaged" flag is not built.
+- **Checked here:** library-free suite 1847 passed, 0 failed (156 not run, 7 classes not run). Compiled with JavaFX missing: only the missing JavaFX types in the touched controllers. **Not run:** `./mvnw`, JavaFX, a database (so `RefundDAO.load` with the new column was never executed against the repository's tests). New section 0 box.
+- **Left in 6.90:** only (c), the Maven wrapper checksum (needs a network).
+
+## Session 268 - item 6.72: the database indexes (2026-11-10)
+- **Done:** schema **version 5**. `SchemaMigrations.createMirroredIndexes` (SQLite) creates the 11 same-named indexes that only MariaDB had (`orders (status, order_date)`, `stock_log`, `expenses`, `reservations`, `audit_log`, `shift_closes`), plus two that neither database had (`gift_card_moves (order_id)`, `time_clock (user_id, clock_out)`) and, on SQLite only, `order_items (product_id)` (MariaDB's foreign key already makes that one). `ensureMariaMirroredIndexes` is MariaDB step 5 (adds only an index whose name is missing); the two MariaDB `CREATE TABLE`s have the two new ones, so a new database starts with them. `LATEST_VERSION` 5.
+- **Parity test:** `MariaDbSchemaTest.everyMariaDbIndexAlsoExistsOnSqlite` compares table and columns of every plain `INDEX` line (the old `idx_orders_table_number` and MariaDB's `idx_orders_table` are the same index under two names) and pins the five older SQLite-only ones by name; `aSharedIndexNameMeansTheSameColumnsOnBoth` checks that a name used by both means the same columns. Unique keys are not compared (they stay in the table text).
+- **Checked here:** library-free suite 1849 passed, 0 failed (156 not run, 7 classes not run; before this session's tests 1847). All 13 `CREATE INDEX` lines ran in Python's SQLite on the real `SqliteSchema` table text. **Not run:** `./mvnw`, `SchemaMigrationsTest.aVersion4DatabaseGetsTheRestOfTheMirroredIndexes` (needs the SQLite driver), any MariaDB server, the speed effect.
+- **Item 6.72 is now `[~]`**; one new check in section 0 of `TODO.md` (first start on a copy of real data, `.indexes`, `SHOW INDEX`).
+
+## Session 269 - audit section 1 checked again; the 15 red tests fixed (2026-11-10, tests and notes only; JavaFX 11 here, no JavaFX 21)
+- **Asked:** is anything in audit section 1 ("marked completed but not started") still undone and doable here. **Built here:** `Lunavera_Coffee_6_72_indexes.zip` compiles against JavaFX 11 and the whole suite was run with SQLite 3.46.1.3: **3183 tests, 15 failed.**
+- **Section 1 checks repeated on this tree, all as before:** 382 ticked items in `COMPLETE.md`, 57 in `TODO.md` (8 `[ ]`, 49 `[~]`), none in both, none ticked in TODO, none twice; no unexplained unresolved class name (only `AdminController`, `HelloApplication`, `BackupRepro`, which the audit explains, and JDK or JavaFX classes) and no unexplained unresolved `Class.member`.
+- **What was wrong, and is not any more:** the audit said the red tests "are not about section 1 items". Four ticked items cite them (3.85, 4.41, 4.43, 4.47) and four `[~]` items too (3.75, 4.57, 5.49, 6.84), so a ticked item had a failing test of its own. All were test faults, none a program fault: `ProductOptionsDaoTest` (3: a cheaper size's cost was negative, costs may not be), `OrderOptionsDaoTest` (a changed extra is a new line and goes last), `IngredientTest` (300 off a stock of 200), `StockTakerTest` (2: `ProductDAO.findById` shows a recipe product as the servings its ingredients allow), `StartSellingDatabaseTest` (4: a second open clock-in for user 1), `ReservationDaoTest` (one test booked "the next day", another test's day), `StaffAnonymiseScrubTest` (2: a booking 300 days ahead is refused by the 60-day limit; an expense is recorded by an administrator only).
+- **New since Session 268:** `SchemaMigrationsTest.aFreshDatabaseHasTheIndexesAndTheLatestVersion` still asserted schema version 3; Session 268 made it 5. Now 5, with a message that says to raise it with the migration.
+- **Result:** the whole suite again, JDK 21, JavaFX 11 and SQLite 3.46.1.3: **3183 tests, 0 failed** (it was 15 failed). The affected classes alone: 119 tests, 0 failed. Dated check notes were added to 3.85, 4.41, 4.43, 4.47 and to 3.75, 4.57, 5.49, 6.84.
+- **Not run:** `./mvnw`, JavaFX 21, MariaDB, any window. Section 1 still shows only that what the items cite exists or is explained, not that a feature works.
+
+## Session 271 - audit section 2 ("done, but TODO.md not updated") checked again (2026-11-10, notes only)
+- **Asked:** is anything in audit section 2 still not done and doable here, or is it all done or not doable here. Checked on `Lunavera_Coffee_6_72_tests_green.zip`.
+- **The five rows hold:** 6.82 and 6.83 are ticked in `COMPLETE.md` (`ScreensStayAwayFromTheDatabaseTest`, `DatabaseInfo`, `NoJavaFxInRulesTest` are in the tree) and not in `TODO.md`; the birthday idea is in `COMPLETE.md` (`BirthdayTest`) and not in section 7; the two sub-lines of 1.7 are ticked and the parent says it stays open only for the person's screen checks; 3.18 is `[~]` with the one part left (a case-insensitive unique rule for category names on SQLite) closed on purpose. No numbered item is in both files (57 in `TODO.md`, 382 in `COMPLETE.md`). The header of `TODO.md` matches the file: 169 = 139 + 10 + 8 + 12 open, 49 `[~]`.
+- **Scan for anything newer:** every open `[ ]` item, every box of sections 1 and 7 and every `[~]` item was read for wording that calls a part open that the code has since done. Each item leads with its current state; the old "PART DONE, left open" sentences inside 6.5, 6.21 and 6.54 and the old "NOT done" in 6.9 sit behind a current "DONE IN CODE" lead, as the file's own habit has it. The section 7 ideas (customer notes, "what to buy" list, points that lapse, cash-drawer pulse, second display, open an order from the receipt QR) have no code. **One stale sentence found and fixed:** the section 1 box "A later schema change needs three edits" named version 3 as the newest step and said new columns go through `LATER_COLUMNS`; there are steps up to version 5 (SQLite 2 to 5, MariaDB 3 to 5) and a new column is a numbered step since Session 203. It now says so.
+- **What cannot be done here, and why:** 6.90 (c), the Maven wrapper checksum: the jar in the repository is 3.1.0 (`sha256 46b0acdf...`) while `wrapperUrl` names 3.3.2; the checksum has to be of the 3.3.2 jar, which needs a download; a guessed or wrong value would stop every build. The rest of what is open needs a person, a screen, a printer, a shop's own database, JavaFX 21 or an adviser (2A.4, 6.15, 6.44, 6.67, 6.71 b and c, 6.8 and 6.32 as habits, section 0).
+- **Not run:** the suite was not changed by this session (a sentence in `TODO.md` and this note).
+
+## Session 272 - audit section 3 ("partly done, and done in code waiting for a check"): what can still be done here (2026-11-10, code, tests, docs; JDK 21 only, no JavaFX, SQLite driver or Maven)
+- **Asked:** go through the 12 items of audit section 3 and say which are not finished and can be finished here, and which are done or cannot be done here. **Starting tree:** `Lunavera_Coffee_6_72_section2_checked.zip`.
+- **Verdict, item by item.** **Could still be done here, and was:** **5.42** (the support-file filter was attacked with random log lines; 5 of the first 8 tests failed on the old filter, so Vietnamese phones in groups, Windows user names in paths, quoted passwords and keys with a slash really leaked; now fixed, plus `SupportReport.hidePath` for the data and home folders), **2A.4** (`docs/PERSONAL_DATA.md` part 7, the 50 personal columns, kept true by `PersonalDataDocTest`; it shows that a staff name is copied into eight tables and that `login_attempts` keeps wrong login names), **6.44** (the facts in the README re-checked byte by byte, one sentence corrected ("Picasa" is on all three AI photos), a checksummed inventory `docs/PHOTO_INVENTORY.md` with `tools/PhotoInventory.java` and `PhotoInventoryTest`, and the size corrected from "about 12 MB" to 2.77 MB). **Already done, nothing more to do here:** **5.39** (the zero-width roll guard and `ReceiptPrintingPropertyTest` from `Lunavera_Coffee_5_39_checked.zip` are in this tree; `ReceiptPrintingTest` 11 and the 5 property tests pass). **Done in code; what is left is proof that needs `./mvnw -B clean test` or a person with a window, so nothing more here:** **6.54, 6.21, 6.5** (every guard test that can run here passes: `ControllerSizeTest`, `ScreensUseServicesTest`, `PaymentLogicInServicesSourceTest`, `OrderScreenRulesTest`, `SplitPaymentRulesTest`, `PaymentFlowRulesTest`, `PromotionTotalsTest`, `CartQuantityMoveTest`), **6.14** (`DatabaseOffTheScreenThreadTest` passes at 29 calls in 18 screens, every one kept on the screen thread on purpose), **6.71** (the two Help buttons and the cashier entry are coded and `HelpPagesLoadTest` passes; screenshots and a real cashier need a screen and a person). **Cannot be done here:** **6.15** (a real `jlink` image with JavaFX jmods and an upgrade on the shop's Windows machine; `ModuleCheckTest`, `ModularImageProfileTest` pass). **By design:** **6.32, 6.8** (habits; the boxes stay open).
+- **What was carried over:** this was the work of an earlier session that had not been delivered, copied into this tree after checking that the files it changes (`SupportReport`, `SupportBundle`, `PERSONAL_DATA.md`, `README.md`) were identical to the versions it was made from: `SupportReport.java`, `SupportBundle.java`, `SupportReportPropertyTest` (9), `PersonalDataDocTest` (4), `PhotoInventoryTest` (4), `PhotoInventory.java`, `docs/PHOTO_INVENTORY.md`, `docs/PERSONAL_DATA.md`, `README.md` (the Picasa sentence, a pointer to the inventory, two rows in the docs table and one in the tools row). Every test was run against this tree, not the old one.
+- **Run here:** `SupportReportTest` 11, `SupportReportPropertyTest` 9, `PersonalDataDocTest` 4, `PhotoInventoryTest` 4, `NotesConsistencyTest` 4 (32 in all), and the section-3 guard tests above and the receipt tests (112 in all across both runs): **0 failed**. **Not run:** `./mvnw`, JavaFX, a printer, anything that needs the SQLite driver (`SupportBundleDatabaseTest`, the schema tests), the screens.
+- **Documents:** `TODO.md` (notes on 5.42, 6.44, 2A.4 and the check of 5.42 in section 0 extended), `CHANGELOG.md` (one line), `README.md`. The header counts of `TODO.md` did not change (no box added or removed).
+

@@ -81,23 +81,4 @@ public final class UiSettings {
     public static void putBoolean(String key, boolean value) {
         put(key, String.valueOf(value));
     }
-
-    /** A window opens at the size it had when last closed, when that size is sensible for this screen. */
-    public static void rememberSize(javafx.stage.Stage stage, String key, double defaultWidth, double defaultHeight) {
-        double w = getDouble(key + ".width", defaultWidth);
-        double h = getDouble(key + ".height", defaultHeight);
-        javafx.geometry.Rectangle2D screen = javafx.stage.Screen.getPrimary().getVisualBounds();
-        if (w < 600 || h < 400 || w > screen.getWidth() || h > screen.getHeight()) {
-            w = defaultWidth;
-            h = defaultHeight;
-        }
-        stage.setWidth(w);
-        stage.setHeight(h);
-        stage.setOnHidden(e -> {
-            if (!stage.isMaximized() && !stage.isIconified() && stage.getWidth() > 0) {
-                put(key + ".width", String.valueOf(Math.round(stage.getWidth())));
-                put(key + ".height", String.valueOf(Math.round(stage.getHeight())));
-            }
-        });
-    }
 }

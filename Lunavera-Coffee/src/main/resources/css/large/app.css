@@ -1,0 +1,10 @@
+/*
+ * GENERATED FILE - do not edit by hand (TODO 5.44, the large text).
+ * The large sizes of app.css, rule by rule.
+ * Added by AppStyle to a window while the large text is chosen. Regenerate with service/LargeTextSheet.main after a
+ * change to any style sheet; LargeTextSheetTest fails when a file here is out of date.
+ */
+
+.sidebar-language-button {
+    -fx-font-size: 14px !important;
+}

@@ -1,6 +1,9 @@
 package com.coffeeshop.coffeeshopmanagement.dao;
 
+import com.coffeeshop.coffeeshopmanagement.config.AppFlags;
 import com.coffeeshop.coffeeshopmanagement.config.SqlStatus;
+import com.coffeeshop.coffeeshopmanagement.model.AuditAction;
+import com.coffeeshop.coffeeshopmanagement.model.AuditTarget;
 import com.coffeeshop.coffeeshopmanagement.util.AppClock;
 import com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig;
 import com.coffeeshop.coffeeshopmanagement.util.DbTime;
@@ -257,6 +260,34 @@ public Optional<User> findById(int id) {
         update("UPDATE users SET pin_hash = NULL, pin_failures = 0 WHERE id = ?", null, userId);
     }
 
+    /**
+     * Switches a PIN off because of wrong tries (TODO 2A.46), in one transaction: the PIN goes, an audit line says who was signed in
+     * on the till and how many wrong PINs there were, and a notice is left for the owner of the PIN to be shown at the next sign-in.
+     * Either all three happen or none does, so a PIN is never switched off without a trace and a person is never told about a PIN
+     * that is still on. {@code username} is the account's name for the audit line.
+     */
+    public void switchOffPinAfterWrongTries(int userId, String username, int failures) {
+        try (Connection connection = DatabaseConfig.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "UPDATE users SET pin_hash = NULL, pin_failures = 0 WHERE id = ?")) {
+                    statement.setInt(1, userId);
+                    statement.executeUpdate();
+                }
+                AuditDAO.write(connection, AuditAction.PIN_SWITCHED_OFF, AuditTarget.ACCOUNT, userId, username, null, null,
+                        String.valueOf(failures));
+                AppFlags.markIn(connection, AppFlags.PIN_OFF_NOTICE_PREFIX + userId);
+                connection.commit();
+            } catch (SQLException | RuntimeException e) {
+                connection.rollback();
+                throw e;
+            }
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to switch the PIN off", e);
+        }
+    }
+
     /** A right PIN: the count of wrong ones in a row starts again. */
     public void resetPinFailures(int userId) {
         update("UPDATE users SET pin_failures = 0 WHERE id = ? AND pin_failures <> 0", null, userId);
@@ -297,7 +328,7 @@ public Optional<User> findById(int id) {
     public List<PinHolder> pinHolders() {
         String sql = "SELECT u.id, COALESCE(e.full_name, u.username) AS shown FROM users u LEFT JOIN employees e ON e.id = u.employee_id "
                 + "WHERE u.pin_hash IS NOT NULL AND u.role = '" + Role.EMPLOYEE.name() + "' AND u.status = " + SqlStatus.ACTIVE
-                + " ORDER BY shown, u.id";
+                + " ORDER BY " + DatabaseConfig.dialect().vietnameseOrder("shown") + ", u.id";
         List<PinHolder> holders = new ArrayList<>();
         try (Connection connection = DatabaseConfig.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql);

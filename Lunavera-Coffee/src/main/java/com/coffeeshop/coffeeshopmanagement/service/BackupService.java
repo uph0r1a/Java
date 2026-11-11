@@ -68,12 +68,13 @@ public final class BackupService {
     static final String BEFORE_RESTORE_PREFIX = "before-restore-";
     /** The copy made right before unused pictures are deleted (TODO 4.27); the newest {@link #KEEP_BEFORE_RESTORE} are kept. */
     static final String BEFORE_CLEANUP_PREFIX = "before-cleanup-";
+    static final String BEFORE_OPENING_PREFIX = "before-opening-";
     static final String PENDING_ZIP = "restore-pending.zip";
     static final String PENDING_DB = "restore-pending.db";
     static final String DB_ENTRY = DataPaths.DATABASE_FILE_NAME;
     static final String IMAGES_FOLDER = "images";
     static final String INFO_ENTRY = "backup-info.txt";
-    private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
+    static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 
     /** What to tell someone who tries the in-app restore while the shop runs on MariaDB/MySQL. */
     public static String mariaDbRestoreHelp() {
@@ -97,7 +98,20 @@ public final class BackupService {
 
     /** Writes a full backup (database + pictures) to {@code target}; returns the file actually written. */
     public static Path createBackup(Path target) throws SQLException, IOException {
-        return createBackup(target, true);
+        Path made = createBackup(target, true);
+        auditBackup(made, "PLAIN");
+        return made;
+    }
+
+    /**
+     * Notes in the audit log (TODO 4.2) that somebody made a backup by hand: the file name only (never the folder), and whether it
+     * is locked with a passphrase. Automatic backups are not written (one a day would drown the rest). A failure to write the line
+     * never fails the backup.
+     */
+    private static void auditBackup(Path file, String kind) {
+        com.coffeeshop.coffeeshopmanagement.dao.AuditDAO.recordQuietly(com.coffeeshop.coffeeshopmanagement.model.AuditAction.BACKUP_MADE,
+                com.coffeeshop.coffeeshopmanagement.model.AuditTarget.BACKUP, null,
+                file == null || file.getFileName() == null ? null : file.getFileName().toString(), null, kind, null);
     }
 
     /** {@code withPictures} false: database and transfer QR only (automatic backups between two full ones, TODO 4.28). */
@@ -203,7 +217,7 @@ public final class BackupService {
         Path plain = DataPaths.createTempFile("lunavera-plain-backup", ".zip");
         Path partial = out.resolveSibling(out.getFileName() + ".part");
         try {
-            createBackup(plain);
+            createBackup(plain, true); // not the public one: the temporary plain copy is not a backup somebody made
             if (Files.getFileStore(folder).getUsableSpace() < Files.size(plain) + 1_000_000L) {
                 throw new IOException(I18n.t("backup.dir.nospace", folder));
             }
@@ -224,6 +238,7 @@ public final class BackupService {
         } finally {
             if (opened != null) Files.deleteIfExists(opened);
         }
+        auditBackup(out, "ENCRYPTED");
         return out;
     }
 
@@ -276,15 +291,26 @@ public final class BackupService {
         writeZip(zipFile, databaseFile, DB_ENTRY, imagesDir, dataDir, true);
     }
 
+    /**
+     * The text of {@code backup-info.txt}: when, which database, which program version and table layout made it (TODO 5.41, so a
+     * backup can be matched to the version that wrote it and the restore of a newer one can be understood), and whether the pictures
+     * are left out. A few lines, read by people and by {@link #picturesIncluded}.
+     */
+    static String infoText(String databaseEntry, boolean withPictures, LocalDateTime now) {
+        return "Lunavera Coffee backup\ncreated: " + now + "\ndatabase: "
+                + (DB_ENTRY.equals(databaseEntry) ? "SQLite (" + DB_ENTRY + ")" : "MariaDB/MySQL dump (" + databaseEntry + ")")
+                + "\nprogram: " + com.coffeeshop.coffeeshopmanagement.util.AppVersion.version()
+                + "\nschema: " + com.coffeeshop.coffeeshopmanagement.config.SchemaMigrations.LATEST_VERSION
+                + (withPictures ? "" : "\n" + NO_PICTURES_LINE)
+                + "\n";
+    }
+
     private static void writeZip(Path zipFile, Path databaseFile, String databaseEntry, Path imagesDir, Path dataDir,
                                  boolean withPictures) throws IOException {
         try (OutputStream out = Files.newOutputStream(zipFile);
              ZipOutputStream zip = new ZipOutputStream(out)) {
             zip.putNextEntry(new ZipEntry(INFO_ENTRY));
-            zip.write(("Lunavera Coffee backup\ncreated: " + LocalDateTime.now() + "\ndatabase: "
-                    + (DB_ENTRY.equals(databaseEntry) ? "SQLite (" + DB_ENTRY + ")" : "MariaDB/MySQL dump (" + databaseEntry + ")")
-                    + (withPictures ? "" : "\n" + NO_PICTURES_LINE)
-                    + "\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            zip.write(infoText(databaseEntry, withPictures, LocalDateTime.now()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
             zip.closeEntry();
             zip.putNextEntry(new ZipEntry(databaseEntry));
             Files.copy(databaseFile, zip);
@@ -318,6 +344,39 @@ public final class BackupService {
      * {@link #AUTOMATIC_EVERY}, then prunes. Never throws: a failed automatic backup is logged and the app carries on.
      */
     public static Optional<Path> autoBackupIfDue() {
+        return AUTOMATIC.run(0, BackupService::autoBackupNow).flatMap(result -> result);
+    }
+
+    /** One automatic backup at a time, whichever of the five starts asks (TODO 2.62). */
+    private static final com.coffeeshop.coffeeshopmanagement.util.SingleFlight AUTOMATIC = new com.coffeeshop.coffeeshopmanagement.util.SingleFlight();
+
+    /**
+     * Starts {@link #autoBackupIfDue()} on its own thread and returns at once: the start-up, the hourly timer, a logout and the
+     * idle logout use it, so a backup never holds up a screen (TODO 2.62). A backup already running makes this one do nothing.
+     */
+    public static void autoBackupInBackground() {
+        Thread thread = new Thread(BackupService::autoBackupIfDue, "auto-backup");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    /**
+     * For closing the program (TODO 2.62): makes the automatic backup if it is due, and waits for it, or for one that is already
+     * running, for at most {@code maxMillis}; the program then closes whatever happened. A backup is written to a {@code .part} file
+     * and moved into place only when whole, so one cut off by the time limit leaves the older backups as they were.
+     */
+    public static void autoBackupBeforeExit(long maxMillis) {
+        Thread thread = new Thread(() -> AUTOMATIC.run(maxMillis, BackupService::autoBackupNow), "auto-backup-exit");
+        thread.setDaemon(true);
+        thread.start();
+        try {
+            thread.join(Math.max(0, maxMillis));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private static Optional<Path> autoBackupNow() {
         try {
             Path dir = DataPaths.backupsDir();
             if (!isDue(dir, Instant.now())) {
@@ -440,8 +499,29 @@ public final class BackupService {
         return made;
     }
 
+    /**
+     * A full backup (database and pictures) named {@code before-opening-<time>.zip} in the backups folder, taken before the test
+     * sales are cleared (TODO 4.57). It is the only way back from that action, so it is never pruned: no part of this class
+     * deletes a file with this prefix.
+     */
+    public static Path createBeforeOpeningBackup() throws SQLException, IOException {
+        return createBackup(DataPaths.backupsDir().resolve(BEFORE_OPENING_PREFIX + STAMP.format(LocalDateTime.now()) + ".zip"), true);
+    }
+
+    /**
+     * The safety copy a MariaDB restore takes before it changes anything (TODO 1.8): a full backup (dump and pictures) named
+     * {@code before-restore-<time>.zip} in the backups folder, like the one a SQLite restore writes at the next start. The newest
+     * {@link #KEEP_BEFORE_RESTORE} are kept. Not written to the audit log as a backup by hand: the restore writes its own line.
+     */
+    static Path createBeforeRestoreBackup() throws SQLException, IOException {
+        Path dir = DataPaths.backupsDir();
+        Path made = createBackup(dir.resolve(BEFORE_RESTORE_PREFIX + STAMP.format(LocalDateTime.now()) + ".zip"), true);
+        pruneBeforeRestoreQuietly(dir);
+        return made;
+    }
+
     /** Same, but a problem is only logged: a restore or a backup must never fail because of tidying. */
-    private static void pruneBeforeRestoreQuietly(Path dir) {
+    static void pruneBeforeRestoreQuietly(Path dir) {
         try {
             pruneBeforeRestore(dir, KEEP_BEFORE_RESTORE);
             pruneNewest(zipsWithPrefix(dir, BEFORE_CLEANUP_PREFIX), KEEP_BEFORE_RESTORE, Instant.now());
@@ -537,7 +617,7 @@ public final class BackupService {
         }
     }
 
-    private static boolean isZip(Path source) {
+    static boolean isZip(Path source) {
         return source.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".zip");
     }
 
@@ -742,6 +822,12 @@ public final class BackupService {
             // TODO 2.85: after a crash the newest sales can still be in lunavera.db-wal. Open the file once so SQLite replays that
             // log, and fold it into the main file, BEFORE the safety copy is taken and before the side files are deleted below.
             boolean logFolded = !Files.exists(database) || foldLeftoverLogInto(database);
+            boolean keptLog = false;
+            if (!logFolded) {
+                // At once, before anything else opens the damaged file: every failed open makes SQLite delete the log again, and
+                // the account comparison below opens the live file (TODO 2.85).
+                keptLog = keepUnfoldedLog(database, backups);
+            }
 
             Path safety = null;
             if (Files.exists(database)) {
@@ -780,14 +866,7 @@ public final class BackupService {
                     imagesSwapped = true;
                 }
                 for (String suffix : List.of("-journal", "-wal", "-shm")) {
-                    Path side = dataDir.resolve(DataPaths.DATABASE_FILE_NAME + suffix);
-                    if (!logFolded && suffix.equals("-wal") && Files.exists(side)) {
-                        // The log could not be folded in: keep it beside the safety copies instead of deleting sales (TODO 2.85).
-                        Files.move(side, backups.resolve("lunavera.db-wal.unfolded-" + STAMP.format(LocalDateTime.now())),
-                                StandardCopyOption.REPLACE_EXISTING);
-                    } else {
-                        Files.deleteIfExists(side);
-                    }
+                    Files.deleteIfExists(dataDir.resolve(DataPaths.DATABASE_FILE_NAME + suffix)); // an unfoldable log is already in backups/ (above)
                 }
                 Files.move(incoming, database, StandardCopyOption.REPLACE_EXISTING);
             } catch (Exception failed) {
@@ -808,7 +887,9 @@ public final class BackupService {
             LOGGER.info("Restored from the pending backup." + where);
                String accounts = accountNotes.isEmpty() ? ""
                     : I18n.t("backup.restored.accounts", String.join("\n- ", accountNotes));
-               return new RestoreResult(RestoreOutcome.RESTORED, I18n.t("backup.restored", where) + accounts);
+               // TODO 2.85: say so when a log that could not be read back was kept, so the person knows where it is
+               String kept = keptLog ? I18n.t("backup.restored.unfolded") : "";
+               return new RestoreResult(RestoreOutcome.RESTORED, I18n.t("backup.restored", where) + accounts + kept);
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Restore failed", e);
             try {
@@ -828,26 +909,59 @@ public final class BackupService {
      * {@code wal_checkpoint(TRUNCATE)} moves its pages into {@code lunavera.db}. A copy of the bare file taken without this
      * misses every sale since the last checkpoint.
      *
-     * @return true if there was nothing to fold or it was folded; false if the file could not be opened (the caller then keeps
-     *         the log file instead of deleting it)
+     * <p>SQLite deletes the {@code -wal} file itself when the main file cannot be opened as a database (found with the real
+     * driver, TODO 2.85), which would lose the very sales this is meant to save. So the log is copied aside BEFORE the first
+     * connection; the copy is deleted once the fold worked, and put back when the fold failed and SQLite removed the log.
+     *
+     * @return true if there was nothing to fold or it was folded; false if the file could not be opened (the log file is then
+     *         still there, and the caller keeps it instead of deleting it)
      */
     static boolean foldLeftoverLogInto(Path database) {
         Path log = database.resolveSibling(database.getFileName() + "-wal");
+        Path keep = database.resolveSibling(database.getFileName() + "-wal.keep");
         try {
             if (!Files.exists(log) || Files.size(log) == 0) {
                 return true;
             }
+            Files.copy(log, keep, StandardCopyOption.REPLACE_EXISTING); // before SQLite can delete the log
         } catch (IOException e) {
+            LOGGER.log(Level.WARNING, "Could not copy the database log aside; it is left as it is", e);
             return false;
         }
+        boolean folded = false;
         try (Connection connection = DriverManager.getConnection("jdbc:sqlite:" + database.toAbsolutePath());
              Statement statement = connection.createStatement()) {
             statement.execute("PRAGMA wal_checkpoint(TRUNCATE)");
-            return true;
+            folded = true;
         } catch (SQLException e) {
             LOGGER.log(Level.WARNING, "Could not fold the database log into its file before the safety copy", e);
-            return false;
         }
+        try {
+            if (!folded && !Files.exists(log)) {
+                Files.move(keep, log, StandardCopyOption.REPLACE_EXISTING); // SQLite removed it: put the sales' log back
+            } else {
+                Files.deleteIfExists(keep);
+            }
+        } catch (IOException e) {
+            LOGGER.log(Level.WARNING, "The database log copy " + keep.getFileName() + " could not be put back or removed: keep it", e);
+        }
+        return folded;
+    }
+
+    /**
+     * The log that could not be folded in is moved beside the safety copies as {@code lunavera.db-wal.unfolded-<time>} instead of
+     * being deleted with the other side files (TODO 2.85). Does nothing when there is no log.
+     *
+     * @return true when a log was found and moved (the restore message then says so)
+     */
+    static boolean keepUnfoldedLog(Path database, Path backups) throws IOException {
+        Path log = database.resolveSibling(database.getFileName() + "-wal");
+        if (Files.exists(log)) {
+            Files.move(log, backups.resolve("lunavera.db-wal.unfolded-" + STAMP.format(LocalDateTime.now())),
+                    StandardCopyOption.REPLACE_EXISTING);
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -894,7 +1008,7 @@ public final class BackupService {
     }
 
     /** Extracts the {@code images/} entries of a backup into {@code target} (created fresh); names that climb out are skipped. */
-    private static void extractImages(Path zipFile, Path target) throws IOException {
+    static void extractImages(Path zipFile, Path target) throws IOException {
         Files.createDirectories(target);
         Path root = target.toAbsolutePath().normalize();
         long totalBytes = 0;
@@ -915,7 +1029,7 @@ public final class BackupService {
     }
 
     /** The bank-transfer QR picture is part of a backup too; it comes back with a restore (TODO 2.42). */
-    private static void restoreTransferQr(Path zipFile, Path dataDir) {
+    static void restoreTransferQr(Path zipFile, Path dataDir) {
         try (InputStream in = Files.newInputStream(zipFile); ZipInputStream zip = new ZipInputStream(in)) {
             ZipEntry entry;
             boolean cleared = false;
@@ -947,7 +1061,7 @@ public final class BackupService {
         }
     }
 
-    private static void deleteTree(Path folder) throws IOException {
+    static void deleteTree(Path folder) throws IOException {
         if (!Files.exists(folder)) return;
         try (Stream<Path> files = Files.walk(folder)) {
             for (Path file : (Iterable<Path>) files.sorted(Comparator.reverseOrder())::iterator) {
@@ -982,7 +1096,7 @@ public final class BackupService {
     }
 
     /** Reads and discards the rest of the entry (so its CRC is checked), refusing one longer than {@code maxBytes}. */
-    private static long copyCappedToNowhere(InputStream in, long maxBytes) throws IOException {
+    static long copyCappedToNowhere(InputStream in, long maxBytes) throws IOException {
         long total = 0;
         byte[] buffer = new byte[64 * 1024];
         int read;

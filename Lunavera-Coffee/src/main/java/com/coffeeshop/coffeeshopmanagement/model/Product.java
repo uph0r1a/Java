@@ -14,6 +14,12 @@ public class Product {
     private int stock;
     /** The stock number as it was when this object was read from the database; null for a product not read yet (TODO 3.2). */
     private Integer loadedStock;
+    private boolean recipeBased;
+    /**
+     * Pieces (servings for a recipe product) that the OTHER open orders hold, already taken off {@link #getStock()} when the product
+     * was read for the till by {@code ProductDAO.findAllForSale} (TODO 3.1); 0 everywhere else.
+     */
+    private int heldElsewhere;
     private String description;
     private String imagePath;
     private boolean active;
@@ -54,6 +60,12 @@ public class Product {
     public void setLoadedStock(Integer loadedStock) { this.loadedStock = loadedStock; }
     /** True when this object was read from the database and its stock number was not changed since. */
     public boolean isStockUntouchedSinceLoad() { return loadedStock != null && loadedStock == stock; }
+
+    /** True when the product has a recipe (TODO 4.41): {@link #getStock()} is then the servings its ingredients allow, not a cup count. */
+    public int getHeldElsewhere() { return heldElsewhere; }
+    public void setHeldElsewhere(int heldElsewhere) { this.heldElsewhere = Math.max(0, heldElsewhere); }
+    public boolean isRecipeBased() { return recipeBased; }
+    public void setRecipeBased(boolean recipeBased) { this.recipeBased = recipeBased; }
 
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }

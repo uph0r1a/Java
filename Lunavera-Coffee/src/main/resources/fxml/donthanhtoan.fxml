@@ -43,7 +43,7 @@
           spacing="4.0">
 
         <Label fx:id="shopNameLabel"
-               text="Lunavera Coffee"
+               text=""
                styleClass="invoice-shop-name"/>
 
         <!-- The shop's address and phone from the settings screen (TODO 4.7); hidden until the owner types one. -->
@@ -64,6 +64,12 @@
                visible="false"
                managed="false"
                styleClass="invoice-cancelled-banner"/>
+
+        <!-- "COPY - print no. 2" from the second print of this receipt on (TODO 3.72); empty and hidden until then. -->
+        <Label fx:id="copyLabel"
+               visible="false"
+               managed="false"
+               styleClass="invoice-copy-mark"/>
 
     </VBox>
 
@@ -331,7 +337,7 @@
           spacing="3.0">
 
         <Label fx:id="footerShopNameLabel"
-               text="Lunavera Coffee"
+               text=""
                styleClass="invoice-footer-shop"/>
 
         <Label text="%receipt.thanks"
@@ -353,6 +359,14 @@
                 HBox.hgrow="ALWAYS"
                 styleClass="print-button"
                 onAction="#handlePrint"/>
+
+        <Button fx:id="printOptionsButton"
+                text="%receipt.print.options"
+                prefHeight="42.0"
+                visible="false"
+                managed="false"
+                styleClass="close-button"
+                onAction="#handlePrintWithOptions"/>
 
 
         <Button fx:id="closeButton"

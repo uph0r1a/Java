@@ -1,16 +1,17 @@
 package com.coffeeshop.coffeeshopmanagement.controller;
 
-import com.coffeeshop.coffeeshopmanagement.dao.OrderDAO;
 import com.coffeeshop.coffeeshopmanagement.model.Order;
+import com.coffeeshop.coffeeshopmanagement.model.OrderChannel;
 import com.coffeeshop.coffeeshopmanagement.service.TableAge;
 import com.coffeeshop.coffeeshopmanagement.service.TableLayout;
+import com.coffeeshop.coffeeshopmanagement.service.OrderCancelService;
+import com.coffeeshop.coffeeshopmanagement.service.TableService;
 import com.coffeeshop.coffeeshopmanagement.service.TablePolicy;
 import com.coffeeshop.coffeeshopmanagement.util.AlertUtil;
 import com.coffeeshop.coffeeshopmanagement.util.AppClock;
 import com.coffeeshop.coffeeshopmanagement.util.Async;
 import com.coffeeshop.coffeeshopmanagement.util.I18n;
 import com.coffeeshop.coffeeshopmanagement.util.OrderNumber;
-import com.coffeeshop.coffeeshopmanagement.util.Session;
 import javafx.scene.control.Button;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.Priority;
@@ -26,17 +27,37 @@ import java.util.function.IntConsumer;
  * with {@code table_number} empty; paying and the receipt already handled that. Kept out of {@code OrderController}, which is at its
  * size ceiling (TODO 6.54).
  *
- * <p>There is no queue number of its own: the order number ({@code #12}) already tells two orders apart and is on the receipt, and a
- * per-day counter would need a new column in both databases.
+ * <p>Each take-away order gets a number of the day ("số 5", from 1 again every morning, TODO 4.25 rule D3) so the cup can be called
+ * out; it is on the button, the receipt window and the thermal receipt. The order number ({@code #12}) still tells two orders apart.
  */
 final class TakeAwayPanel {
 
     private TakeAwayPanel() {
     }
 
+    /**
+     * The channel of the table-less order on screen, or of the one a new order will be started as (TODO 4.48): set by the buttons
+     * below, read when the order is started and for the name above the order. Only the screen thread sets it.
+     */
+    private static volatile OrderChannel current = OrderChannel.TAKE_AWAY;
+
+    static OrderChannel current() {
+        return current;
+    }
+
+    /** How many "new order" buttons come before the open orders: one per channel without a table. */
+    static int newButtons() {
+        return OrderChannel.withoutTable().size();
+    }
+
+    /** "Số 5" (the number of the day, D3), or the order number when an older order has none. */
+    static String numberOf(Order order) {
+        return order.getQueueNo() != null ? I18n.t("pos.takeaway.number", String.valueOf(order.getQueueNo())) : OrderNumber.format(order.getId());
+    }
+
     /** "Bàn 3", or "Mang đi" for no table. */
     static String tableLabel(Integer tableNumber) {
-        return tableNumber == null ? I18n.t("orders.takeaway") : I18n.t("orders.table", tableNumber);
+        return tableNumber == null ? current.label() : I18n.t("orders.table", tableNumber);
     }
 
     /**
@@ -49,19 +70,28 @@ final class TakeAwayPanel {
     static void addButtons(GridPane grid, int firstIndex, List<Order> open, boolean newSelected, Integer selectedId,
                            IntConsumer onOpen, Runnable onNew) {
         int index = firstIndex;
-        Button fresh = new Button("🥡  " + I18n.t("orders.takeaway") + "\n" + I18n.t("pos.takeaway.new"));
-        style(fresh, "table-button-empty", newSelected);
-        fresh.setOnAction(e -> onNew.run());
-        place(grid, fresh, index++);
+        for (OrderChannel channel : OrderChannel.withoutTable()) { // "Mang đi", "GrabFood", "ShopeeFood" (TODO 4.48)
+            Button fresh = new Button(channel.icon() + "  " + channel.label() + "\n" + I18n.t("pos.takeaway.new"));
+            style(fresh, "table-button-empty", newSelected && current == channel);
+            fresh.setOnAction(e -> {
+                current = channel;
+                onNew.run();
+            });
+            place(grid, fresh, index++);
+        }
         for (Order order : open) {
             Duration age = TableAge.since(order.getOrderDate(), AppClock.now());
             String time = age == null ? "" : "  ·  " + TableAge.text(age);
-            Button button = new Button("🥡  " + I18n.t("orders.takeaway") + " " + OrderNumber.format(order.getId()) + "\n"
+            Button button = new Button(order.channel().icon() + "  " + order.channel().label() + " " + numberOf(order) + "\n"
                     + I18n.t("tables.status.occupied") + time);
             style(button, "table-button-occupied", selectedId != null && selectedId == order.getId());
             if (TableAge.isLong(age)) button.getStyleClass().add("table-button-long");
             int id = order.getId();
-            button.setOnAction(e -> onOpen.accept(id));
+            OrderChannel channel = order.channel();
+            button.setOnAction(e -> {
+                current = channel;
+                onOpen.accept(id);
+            });
             place(grid, button, index++);
         }
     }
@@ -97,15 +127,14 @@ final class TakeAwayPanel {
      */
     static void cancel(Order order, Runnable after) {
         if (order == null) return;
-        Integer me = Session.getCurrentEmployee() != null ? Session.getCurrentEmployee().getId() : null;
-        if (!TablePolicy.canEmptyTableWithOpenOrder(Session.isAdmin(), me, order.getEmployeeId())) {
+        if (!TableService.mayEmpty(order)) { // refuse at once; the service checks again against the database (TODO 6.21)
             AlertUtil.warning(I18n.t("admin.only.title"), TablePolicy.refusedMessage());
             return;
         }
         if (!AlertUtil.confirm(I18n.t("pos.cancel.title"), I18n.t("pos.takeaway.cancel.message", OrderNumber.format(order.getId())))) {
             return;
         }
-        Async.run(() -> new OrderDAO().cancelOpenTakeAway(order.getId()), done -> after.run(),
+        Async.run(() -> new OrderCancelService().cancelTakeAway(order.getId()), done -> after.run(),
                 error -> AlertUtil.error(I18n.t("common.error.title"), I18n.t("pos.toggle.fail", error.getMessage())));
     }
 }

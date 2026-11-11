@@ -1,11 +1,11 @@
 package com.coffeeshop.coffeeshopmanagement.controller;
 
-import com.coffeeshop.coffeeshopmanagement.service.Limits;
+import com.coffeeshop.coffeeshopmanagement.service.CategoryService;
 import java.util.Locale;
 import com.coffeeshop.coffeeshopmanagement.util.I18n;
 import com.coffeeshop.coffeeshopmanagement.dao.CategoryDAO;
 import com.coffeeshop.coffeeshopmanagement.dao.DataAccessException;
-import com.coffeeshop.coffeeshopmanagement.dao.ProductDAO;
+import com.coffeeshop.coffeeshopmanagement.service.ProductFormRules;
 import com.coffeeshop.coffeeshopmanagement.service.ProductService;
 import com.coffeeshop.coffeeshopmanagement.model.Category;
 import com.coffeeshop.coffeeshopmanagement.model.Product;
@@ -13,10 +13,8 @@ import com.coffeeshop.coffeeshopmanagement.util.AlertUtil;
 import com.coffeeshop.coffeeshopmanagement.util.TextLengthLimiter;
 import com.coffeeshop.coffeeshopmanagement.util.Async;
 import com.coffeeshop.coffeeshopmanagement.util.CurrencyUtil;
-import com.coffeeshop.coffeeshopmanagement.util.MoneyParser;
 import com.coffeeshop.coffeeshopmanagement.util.PagedTable;
 import com.coffeeshop.coffeeshopmanagement.util.Session;
-import com.coffeeshop.coffeeshopmanagement.util.ValidationUtil;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
@@ -41,7 +39,6 @@ import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import java.io.IOException;
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -52,8 +49,7 @@ import java.util.stream.Collectors;
  */
 public class ProductController extends AdminScreen {
 
-    private final CategoryDAO categoryDAO = new CategoryDAO();
-    private final ProductDAO productDAO = new ProductDAO();
+    private final CategoryService categoryService = new CategoryService();
     private final ProductService productService = new ProductService();
     private List<Category> allCategories = List.of();
     // Loaded once per reload via CategoryDAO.countProductsByCategory() (a single grouped
@@ -111,8 +107,7 @@ public class ProductController extends AdminScreen {
         exportButton.setOnAction(e -> exportProductsCsv());
         Button stockButton = new Button(I18n.t("stock.open")); // "Nhập kho": goods received and the stock log (TODO 4.5)
         stockButton.setOnAction(e -> StockLogDialog.show(allProducts, this::reloadProducts));
-        int at = bar.getChildren().indexOf(addProductButton);
-        bar.getChildren().addAll(at, List.of(stockButton, importButton, exportButton));
+        bar.getChildren().addAll(bar.getChildren().indexOf(addProductButton), List.of(stockButton, importButton, exportButton));
     }
 
     private void exportProductsCsv() {
@@ -126,7 +121,7 @@ public class ProductController extends AdminScreen {
         Runnable pointer = com.coffeeshop.coffeeshopmanagement.util.BusyIndicator.waitCursor(productTable); // TODO 5.16
         Async.run(
                 () -> {
-                    List<Product> all = productDAO.findAll();
+                    List<Product> all = productService.findAll();
                     com.coffeeshop.coffeeshopmanagement.util.ExportCsv.write(file.toPath(),
                             com.coffeeshop.coffeeshopmanagement.service.ProductCsv.export(all));
                     return all.size();
@@ -157,19 +152,20 @@ public class ProductController extends AdminScreen {
             AlertUtil.warning(I18n.t("products.import.toobig.title"), I18n.t("products.import.toobig.message"));
             return;
         }
-        com.coffeeshop.coffeeshopmanagement.service.ProductCsv.Result result;
-        try {
-            String text = com.coffeeshop.coffeeshopmanagement.service.ProductCsv.decode(java.nio.file.Files.readAllBytes(file.toPath()));
-            java.util.Set<String> codesInUse = new java.util.HashSet<>(); // the database's own unique rule is the last word (TODO 4.42)
-            for (Product p : allProducts) {
-                if (p.getCode() != null) codesInUse.add(p.getCode());
-            }
-            result = com.coffeeshop.coffeeshopmanagement.service.ProductCsv.parse(text, allActiveCategories,
-                    (name, categoryId) -> productDAO.existsByNameInCategory(name, categoryId, 0), codesInUse::contains);
-        } catch (java.io.IOException | RuntimeException e) {
-            AlertUtil.error(I18n.t("products.import.unreadable.title"), I18n.t("products.import.unreadable.message", (e instanceof java.io.IOException ? "" : e.getMessage())));
-            return;
-        }
+        java.util.Set<String> codesInUse = new java.util.HashSet<>(); // the database's own unique rule is the last word (TODO 4.42)
+        for (Product p : allProducts) if (p.getCode() != null) codesInUse.add(p.getCode());
+        List<Category> categories = List.copyOf(allActiveCategories); // the file and each row's name check are read in the background (TODO 6.14)
+        Async.run(() -> com.coffeeshop.coffeeshopmanagement.service.ProductCsv.parse(
+                        com.coffeeshop.coffeeshopmanagement.service.ProductCsv.decode(java.nio.file.Files.readAllBytes(file.toPath())), categories,
+                        (name, categoryId) -> productService.existsByNameInCategory(name, categoryId, 0), codesInUse::contains),
+                this::confirmCsvImport,
+                failure -> AlertUtil.error(I18n.t("products.import.unreadable.title"),
+                        I18n.t("products.import.unreadable.message", (failure instanceof java.io.IOException ? "" : failure.getMessage()))),
+                productTable);
+    }
+
+    /** The preview of a parsed CSV file and the question; the import itself runs in the background. */
+    private void confirmCsvImport(com.coffeeshop.coffeeshopmanagement.service.ProductCsv.Result result) {
         String problems = result.problems().isEmpty() ? ""
                 : "\n\n" + I18n.t("products.import.skipped", result.problems().size(), String.join("\n", result.problems().stream().limit(12).toList()), (result.problems().size() > 12 ? "\n" + I18n.t("products.import.more", (result.problems().size() - 12)) : ""));
         String warnings = result.warnings().isEmpty() ? ""
@@ -188,7 +184,7 @@ public class ProductController extends AdminScreen {
         Async.run(
                 () -> {
                     com.coffeeshop.coffeeshopmanagement.util.Permissions.requireAdmin("import products");
-                    productDAO.insertAll(toAdd); // one transaction: all rows or none (TODO 2.69)
+                    productService.insertAll(toAdd); // one transaction: all rows or none (TODO 2.69)
                     com.coffeeshop.coffeeshopmanagement.util.SecurityLog.event("imported " + toAdd.size() + " products from CSV");
                     return toAdd.size();
                 },
@@ -236,6 +232,7 @@ public class ProductController extends AdminScreen {
                 new SimpleStringProperty(!data.getValue().isActive() ? I18n.t("products.status.stopped")
                         : isCategoryHidden(data.getValue()) ? I18n.t("products.status.categoryhidden") : I18n.t("products.status.selling")));
         actionColumn.setCellFactory(actionColumnFactory(this::openEditProductDialog, this::deleteProduct));
+        CopyMenus.products(productTable, this::openEditProductDialog, this::deleteProduct); // right-click menu (TODO 5.46)
         imageColumn.setCellFactory(column -> new TableCell<>() {
             private final javafx.scene.image.ImageView imageView = new javafx.scene.image.ImageView();
             {
@@ -285,9 +282,9 @@ public class ProductController extends AdminScreen {
     private void reloadProducts(Integer selectId) {
         Async.run(
                 () -> {
-                    List<Category> categories = categoryDAO.findAll();
-                    List<Product> products = productDAO.findAll();
-                    Map<Integer, Integer> counts = categoryDAO.countProductsByCategory();
+                    List<Category> categories = categoryService.findAll();
+                    List<Product> products = productService.findAll();
+                    Map<Integer, Integer> counts = categoryService.countProductsByCategory();
                     return new Object[]{categories, products, counts};
                 },
                 result -> {
@@ -508,7 +505,7 @@ public class ProductController extends AdminScreen {
         }
         int id = selected.getId();
         Async.run(
-                () -> productDAO.move(id, delta),
+                () -> productService.move(id, delta),
                 moved -> reloadProducts(id),
                 error -> AlertUtil.error(I18n.t("common.error.title"), error.getMessage()));
     }
@@ -573,7 +570,7 @@ public class ProductController extends AdminScreen {
             pickImageButton.setDisable(true);
             Async.run(
                     () -> {
-                        String problem = com.coffeeshop.coffeeshopmanagement.util.ImageStorage.pictureProblem(picked);
+                        String problem = com.coffeeshop.coffeeshopmanagement.util.PictureCheck.pictureProblem(picked);
                         if (problem != null) return new String[]{problem, null};
                         // Stores a bare file name now, not an absolute path (TODO.md item 10a) - a
                         // database copied to another machine/user still finds its product images.
@@ -620,127 +617,23 @@ public class ProductController extends AdminScreen {
 
         Button saveButton = (Button) dialog.getDialogPane().lookupButton(saveButtonType);
         saveButton.addEventFilter(ActionEvent.ACTION, event -> {
-            if (ValidationUtil.isBlank(nameField.getText())) {
-                AlertUtil.warning(I18n.t("common.missing.title"), I18n.t("products.val.name"));
+            // What was typed is checked by ProductFormRules, the name/code against the database and the save by ProductService (TODO 6.21).
+            ProductFormRules.Result checked = ProductFormRules.check(new ProductFormRules.Form(nameField.getText(), categoryBox.getValue(),
+                    priceField.getText(), costField.getText(), stockField.getText(), codeField.getText(), reorderField.getText(),
+                    descriptionField.getText(), pickedImagePath[0], activeBox.isSelected()), existing != null ? existing.getStock() : 0);
+            if (checked.problem() != null) {
+                AlertUtil.warning(checked.problem().title(), checked.problem().message());
                 event.consume();
                 return;
             }
-            if (categoryBox.getValue() == null) {
-                AlertUtil.warning(I18n.t("common.missing.title"), I18n.t("products.val.category"));
-                event.consume();
-                return;
-            }
-            BigDecimal price;
-            try {
-                price = MoneyParser.parseDong(priceField.getText());
-                if (price == null || price.signum() <= 0) throw new IllegalArgumentException();
-            } catch (IllegalArgumentException ex) {
-                AlertUtil.warning(I18n.t("products.val.price.title"), I18n.t("products.val.price.message"));
-                event.consume();
-                return;
-            }
-            if (Limits.priceTooBig(price)) { // a price with three extra zeros is an easy slip (TODO 3.59)
-                AlertUtil.warning(I18n.t("products.val.price.title"), I18n.t("products.val.price.max", Limits.maxPriceText()));
-                event.consume();
-                return;
-            }
-            BigDecimal cost = null;
-            if (!ValidationUtil.isBlank(costField.getText())) {
-                try {
-                    cost = MoneyParser.parseDong(costField.getText());
-                    if (cost.signum() < 0) throw new IllegalArgumentException("negative");
-                } catch (IllegalArgumentException ex) {
-                    AlertUtil.warning(I18n.t("products.val.cost.title"), I18n.t("products.val.cost.message"));
-                    event.consume();
-                    return;
-                }
-                if (Limits.priceTooBig(cost)) {
-                    AlertUtil.warning(I18n.t("products.val.cost.title"), I18n.t("products.val.price.max", Limits.maxPriceText()));
-                    event.consume();
-                    return;
-                }
-                if (cost.compareTo(price) > 0
-                        && !AlertUtil.confirm(I18n.t("products.val.loss.title"),
-                        I18n.t("products.val.loss.message"))) {
+            for (ProductFormRules.Question question : checked.questions()) {
+                if (!AlertUtil.confirm(question.title(), question.message())) {
                     event.consume();
                     return;
                 }
             }
-            int stock;
             try {
-                stock = Integer.parseInt(stockField.getText().trim());
-                if (stock < 0) throw new NumberFormatException();
-            } catch (NumberFormatException ex) {
-                AlertUtil.warning(I18n.t("products.val.stock.title"), I18n.t("products.val.stock.message"));
-                event.consume();
-                return;
-            }
-            if (stock > Limits.MAX_STOCK) {
-                AlertUtil.warning(I18n.t("products.val.stock.title"), I18n.t("products.val.stock.max", Limits.MAX_STOCK));
-                event.consume();
-                return;
-            }
-            int oldStock = existing != null ? existing.getStock() : 0;
-            if (com.coffeeshop.coffeeshopmanagement.service.StockPolicy.looksTooBig(oldStock, stock)
-                    && !AlertUtil.confirm(I18n.t("products.stock.jump.title"),
-                    I18n.t("products.stock.jump.message", oldStock, stock, stock))) {
-                event.consume();
-                return;
-            }
-
-            try {
-                if (productDAO.existsByNameInCategory(nameField.getText(), categoryBox.getValue().getId(),
-                        existing != null ? existing.getId() : 0)) {
-                    AlertUtil.warning(I18n.t("products.dup.title"), I18n.t("products.dup.message", categoryBox.getValue().getName(), nameField.getText().trim()));
-                    event.consume();
-                    return;
-                }
-            } catch (DataAccessException ex) {
-                AlertUtil.error(I18n.t("products.dup.checkfail"), ex.getMessage());
-                event.consume();
-                return;
-            }
-            String codeProblem = com.coffeeshop.coffeeshopmanagement.service.ProductCode.problem(codeField.getText());
-            if (codeProblem != null) {
-                AlertUtil.warning(I18n.t("products.val.code.title"), I18n.t(codeProblem, com.coffeeshop.coffeeshopmanagement.service.ProductCode.MAX_LENGTH));
-                event.consume();
-                return;
-            }
-            try {
-                if (productDAO.codeTaken(codeField.getText(), existing != null ? existing.getId() : 0)) {
-                    AlertUtil.warning(I18n.t("products.val.code.title"), I18n.t("products.code.taken"));
-                    event.consume();
-                    return;
-                }
-            } catch (DataAccessException ex) {
-                AlertUtil.error(I18n.t("products.dup.checkfail"), ex.getMessage());
-                event.consume();
-                return;
-            }
-            String reorderProblem = com.coffeeshop.coffeeshopmanagement.service.StockLevel.problem(reorderField.getText());
-            if (reorderProblem != null) {
-                AlertUtil.warning(I18n.t("products.val.stock.title"), I18n.t(reorderProblem, Limits.MAX_STOCK));
-                event.consume();
-                return;
-            }
-            Product product = existing != null ? existing : new Product();
-            product.setName(nameField.getText().trim());
-            product.setCategoryId(categoryBox.getValue().getId());
-            product.setPrice(price);
-            product.setCost(cost);
-            product.setStock(stock);
-            product.setReorderLevel(com.coffeeshop.coffeeshopmanagement.service.StockLevel.parse(reorderField.getText()));
-            product.setCode(com.coffeeshop.coffeeshopmanagement.service.ProductCode.clean(codeField.getText()));
-            product.setDescription(descriptionField.getText());
-            product.setImagePath(pickedImagePath[0]);
-            product.setActive(activeBox.isSelected());
-
-            try {
-                if (existing == null) {
-                    productDAO.insert(product);
-                } else {
-                    productDAO.update(product);
-                }
+                Product product = productService.save(existing, checked.values());
                 productSaved[0] = true;
                 // Saved: now the replaced picture and any picture picked and then replaced again can go.
                 for (String copy : copiedImages) {
@@ -749,9 +642,12 @@ public class ProductController extends AdminScreen {
                     }
                 }
                 if (originalImagePath != null && !originalImagePath.equals(pickedImagePath[0])
-                        && productDAO.countUsingImage(originalImagePath, product.getId()) == 0) {
+                        && productService.countUsingImage(originalImagePath, product.getId()) == 0) {
                     com.coffeeshop.coffeeshopmanagement.util.ImageStorage.deleteQuietly(originalImagePath);
                 }
+            } catch (ProductService.Refused refused) {
+                AlertUtil.warning(refused.title(), refused.getMessage());
+                event.consume();
             } catch (DataAccessException ex) {
                 AlertUtil.error(I18n.t("products.save.fail"), ex.getMessage());
                 event.consume();

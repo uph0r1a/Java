@@ -7,24 +7,32 @@ import java.math.RoundingMode;
 
 /**
  * One place that decides how many loyalty points a paid order earns, so the rule isn't
- * scattered across DAOs/controllers. Currently: 1 point per full 10.000đ of the final total.
- * The membership tiers (100 points = silver, 500 = gold) are decided here too, by {@link #tierFor(int)} (TODO 6.63), so the
+ * scattered across DAOs/controllers. The numbers are the owner's settings ({@link ShopRules}, TODO 4.49); until changed: 1 point per
+ * full 10.000đ of the final total. The membership tiers (100 points = silver, 500 = gold by default) are decided here too, by {@link #tierFor(int)} (TODO 6.63), so the
  * customer list, the receipt and an export cannot disagree.
  */
 public final class LoyaltyPolicy {
 
-    private static final BigDecimal VND_PER_POINT = new BigDecimal("10000");
-
     // ---- Spending points (TODO 4.16, rule D5). The owner's call; these three numbers are the whole rule.
 
-    /** What one point is worth when it is spent: 1 point takes 1.000đ off the bill (earned: 1 point per 10.000đ paid, so 10% back). */
-    public static final BigDecimal VND_PER_POINT_SPENT = new BigDecimal("1000");
-    /** Points may pay at most this share of the bill after any discount, so a sale is never paid for entirely with points. */
-    public static final int MAX_PERCENT_OF_BILL = 50;
+    /** What one point is worth when it is spent (1.000đ until the owner changes it; earned 1 point per 10.000đ paid, so 10% back). */
+    public static BigDecimal vndPerPointSpent() {
+        return BigDecimal.valueOf(ShopRules.current().spendDong());
+    }
+
+    /** Points may pay at most this share of the bill after any discount, so a sale is never paid for entirely with points (50 until changed). */
+    public static int maxPercentOfBill() {
+        return ShopRules.current().maxPercentOfBill();
+    }
+
+    /** The least that may be spent on one order (20 points until changed, the owner's answer to D5). Below it nothing is spent. */
+    public static int minPoints() {
+        return ShopRules.current().minPoints();
+    }
 
     /**
      * Points spent on one order and what they were worth when they were spent. The value is saved with the order, so a later
-     * change of {@link #VND_PER_POINT_SPENT} does not rewrite old orders.
+     * change of the point's value ({@link #vndPerPointSpent()}) does not rewrite old orders.
      */
     public record Redemption(int points, BigDecimal value) {
         public static final Redemption NONE = new Redemption(0, BigDecimal.ZERO);
@@ -36,7 +44,7 @@ public final class LoyaltyPolicy {
 
     /** {@code points} spent at today's rate. */
     public static Redemption redemptionOf(int points) {
-        return points <= 0 ? Redemption.NONE : new Redemption(points, VND_PER_POINT_SPENT.multiply(BigDecimal.valueOf(points)));
+        return points <= 0 ? Redemption.NONE : new Redemption(points, vndPerPointSpent().multiply(BigDecimal.valueOf(points)));
     }
 
     /**
@@ -45,10 +53,11 @@ public final class LoyaltyPolicy {
      */
     public static int maxRedeemable(int balance, BigDecimal amountAfterDiscount) {
         if (balance <= 0 || amountAfterDiscount == null || amountAfterDiscount.signum() <= 0) return 0;
-        BigDecimal allowed = amountAfterDiscount.multiply(BigDecimal.valueOf(MAX_PERCENT_OF_BILL)).divide(BigDecimal.valueOf(100), 0, RoundingMode.FLOOR);
-        BigDecimal whole = allowed.divide(VND_PER_POINT_SPENT, 0, RoundingMode.FLOOR);
+        BigDecimal allowed = amountAfterDiscount.multiply(BigDecimal.valueOf(maxPercentOfBill())).divide(BigDecimal.valueOf(100), 0, RoundingMode.FLOOR);
+        BigDecimal whole = allowed.divide(vndPerPointSpent(), 0, RoundingMode.FLOOR);
         long byShare = whole.compareTo(BigDecimal.valueOf(Integer.MAX_VALUE)) > 0 ? Integer.MAX_VALUE : whole.longValue();
-        return (int) Math.min(balance, byShare);
+        int most = (int) Math.min(balance, byShare);
+        return most < minPoints() ? 0 : most; // a bill or a balance too small for the least amount can spend nothing
     }
 
     /**
@@ -60,8 +69,11 @@ public final class LoyaltyPolicy {
         if (points < 0) return I18n.t("pos.points.invalid");
         if (balance == null) return I18n.t("pos.points.nocustomer");
         if (points > balance) return I18n.t("pos.points.notenough", balance);
+        if (points < minPoints()) {
+            return I18n.t("pos.points.min", minPoints(), com.coffeeshop.coffeeshopmanagement.util.CurrencyUtil.format(vndPerPointSpent().multiply(BigDecimal.valueOf(minPoints()))));
+        }
         int max = maxRedeemable(balance, amountAfterDiscount);
-        if (points > max) return I18n.t("pos.points.toomany", max, MAX_PERCENT_OF_BILL);
+        if (points > max) return I18n.t("pos.points.toomany", max, maxPercentOfBill());
         return null;
     }
 
@@ -70,7 +82,7 @@ public final class LoyaltyPolicy {
      * comma, a letter) is null, "not a number of points".
      */
     public static Integer parsePoints(String typed) {
-        String text = typed == null ? "" : typed.strip();
+        String text = typed == null ? "" : com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.plain(typed).strip(); // TODO 3.71
         if (text.isEmpty()) return 0;
         if (!text.matches("[0-9]{1,9}")) return null;
         return Integer.valueOf(text);
@@ -83,17 +95,30 @@ public final class LoyaltyPolicy {
         return manualReason == null || manualReason.isBlank() ? note : manualReason + " · " + note;
     }
 
-    /** Points from which a customer is silver / gold (inclusive). */
-    public static final int SILVER_FROM = 100;
-    public static final int GOLD_FROM = 500;
+    /** Points from which a customer is silver / gold (inclusive); 100 and 500 until the owner changes them. */
+    public static int silverFrom() {
+        return ShopRules.current().silverFrom();
+    }
+
+    public static int goldFrom() {
+        return ShopRules.current().goldFrom();
+    }
 
     /** The membership tier of a customer with this many points; a negative number counts as none. */
     public enum Tier { NEW, SILVER, GOLD }
 
     public static Tier tierFor(int points) {
-        if (points >= GOLD_FROM) return Tier.GOLD;
-        if (points >= SILVER_FROM) return Tier.SILVER;
+        if (points >= goldFrom()) return Tier.GOLD;
+        if (points >= silverFrom()) return Tier.SILVER;
         return Tier.NEW;
+    }
+
+    /**
+     * The tier of a customer (TODO 3.80): from the points earned over time, not from the balance, so spending points on a bill does
+     * not take a customer down a tier ({@link com.coffeeshop.coffeeshopmanagement.model.Customer#getTierPoints()}).
+     */
+    public static Tier tierOf(com.coffeeshop.coffeeshopmanagement.model.Customer customer) {
+        return tierFor(customer == null ? 0 : customer.getTierPoints());
     }
 
     /** The tier's name in the interface language. */
@@ -125,7 +150,7 @@ public final class LoyaltyPolicy {
             return 0;
         }
         // Not .intValue(): above 21 trillion dong that wrapped round to a negative number of points (TODO 3.59).
-        BigDecimal points = orderTotal.divide(VND_PER_POINT, 0, RoundingMode.DOWN);
+        BigDecimal points = orderTotal.divide(BigDecimal.valueOf(ShopRules.current().earnDong()), 0, RoundingMode.DOWN);
         return points.compareTo(BigDecimal.valueOf(Integer.MAX_VALUE)) > 0 ? Integer.MAX_VALUE : points.intValue();
     }
 }

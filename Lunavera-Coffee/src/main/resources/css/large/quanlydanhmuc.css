@@ -1,0 +1,26 @@
+/*
+ * GENERATED FILE - do not edit by hand (TODO 5.44, the large text).
+ * The large sizes of quanlydanhmuc.css, rule by rule.
+ * Added by AppStyle to a window while the large text is chosen. Regenerate with service/LargeTextSheet.main after a
+ * change to any style sheet; LargeTextSheetTest fails when a file here is out of date.
+ */
+
+.stat-icon {
+    -fx-font-size: 20px !important;
+}
+
+.stat-icon-active {
+    -fx-font-size: 20px !important;
+}
+
+.stat-icon-hidden {
+    -fx-font-size: 20px !important;
+}
+
+.category-table .column-header .label {
+    -fx-font-size: 13px !important;
+}
+
+.category-table .table-cell {
+    -fx-font-size: 13px !important;
+}

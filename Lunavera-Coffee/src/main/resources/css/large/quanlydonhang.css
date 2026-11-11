@@ -1,0 +1,134 @@
+/*
+ * GENERATED FILE - do not edit by hand (TODO 5.44, the large text).
+ * The large sizes of quanlydonhang.css, rule by rule.
+ * Added by AppStyle to a window while the large text is chosen. Regenerate with service/LargeTextSheet.main after a
+ * change to any style sheet; LargeTextSheetTest fails when a file here is out of date.
+ */
+
+.page-title {
+    -fx-font-size: 23px !important;
+}
+
+.page-description {
+    -fx-font-size: 14px !important;
+}
+
+.header-icon {
+    -fx-font-size: 21px !important;
+}
+
+.admin-name {
+    -fx-font-size: 15px !important;
+}
+
+.admin-role {
+    -fx-font-size: 13px !important;
+}
+
+.profile-icon {
+    -fx-font-size: 20px !important;
+}
+
+.section-title {
+    -fx-font-size: 18px !important;
+}
+
+.section-subtitle {
+    -fx-font-size: 14px !important;
+}
+
+.section-subtitle-bold {
+    -fx-font-size: 15px !important;
+}
+
+.order-status-badge {
+    -fx-font-size: 14px !important;
+}
+
+.order-status-badge-empty {
+    -fx-font-size: 14px !important;
+}
+
+.empty-badge {
+    -fx-font-size: 13px !important;
+}
+
+.occupied-badge {
+    -fx-font-size: 13px !important;
+}
+
+.selected-table-title {
+    -fx-font-size: 17px !important;
+}
+
+.selected-table-info {
+    -fx-font-size: 14px !important;
+}
+
+.info-label {
+    -fx-font-size: 13px !important;
+}
+
+.info-value {
+    -fx-font-size: 15px !important;
+}
+
+.order-detail-table .column-header .label {
+    -fx-font-size: 14px !important;
+}
+
+.order-detail-table .table-cell {
+    -fx-font-size: 14px !important;
+}
+
+.order-detail-table .placeholder .label {
+    -fx-font-size: 14px !important;
+}
+
+.empty-label {
+    -fx-font-size: 14px !important;
+}
+
+.search-field {
+    -fx-font-size: 14px !important;
+}
+
+.total-label {
+    -fx-font-size: 14px !important;
+}
+
+.total-subtext {
+    -fx-font-size: 13px !important;
+}
+
+.total-value {
+    -fx-font-size: 21px !important;
+}
+
+.primary-button {
+    -fx-font-size: 14px !important;
+}
+
+.secondary-button {
+    -fx-font-size: 14px !important;
+}
+
+.action-pay-button {
+    -fx-font-size: 15px !important;
+}
+
+.customer-input-field {
+    -fx-font-size: 14px !important;
+}
+
+.category-chip {
+    -fx-font-size: 13px !important;
+}
+
+.product-card-name {
+    -fx-font-size: 14px !important;
+}
+
+.product-card-price {
+    -fx-font-size: 13px !important;
+}

@@ -18,8 +18,9 @@ public final class OrderNote {
      * and a note longer than {@link #MAX_LENGTH} is cut. Empty means "no note" and is null, so a line with no note is always
      * {@code null}, never an empty text that looks different to the database and to the code.
      */
-    public static String clean(String typed) {
-        if (typed == null) return null;
+    public static String clean(String raw) {
+        if (raw == null) return null;
+        String typed = java.text.Normalizer.normalize(com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.clean(raw), java.text.Normalizer.Form.NFC); // zero-width and direction marks do not count as text (TODO 3.71), one way of storing an accent (TODO 3.18)
         StringBuilder out = new StringBuilder(typed.length());
         boolean pendingSpace = false;
         for (int i = 0; i < typed.length(); i++) {
@@ -32,7 +33,7 @@ public final class OrderNote {
                 out.append(c);
             }
         }
-        String note = out.length() > MAX_LENGTH ? out.substring(0, MAX_LENGTH).stripTrailing() : out.toString();
+        String note = com.coffeeshop.coffeeshopmanagement.util.TextClip.clip(out.toString(), MAX_LENGTH).stripTrailing();
         return note.isEmpty() ? null : note;
     }
 

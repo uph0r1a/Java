@@ -50,12 +50,16 @@ public class StaffScreenFilesTest {
 
     @Test
     public void everyControllerThatNavigatesToAccountsCanNavigateToStaffAndOnlyForAnAdministrator() throws IOException {
-        for (String controller : List.of("AdminScreen", "CustomerController", "OrderController")) {
+        // TODO 6.54: the sidebar is written once, in ScreenNavigation; AdminScreen, CustomerController, EmployeeController and OrderController extend it
+        for (String controller : List.of("ScreenNavigation")) {
             String text = read(CONTROLLERS.resolve(controller + ".java"));
             int at = text.indexOf("void openStaffManagement(");
             assertTrue(controller + " has no openStaffManagement", at > 0);
             String body = text.substring(at, text.indexOf("@FXML", at));
-            assertTrue(controller + " must check for an administrator", body.contains("Session.isAdmin()"));
+            // The handler hands this to one shared method that does the check (ScreenNavigation.openAdminScreen).
+            boolean checks = body.contains("Session.isAdmin()")
+                    || (body.contains("openAdminScreen(") && text.substring(text.indexOf("void openAdminScreen(")).contains("Session.isAdmin()"));
+            assertTrue(controller + " must check for an administrator", checks);
             assertTrue(controller, body.contains("/fxml/quanlynhanvien.fxml"));
         }
     }

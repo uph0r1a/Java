@@ -1,7 +1,7 @@
 package com.coffeeshop.coffeeshopmanagement.controller;
 
-import com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig;
-import com.coffeeshop.coffeeshopmanagement.dao.EmployeeDAO;
+import com.coffeeshop.coffeeshopmanagement.service.AccountService;
+import com.coffeeshop.coffeeshopmanagement.service.DatabaseInfo;
 import com.coffeeshop.coffeeshopmanagement.model.Employee;
 import com.coffeeshop.coffeeshopmanagement.model.Role;
 import com.coffeeshop.coffeeshopmanagement.model.User;
@@ -52,7 +52,7 @@ public class LoginController {
     private javafx.scene.control.Label dataLocationLabel;
 
     private final AuthenticationService authenticationService = new AuthenticationService();
-    private final EmployeeDAO employeeDAO = new EmployeeDAO();
+    private final AccountService accounts = new AccountService();
 
     /** The background picture always covers the whole window (cropped, not stretched), whatever its shape (TODO 2.38). */
     private void coverBackground() {
@@ -78,7 +78,7 @@ public class LoginController {
     private void showDataLocation() {
         if (dataLocationLabel == null) return;
         try {
-            dataLocationLabel.setText(DatabaseConfig.locationSummary());
+            dataLocationLabel.setText(DatabaseInfo.locationSummary() + "  ·  " + com.coffeeshop.coffeeshopmanagement.util.AppVersion.label());
         } catch (RuntimeException e) {
             dataLocationLabel.setVisible(false);
         }
@@ -186,7 +186,7 @@ public class LoginController {
         // Async guarantees these callbacks land back on the FX thread.
         setLoginInProgress(true);
         String trimmedUsername = username.trim();
-        boolean usedDefaultPassword = DatabaseConfig.DEFAULT_ADMIN_PASSWORD.equals(password);
+        boolean usedDefaultPassword = DatabaseInfo.isFactoryAdminPassword(password);
         Async.run(
                 () -> authenticationService.login(trimmedUsername, password),
                 result -> onLoginFinished(result, usedDefaultPassword),
@@ -247,7 +247,7 @@ public class LoginController {
         // The employee lookup is a DB call, so it runs off the FX thread like the password check.
         setLoginInProgress(true);
         Async.run(
-                () -> employeeDAO.findById(user.getEmployeeId()).orElse(null),
+                () -> accounts.findEmployee(user.getEmployeeId()).orElse(null),
                 employee -> {
                     setLoginInProgress(false);
                     enterApplication(user, employee, usedDefaultPassword);
@@ -271,9 +271,14 @@ public class LoginController {
                 : "/fxml/employee-trangchu.fxml";
         SessionGuard.startWatching(stage);
         SceneNavigator.switchScene(stage, target);
-        if (usedDefaultPassword || user.isMustChangePassword()) {
-            javafx.application.Platform.runLater(() -> PasswordChangeDialog.showForced(user, stage));
-        }
+        boolean mustChangePassword = usedDefaultPassword || user.isMustChangePassword();
+        javafx.application.Platform.runLater(() -> {
+            if (mustChangePassword) PasswordChangeDialog.showForced(user, stage);
+            // "Clock in for this shift?" (TODO 5.38): after the forced password box, which may have signed the person out again.
+            com.coffeeshop.coffeeshopmanagement.util.ClockOffer.afterSignIn();
+            FirstSignInLeftovers.afterSignIn(); // yesterday's bookings and a shift not closed for days (TODO 5.49)
+            PinOffNotice.afterSignIn(); // "your PIN was switched off by wrong tries" (TODO 2A.46)
+        });
     }
 
     private Stage currentStage() {

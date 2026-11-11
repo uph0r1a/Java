@@ -1,20 +1,16 @@
 package com.coffeeshop.coffeeshopmanagement.controller;
 
 import com.coffeeshop.coffeeshopmanagement.config.SeedNames;
+import com.coffeeshop.coffeeshopmanagement.service.OrderScreenRules;
+import com.coffeeshop.coffeeshopmanagement.service.PaymentFlowRules;
+import com.coffeeshop.coffeeshopmanagement.service.SplitBillRules;
 import com.coffeeshop.coffeeshopmanagement.util.ReceiptText;
-import com.coffeeshop.coffeeshopmanagement.dao.CategoryDAO;
-import com.coffeeshop.coffeeshopmanagement.dao.CustomerDAO;
-import com.coffeeshop.coffeeshopmanagement.dao.DataAccessException;
 import com.coffeeshop.coffeeshopmanagement.dao.OrderDAO;
-import com.coffeeshop.coffeeshopmanagement.dao.ProductDAO;
-import com.coffeeshop.coffeeshopmanagement.dao.TableDAO;
 import com.coffeeshop.coffeeshopmanagement.model.Category;
 import com.coffeeshop.coffeeshopmanagement.model.Customer;
 import com.coffeeshop.coffeeshopmanagement.model.DiningTable;
 import com.coffeeshop.coffeeshopmanagement.model.Order;
 import com.coffeeshop.coffeeshopmanagement.model.OrderItem;
-import com.coffeeshop.coffeeshopmanagement.model.OrderStatus;
-import com.coffeeshop.coffeeshopmanagement.model.PaymentMethod;
 import com.coffeeshop.coffeeshopmanagement.model.Product;
 import com.coffeeshop.coffeeshopmanagement.model.TableStatus;
 import com.coffeeshop.coffeeshopmanagement.service.AttachedCustomerRule;
@@ -23,19 +19,20 @@ import com.coffeeshop.coffeeshopmanagement.service.QuantityInput;
 import com.coffeeshop.coffeeshopmanagement.service.Limits;
 import com.coffeeshop.coffeeshopmanagement.service.CheckoutService;
 import com.coffeeshop.coffeeshopmanagement.service.CustomerService;
+import com.coffeeshop.coffeeshopmanagement.service.OrderService;
+import com.coffeeshop.coffeeshopmanagement.service.RepeatOrder;
+import com.coffeeshop.coffeeshopmanagement.service.StockHolds;
+import com.coffeeshop.coffeeshopmanagement.service.PosLeaveRules;
+import com.coffeeshop.coffeeshopmanagement.service.PosService;
 import com.coffeeshop.coffeeshopmanagement.util.AlertUtil;
 import com.coffeeshop.coffeeshopmanagement.util.I18n;
 import com.coffeeshop.coffeeshopmanagement.util.AppClock;
 import com.coffeeshop.coffeeshopmanagement.util.AutoRefresh;
-import com.coffeeshop.coffeeshopmanagement.util.TextLengthLimiter;
 import com.coffeeshop.coffeeshopmanagement.util.Async;
 import com.coffeeshop.coffeeshopmanagement.util.ValidationUtil;
 import com.coffeeshop.coffeeshopmanagement.util.CurrencyUtil;
-import com.coffeeshop.coffeeshopmanagement.util.MoneyParser;
 import com.coffeeshop.coffeeshopmanagement.util.SceneNavigator;
 import com.coffeeshop.coffeeshopmanagement.model.Role;
-import com.coffeeshop.coffeeshopmanagement.service.DiscountPolicy;
-import com.coffeeshop.coffeeshopmanagement.service.LoyaltyPolicy;
 import com.coffeeshop.coffeeshopmanagement.util.Session;
 import com.coffeeshop.coffeeshopmanagement.util.SessionGuard;
 
@@ -46,22 +43,14 @@ import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
-import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
-import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Button;
-import javafx.scene.control.ButtonBar.ButtonData;
-import javafx.scene.control.ButtonType;
-import javafx.scene.control.CheckBox;
-import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
-import javafx.scene.control.RadioButton;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
-import javafx.scene.control.ToggleGroup;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
@@ -75,25 +64,19 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 /**
  * Backs the POS/order-creation screen (quanlydonhang.fxml) - a dine-in table grid + a live
  * cart + checkout.
  */
-public class OrderController {
+public class OrderController extends ScreenNavigation implements com.coffeeshop.coffeeshopmanagement.util.ScreenWork {
 
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss dd/MM/yyyy");
 
-    private final ProductDAO productDAO = new ProductDAO();
-    private final OrderDAO orderDAO = new OrderDAO();
-    private final CustomerDAO customerDAO = new CustomerDAO();
-    private final TableDAO tableDAO = new TableDAO();
-    private final CategoryDAO categoryDAO = new CategoryDAO();
+    private final com.coffeeshop.coffeeshopmanagement.service.TableService tableService = new com.coffeeshop.coffeeshopmanagement.service.TableService(); // marking a table in use or empty (TODO 6.21)
 
     @FXML private Label adminNameLabel;
     @FXML private Label adminRoleLabel;
@@ -134,11 +117,6 @@ public class OrderController {
     private final ObservableList<OrderItem> cart = FXCollections.observableArrayList();
     /** The cart rules (TODO 6.5): they work on {@link #cart}, so the table keeps showing what they change. */
     private final Cart cartRules = new Cart(cart);
-    private final Map<Integer, Button> tableButtonByNumber = new LinkedHashMap<>();
-    private final Map<Integer, DiningTable> tableDataByNumber = new LinkedHashMap<>();
-    private List<Product> allProducts = List.of();
-    private List<Category> allCategories = List.of();
-    private Integer selectedCategoryId = null;
     private Integer selectedTableNumber;
     /** A take-away order (no table) is on screen, or a new one is about to start (TODO 4.25); {@code takeAwayOrderId} is its saved order, once there is one. */
     private boolean takeAway;
@@ -146,28 +124,25 @@ public class OrderController {
     private boolean orderInProgress;
     private static final int REFRESH_SECONDS = 20;
     private Timeline sharedDataRefresh;
+    private final ReservationPanel reservations = new ReservationPanel(); // TODO 4.43
     @FXML
     private Label tableRefreshLabel;
-    /**
-     * True from the moment "Thanh toán" is confirmed until the save has finished (TODO 2.79). While it is true the whole screen
-     * is disabled and the handlers below ignore keyboard shortcuts too, so nothing the cashier does can be wiped or mixed up
-     * by the callback of a payment that is still being saved (a slow MariaDB link makes that seconds).
-     */
+    /** True from "Thanh toán" being confirmed until the save has finished (TODO 2.79): the screen is disabled and shortcuts are ignored meanwhile. */
     private boolean paymentInFlight;
+    private List<OrderItem> splitPart;  // TODO 4.10: the pieces paid first; null for an ordinary payment
+    private List<OrderItem> splitRest;
     private Customer attachedCustomer;
-    private Timeline realTimeClock;
+    private PosCustomerBox customerBox; // the name and phone fields, the match line and the "same as last time" button (TODO 4.56)
+    private OrderClock clock;
     private Order activeOpenOrder;
     private Order lastCompletedOrder;
     private List<OrderItem> lastCompletedItems = List.of();
     /** Name of the customer on the last paid order, kept for "In lại hóa đơn" (TODO 2.46). */
     private String lastCompletedCustomerName;
 
-    private record TableOrderData(Order order, List<OrderItem> items, Customer customer) {
-    }
 
-    /** {@code cashReceived} (cash only) and {@code transferRef} (transfer only) are saved with the order (TODO 3.17, 4.31). */
-    private record PaymentResult(PaymentMethod method, BigDecimal discount, String discountReason, BigDecimal total,
-                                 BigDecimal cashReceived, String transferRef, int pointsRedeemed, BigDecimal cashPart) {
+    private static void hide(javafx.scene.Node node) {
+        if (node != null) { node.setVisible(false); node.setManaged(false); }
     }
 
     // =================================================================== initialize
@@ -175,26 +150,13 @@ public class OrderController {
     @FXML
     private void initialize() {
         javafx.application.Platform.runLater(this::installCloseGuard);
-        if (adminNameLabel != null) {
-            adminNameLabel.setText(Session.getDisplayName());
-        }
-        if (adminRoleLabel != null) {
-            adminRoleLabel.setText(I18n.t(Session.isAdmin() ? "role.admin" : "role.employee"));
-        }
+        if (adminNameLabel != null) adminNameLabel.setText(Session.getDisplayName());
+        if (adminRoleLabel != null) adminRoleLabel.setText(I18n.t(Session.isAdmin() ? "role.admin" : "role.employee"));
 
         if (!Session.isAdmin()) {
-            if (productMenuButton != null) {
-                productMenuButton.setVisible(false);
-                productMenuButton.setManaged(false);
-            }
-            if (categorySeparator != null) {
-                categorySeparator.setVisible(false);
-                categorySeparator.setManaged(false);
-            }
-            if (adminMenuBox != null) {
-                adminMenuBox.setVisible(false);
-                adminMenuBox.setManaged(false);
-            }
+            hide(productMenuButton);
+            hide(categorySeparator);
+            hide(adminMenuBox);
         }
 
         if (orderStatusLabel != null) {
@@ -203,55 +165,48 @@ public class OrderController {
         }
         if (orderIdLabel != null) orderIdLabel.setText(I18n.t("pos.order.none"));
         if (orderTableLabel != null) orderTableLabel.setText("-");
-        if (totalAmountLabel != null) totalAmountLabel.setText(I18n.t("pos.money.zero"));
+        if (totalAmountLabel != null) CartPromotionNote.attach(totalAmountLabel, cart, I18n.t("pos.money.zero")); // TODO 4.55
 
-        initRealTimeClock();
-        initCustomerInputs();
+        clock = new OrderClock(orderTimeLabel, () -> activeOpenOrder);
+        customerBox = new PosCustomerBox(customerNameField, customerPhoneField, customerInfoLabel, customerService, orderService,
+                () -> attachedCustomer, customer -> attachedCustomer = customer, this::syncOpenOrderToDb, this::repeatLast);
+        tableMap = new TableMapView(posService, tableGrid, selectedTableLabel, selectedTableStatusLabel, selectedTableCapacityLabel, reservations,
+                () -> new TableMapView.State(selectedTableNumber, takeAway && takeAwayOrderId == null, takeAwayOrderId), this::selectTable,
+                this::selectTakeAway, this::openReservations, this::openTableMoves, this::afterTableMapLoaded); // the table map of the till (TODO 6.54)
         loadTablesFromDb();
         startSharedDataRefresh();
 
         detailIndexColumn.setCellValueFactory(data -> new SimpleIntegerProperty(
                 orderDetailTable.getItems().indexOf(data.getValue()) + 1));
         productNameColumn.setCellValueFactory(data -> new SimpleStringProperty(SeedNames.product(data.getValue().getProductName())));
-        productNameColumn.setCellFactory(col -> nameWithNoteCell()); // the note under the name, and a button for it (TODO 4.9)
-        quantityColumn.setCellFactory(col -> quantityCell());
+        productNameColumn.setCellFactory(col -> new NoteNameCell(this::editNote)); // the note under the name, and a button for it (TODO 4.9)
+        quantityColumn.setCellFactory(col -> new QuantityCell(this::adjustQuantity, this::changeQuantity, () -> paymentInFlight)); // TODO 5.27
         unitPriceColumn.setCellValueFactory(data ->
                 new SimpleStringProperty(CurrencyUtil.format(data.getValue().getUnitPrice())));
         subtotalColumn.setCellValueFactory(data ->
                 new SimpleStringProperty(CurrencyUtil.format(data.getValue().getLineTotal())));
 
-        if (productSearchField != null) {
-            TextLengthLimiter.limit(productSearchField, TextLengthLimiter.SEARCH_MAX);
-            productSearchField.textProperty().addListener((obs, o, n) -> renderProductCatalog());
-            productSearchField.setOnAction(e -> handleSearchEnter()); // a barcode scanner types the code and Enter (TODO 4.42)
-        }
-
-        setUpBestSellersToggle();
+        catalog = new ProductCatalog(posService, productSearchField, categoryTabBox, productCatalogFlow, this::handleQuickAddProduct,
+                () -> paymentInFlight, () -> activeOpenOrder == null ? 0 : activeOpenOrder.getId()); // the menu side of the till (TODO 6.54)
+        catalog.setUp();
         installShortcuts();
-        loadCategoriesAndProducts();
-        loadRecentSales();
+        catalog.reload();
+        catalog.loadRecentSales();
         refreshCart();
     }
 
     // =================================================================== Real-Time Clock
-    /**
-     * With two or more tills on one server (TODO 5.37) this screen would otherwise show the tables and the stock as they were
-     * when it opened: a table another till just opened looks free, a dish that sold out there looks available. Every 20 seconds
-     * the table map and the product list are read again. The selected table, the cart, the category and the search are kept;
-     * nothing is reloaded while a payment is being saved; a failed refresh is only logged.
-     */
+    /** TODO 5.37: with several tills every 20 seconds the table map and product list are read again (the cart, table and search are kept; not while paying). */
     private void startSharedDataRefresh() {
-        if (tableGrid != null) {
-            sharedDataRefresh = AutoRefresh.every(tableGrid, Duration.seconds(REFRESH_SECONDS), this::refreshSharedData);
-        }
+        if (tableGrid != null) sharedDataRefresh = AutoRefresh.every(tableGrid, Duration.seconds(REFRESH_SECONDS), this::refreshSharedData);
     }
 
     private void refreshSharedData() {
         if (paymentInFlight || startingOrder) {
             return;
         }
-        loadTablesFromDb(true);
-        loadCategoriesAndProducts(true);
+        tableMap.load(true);
+        catalog.reload(true);
     }
 
     private void stampRefresh() {
@@ -262,349 +217,28 @@ public class OrderController {
         }
     }
 
-    private void initRealTimeClock() {
-        realTimeClock = new Timeline(new KeyFrame(Duration.seconds(1), e -> updateClockDisplay()));
-        realTimeClock.setCycleCount(Animation.INDEFINITE);
-        realTimeClock.play();
-        updateClockDisplay();
-        // Stop the timer when this screen is replaced (TODO 2.19). SceneNavigator swaps the root of the
-        // same Scene, so the old screen's label loses its scene (the window stays); stop on that.
-        if (orderTimeLabel != null) {
-            orderTimeLabel.sceneProperty().addListener((o, oldScene, scene) -> {
-                if (realTimeClock == null) return;
-                if (scene == null) realTimeClock.stop();
-                else if (realTimeClock.getStatus() != Animation.Status.RUNNING) realTimeClock.play();
-            });
-        }
-    }
-
-    private void updateClockDisplay() {
-        if (orderTimeLabel != null) {
-            String nowStr = AppClock.now().format(DateTimeFormatter.ofPattern("HH:mm:ss dd/MM/yyyy"));
-            if (activeOpenOrder != null && activeOpenOrder.getOrderDate() != null) {
-                orderTimeLabel.setText(I18n.t("pos.time.withorder", nowStr, activeOpenOrder.getOrderDate().format(DateTimeFormatter.ofPattern("HH:mm"))));
-            } else {
-                orderTimeLabel.setText(nowStr);
-            }
-        }
-    }
-
     // =================================================================== Customer Auto-Link
-    /** How long the phone box must be quiet before the number is looked up (TODO 5.29). */
-    private static final double PHONE_LOOKUP_DELAY_MS = 250;
-
-    private final javafx.animation.PauseTransition phoneLookupDelay =
-            new javafx.animation.PauseTransition(javafx.util.Duration.millis(PHONE_LOOKUP_DELAY_MS));
-
-    private void initCustomerInputs() {
-        TextLengthLimiter.limit(customerNameField, TextLengthLimiter.NAME_MAX);
-        TextLengthLimiter.limit(customerPhoneField, 15);
-        if (customerPhoneField != null) {
-            customerPhoneField.textProperty().addListener((obs, oldVal, newVal) -> {
-                String typed = newVal == null ? "" : newVal.trim();
-                // Editing the phone away from the attached customer detaches them, so the order can never be paid under the
-                // previous person's loyalty account. Also for a customer saved without a phone (TODO 2.70).
-                if (attachedCustomer != null && !AttachedCustomerRule.stillMatches(attachedCustomer,
-                        customerNameField != null ? customerNameField.getText() : "", typed)) {
-                    attachedCustomer = null;
-                    syncOpenOrderToDb();
-                }
-                // Look up only a complete, valid number and only once the typing has paused (TODO 5.29): "+84 901 234 567" typed
-                // or pasted used to start up to seven lookups, each its own thread and, on a MariaDB server, its own round trip.
-                phoneLookupDelay.stop();
-                if (attachedCustomer == null) {
-                    showCustomerInfo(null, false);
-                }
-                if (ValidationUtil.isValidPhone(typed)) {
-                    phoneLookupDelay.setOnFinished(e -> {
-                        String current = customerPhoneField.getText() == null ? "" : customerPhoneField.getText().trim();
-                        if (ValidationUtil.isValidPhone(current)) {
-                            lookupCustomerByPhone(current);
-                        }
-                    });
-                    phoneLookupDelay.playFromStart();
-                }
-            });
-        }
-        if (customerNameField != null) {
-            customerNameField.textProperty().addListener((obs, oldVal, newVal) -> {
-                // Editing the name away from the attached customer detaches them as well (TODO 2.70): the till never renames a
-                // customer, so a different name means a different person. The phone, if it is a known number, finds them again.
-                if (attachedCustomer != null && !AttachedCustomerRule.stillMatches(attachedCustomer, newVal,
-                        customerPhoneField != null ? customerPhoneField.getText() : "")) {
-                    attachedCustomer = null;
-                    syncOpenOrderToDb();
-                    String phone = customerPhoneField != null && customerPhoneField.getText() != null ? customerPhoneField.getText().trim() : "";
-                    if (ValidationUtil.isValidPhone(phone)) {
-                        lookupCustomerByPhone(phone);
-                    } else {
-                        showCustomerInfo(null, false);
-                    }
-                }
-            });
-            customerNameField.focusedProperty().addListener((obs, wasFocused, isNowFocused) -> {
-                if (!isNowFocused) {
-                    handleCustomerInfoChanged();
-                }
-            });
-        }
-    }
-
-    private void lookupCustomerByPhone(String phone) {
-        Async.run(
-                () -> customerDAO.findByPhone(phone),
-                optCust -> {
-                    // Lookups finish in any order: ignore one for a number that is no longer typed.
-                    if (customerPhoneField == null || !phone.equals(customerPhoneField.getText() == null ? "" : customerPhoneField.getText().trim())) {
-                        return;
-                    }
-                    if (optCust.isPresent()) {
-                        attachedCustomer = optCust.get();
-                        // The stored name is the source of truth: the POS never renames a customer.
-                        if (customerNameField != null && !attachedCustomer.getFullName().equals(customerNameField.getText())) {
-                            customerNameField.setText(attachedCustomer.getFullName());
-                        }
-                        showCustomerInfo(attachedCustomer, false);
-                        syncOpenOrderToDb();
-                    } else {
-                        showCustomerInfo(null, ValidationUtil.isValidPhone(phone));
-                    }
-                },
-                err -> LOGGER.log(Level.WARNING, "Customer lookup by phone failed", err)
-        );
-    }
-
-    /** The line under the phone field: who the typed number belongs to, so the cashier sees the match. */
-    private void showCustomerInfo(Customer customer, boolean newCustomer) {
-        if (customerInfoLabel == null) return;
-        String text = customer != null
-                ? I18n.t("pos.customer.known", customer.getFullName(), customer.getLoyaltyPoints())
-                : newCustomer ? I18n.t("pos.customer.new") : "";
-        customerInfoLabel.setText(text);
-        customerInfoLabel.setVisible(!text.isEmpty());
-        customerInfoLabel.setManaged(!text.isEmpty());
-    }
-
-    private void handleCustomerInfoChanged() {
-        String name = customerNameField != null && customerNameField.getText() != null ? customerNameField.getText().trim() : "";
-        String phone = customerPhoneField != null && customerPhoneField.getText() != null ? customerPhoneField.getText().trim() : "";
-        if (name.isEmpty() && phone.isEmpty()) return;
-        // Only LOOK for an existing customer here. A new one is created when the order is started or paid, so pressing
-        // Tab after a mistyped number no longer leaves a permanent customer behind (TODO 3.29).
-        if (ValidationUtil.isValidPhone(phone)) {
-            lookupCustomerByPhone(phone);
-        } else if (phone.isEmpty() && customerInfoLabel != null) {
-            // A name without a phone is a walk-in: say so, so staff know no points are given (TODO 3.9).
-            customerInfoLabel.setText(I18n.t("pos.customer.nophone"));
-            customerInfoLabel.setVisible(true);
-            customerInfoLabel.setManaged(true);
-        }
-    }
-
     private static final Logger LOGGER = Logger.getLogger(OrderController.class.getName());
     private boolean autosaveWarningShown;
+    private final HoldNotice holdNotice = new HoldNotice(); // another table holds what the last change asked for (TODO 3.1)
     private boolean startingOrder;
 
     private final CustomerService customerService = new CustomerService();
-    private final CheckoutService checkoutService = new CheckoutService(orderDAO, tableDAO, customerService);
-
-    private Customer ensureCustomerInDb(String name, String phone) {
-        return customerService.findOrCreateByPhone(name, phone);
-    }
+    private ProductCatalog catalog; // built in initialize
+    private TableMapView tableMap; // built in initialize
+    private final PosService posService = new PosService(); // the menu, the table map, best sellers, the stock re-read (TODO 6.21)
+    private final CheckoutService checkoutService = new CheckoutService();
+    private final OrderService orderService = new OrderService(); // start, load, autosave (TODO 6.5)
 
     // =================================================================== Category & Product Catalog
-    private void loadCategoriesAndProducts() {
-        loadCategoriesAndProducts(false);
-    }
 
-    private void loadCategoriesAndProducts(boolean quiet) {
-        Async.run(
-                () -> {
-                    List<Category> categories = categoryDAO.findAll();
-                    List<Product> products = productDAO.findAll();
-                    return Map.entry(categories, products);
-                },
-                entry -> {
-                    allCategories = entry.getKey();
-                    allProducts = entry.getValue();
-                    renderCategoryChips();
-                    renderProductCatalog();
-                },
-                err -> {
-                    if (quiet) {
-                        LOGGER.log(Level.FINE, "Product refresh failed", err);
-                    } else {
-                        AlertUtil.error(I18n.t("common.error.title"), I18n.t("pos.load.menu", err.getMessage()));
-                    }
-                }
-        );
-    }
 
-    private void renderCategoryChips() {
-        if (categoryTabBox == null) return;
-        categoryTabBox.getChildren().clear();
-
-        Button allBtn = new Button(I18n.t("pos.category.all"));
-        allBtn.getStyleClass().add("category-chip");
-        if (selectedCategoryId == null) allBtn.getStyleClass().add("category-chip-active");
-        allBtn.setOnAction(e -> {
-            selectedCategoryId = null;
-            renderCategoryChips();
-            renderProductCatalog();
-        });
-        categoryTabBox.getChildren().add(allBtn);
-
-        for (Category cat : allCategories) {
-            if (!cat.isActive()) continue;
-            Button catBtn = new Button(SeedNames.category(cat.getName()));
-            boolean isSelected = selectedCategoryId != null && selectedCategoryId == cat.getId();
-            catBtn.getStyleClass().add("category-chip");
-            if (isSelected) catBtn.getStyleClass().add("category-chip-active");
-            catBtn.setOnAction(e -> {
-                selectedCategoryId = cat.getId();
-                renderCategoryChips();
-                renderProductCatalog();
-            });
-            categoryTabBox.getChildren().add(catBtn);
-        }
-    }
-
-    /** Units sold in the last 30 days per product, for "best sellers first" (TODO 5.10); empty until loaded. */
-    private java.util.Map<Integer, Integer> recentSales = java.util.Map.of();
-    private javafx.scene.control.ToggleButton bestSellersToggle;
-
-    private void setUpBestSellersToggle() {
-        if (productSearchField == null || !(productSearchField.getParent() instanceof HBox bar) || bestSellersToggle != null) return;
-        bestSellersToggle = new javafx.scene.control.ToggleButton(I18n.t("pos.bestsellers"));
-        bestSellersToggle.setPrefHeight(32);
-        bestSellersToggle.setSelected(com.coffeeshop.coffeeshopmanagement.util.UiSettings.getBoolean("pos.bestSellersFirst", true));
-        bestSellersToggle.selectedProperty().addListener((o, was, now) -> {
-            com.coffeeshop.coffeeshopmanagement.util.UiSettings.putBoolean("pos.bestSellersFirst", now);
-            renderProductCatalog();
-        });
-        bar.getChildren().add(bar.getChildren().indexOf(productSearchField), bestSellersToggle);
-    }
-
-    /**
-     * Ctrl+F jumps to the menu search, Ctrl+Enter starts the payment (TODO 5.7). The scene is shared by all screens, so the
-     * keys are taken off again as soon as this screen is replaced; otherwise Ctrl+Enter would pay on a screen that is gone.
-     */
+    /** The till's keys (TODO 5.7, 5.45): Ctrl+F, Ctrl+Enter, Esc, Delete, + and -, F4, Ctrl+L, F1; see {@link PosShortcuts}. */
     private void installShortcuts() {
         if (productSearchField == null) return;
-        javafx.scene.input.KeyCombination find = new javafx.scene.input.KeyCodeCombination(
-                javafx.scene.input.KeyCode.F, javafx.scene.input.KeyCombination.CONTROL_DOWN);
-        javafx.scene.input.KeyCombination pay = new javafx.scene.input.KeyCodeCombination(
-                javafx.scene.input.KeyCode.ENTER, javafx.scene.input.KeyCombination.CONTROL_DOWN);
-        Runnable focusSearch = () -> { productSearchField.requestFocus(); productSearchField.selectAll(); };
-        Runnable startPayment = () -> { if (paymentButton != null && !paymentButton.isDisabled()) handlePayment(); };
-        productSearchField.sceneProperty().addListener((o, old, scene) -> {
-            if (old != null) {
-                old.getAccelerators().remove(find);
-                old.getAccelerators().remove(pay);
-            }
-            if (scene != null) {
-                scene.getAccelerators().put(find, focusSearch);
-                scene.getAccelerators().put(pay, startPayment);
-            }
-        });
-        productSearchField.setTooltip(new javafx.scene.control.Tooltip(I18n.t("pos.tip.search")));
+        PosShortcuts.install(productSearchField, customerNameField, orderDetailTable,
+                () -> { if (paymentButton != null && !paymentButton.isDisabled()) handlePayment(); }, this::adjustQuantity);
         if (paymentButton != null) paymentButton.setTooltip(new javafx.scene.control.Tooltip(I18n.t("pos.tip.pay")));
-    }
-
-    private void loadRecentSales() {
-        Async.run(
-                () -> new com.coffeeshop.coffeeshopmanagement.dao.ReportDAO()
-                        .unitsSold(AppClock.today().minusDays(30), AppClock.today()),
-                sales -> {
-                    recentSales = sales;
-                    renderProductCatalog();
-                },
-                err -> LOGGER.log(Level.FINE, "Could not load best sellers", err));
-    }
-
-    private void renderProductCatalog() {
-        if (productCatalogFlow == null) return;
-        productCatalogFlow.getChildren().clear();
-
-        String keyword = productSearchField != null && productSearchField.getText() != null
-                ? com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.searchKey(productSearchField.getText()) : "";
-
-        List<Product> filtered = com.coffeeshop.coffeeshopmanagement.service.SellableMenu.filter(allProducts, allCategories).stream()
-                .filter(p -> selectedCategoryId == null || java.util.Objects.equals(p.getCategoryId(), selectedCategoryId))
-                .filter(p -> keyword.isEmpty() || com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.searchKey(p.getName()).contains(keyword)
-                        || com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.searchKey(SeedNames.product(p.getName())).contains(keyword)
-                        || (p.getCode() != null && com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.searchKey(p.getCode()).contains(keyword)))
-                .collect(Collectors.toList());
-        if (bestSellersToggle != null && bestSellersToggle.isSelected()) {
-            // Most sold first; products never sold (or out of stock) keep their usual order after them. The sort is stable.
-            filtered = filtered.stream()
-                    .sorted(java.util.Comparator.comparingInt((Product p) -> p.getStock() <= 0 ? 1 : 0)
-                            .thenComparing(java.util.Comparator.comparingInt((Product p) -> -recentSales.getOrDefault(p.getId(), 0))))
-                    .collect(Collectors.toList());
-        }
-
-        for (Product product : filtered) {
-            VBox card = new VBox(4);
-            card.getStyleClass().add("product-card-item");
-
-            Label nameLabel = new Label(SeedNames.product(product.getName()));
-            nameLabel.getStyleClass().add("product-card-name");
-            nameLabel.setMaxWidth(130);
-            nameLabel.setWrapText(true);
-
-            Label priceLabel = new Label(CurrencyUtil.format(product.getPrice()));
-            priceLabel.getStyleClass().add("product-card-price");
-
-            card.getChildren().addAll(nameLabel, priceLabel);
-
-            if (product.getStock() <= 0) {
-                Label outOfStock = new Label(I18n.t("stock.badge.out"));
-                outOfStock.setStyle("-fx-text-fill: #b33939; -fx-font-size: 10px; -fx-font-weight: bold;");
-                card.getChildren().add(outOfStock);
-                card.setOpacity(0.55);
-            } else {
-                if (product.isLowStock()) {
-                    // Low-stock badge (TODO 5.6): the cashier sees it before promising the last cups.
-                    Label low = new Label(I18n.t("pos.stock.low", product.getStock()));
-                    low.setStyle("-fx-text-fill: #b26a00; -fx-font-size: 10px; -fx-font-weight: bold;");
-                    card.getChildren().add(low);
-                }
-                card.setOnMouseClicked(e -> handleQuickAddProduct(product));
-            }
-
-            productCatalogFlow.getChildren().add(card);
-        }
-    }
-
-    /**
-     * Enter in the menu search (TODO 4.42). A USB barcode scanner types the digits and Enter like a keyboard, so this is the whole
-     * scanner support: when the typed text is exactly the code of a product on sale, that product goes into the order at once and the
-     * box is emptied for the next scan. A code that no product has is said so (the cashier would otherwise see an empty menu and not
-     * know whether the scan failed); a code of a product that is stopped says that instead. Text that is only part of a name, which
-     * still shows products, is left alone: that person is searching, not scanning.
-     */
-    private void handleSearchEnter() {
-        if (paymentInFlight || productSearchField == null) return;
-        String typed = productSearchField.getText();
-        if (!com.coffeeshop.coffeeshopmanagement.service.ProductCode.looksLikeCode(typed)) return;
-        String code = com.coffeeshop.coffeeshopmanagement.service.ProductCode.clean(typed);
-        Product onSale = com.coffeeshop.coffeeshopmanagement.service.SellableMenu.filter(allProducts, allCategories).stream()
-                .filter(p -> code.equals(p.getCode())).findFirst().orElse(null);
-        if (onSale != null) {
-            productSearchField.clear();
-            handleQuickAddProduct(onSale);
-            productSearchField.requestFocus();
-            return;
-        }
-        boolean stopped = allProducts.stream().anyMatch(p -> code.equals(p.getCode()));
-        if (stopped) {
-            AlertUtil.warning(I18n.t("pos.code.title"), I18n.t("pos.code.stopped", code));
-        } else if (productCatalogFlow != null && productCatalogFlow.getChildren().isEmpty()) {
-            AlertUtil.warning(I18n.t("pos.code.title"), I18n.t("pos.code.unknown", code));
-        } else {
-            return;
-        }
-        productSearchField.selectAll(); // the next scan replaces it
     }
 
     private void handleQuickAddProduct(Product product) {
@@ -617,212 +251,92 @@ public class OrderController {
         }
 
         if (!orderInProgress || activeOpenOrder == null) {
-            startOrderForTable(selectedTableNumber, () -> addToCart(product));
+            if (BookedTables.confirm(selectedTableNumber, I18n.t("orders.table", selectedTableNumber))) startOrderForTable(selectedTableNumber, () -> addToCart(product));
         } else {
             addToCart(product);
         }
     }
 
-    private void loadProducts() {
-        try {
-            allProducts = productDAO.findAll();
-        } catch (DataAccessException e) {
-            AlertUtil.error(I18n.t("common.error.title"), I18n.t("pos.load.products", e.getMessage()));
-        }
-    }
-
-    /**
-     * The name column of the cart (TODO 4.9): the product name, under it the line's note in a smaller italic when it has one, and a
-     * pencil button that opens the note box ({@link OrderNoteDialog}). The note is part of the line, so it is saved with the order by
-     * the same autosave as the quantity.
-     */
-    private TableCell<OrderItem, String> nameWithNoteCell() {
-        return new TableCell<>() {
-            private final Label nameLabel = new Label();
-            private final Label noteLabel = new Label();
-            private final Button editButton = new Button("\u270E");
-            private final VBox texts = new VBox(1, nameLabel, noteLabel);
-            private final HBox box = new HBox(6, texts, editButton);
-
-            {
-                nameLabel.setWrapText(true);
-                noteLabel.setWrapText(true);
-                noteLabel.setStyle("-fx-text-fill: #8a5a00; -fx-font-size: 11px; -fx-font-style: italic;");
-                texts.setMaxWidth(Double.MAX_VALUE);
-                HBox.setHgrow(texts, Priority.ALWAYS);
-                editButton.setFocusTraversable(false);
-                editButton.setTooltip(new javafx.scene.control.Tooltip(I18n.t("pos.note.tip")));
-                editButton.setOnAction(e -> {
-                    if (getIndex() >= 0 && getIndex() < getTableView().getItems().size()) {
-                        editNote(getTableView().getItems().get(getIndex()));
-                    }
-                });
-                box.setAlignment(Pos.CENTER_LEFT);
-            }
-
-            @Override
-            protected void updateItem(String name, boolean empty) {
-                super.updateItem(name, empty);
-                if (empty || getIndex() < 0 || getIndex() >= getTableView().getItems().size()) {
-                    setText(null);
-                    setGraphic(null);
-                    return;
-                }
-                String note = getTableView().getItems().get(getIndex()).getNote();
-                nameLabel.setText(name);
-                noteLabel.setText(note == null ? "" : "\u21B3 " + note);
-                noteLabel.setVisible(note != null);
-                noteLabel.setManaged(note != null);
-                setText(null);
-                setGraphic(box);
-            }
-        };
-    }
-
     /** Asks for a new note for one cart line and puts it on the line (TODO 4.9); the cart is saved and drawn again. */
     private void editNote(OrderItem line) {
-        if (paymentInFlight || line == null) {
-            return; // a payment is being saved (TODO 2.79)
+        if (!paymentInFlight && line != null && CartLineFlow.editNote(cartRules, line)) { // not while a payment is being saved (TODO 2.79)
+            refreshCart();
         }
-        java.util.Optional<String> typed = OrderNoteDialog.show(SeedNames.product(line.getProductName()), line.getNote());
-        if (typed.isEmpty()) {
-            return;
-        }
-        cartRules.setNote(line, typed.get());
-        refreshCart();
-    }
-
-    /** Renders "[-]  qty  [+]" inline in the quantity column; a click on the number turns it into a small box to type a quantity (TODO 5.27). */
-    private TableCell<OrderItem, Void> quantityCell() {
-        return new TableCell<>() {
-            private final Button minus = new Button("−");
-            private final Button plus = new Button("+");
-            private final Label qtyLabel = new Label();
-            private final TextField qtyField = new TextField();
-            private final HBox box = new HBox(4, minus, qtyLabel, plus);
-            private boolean typing;
-
-            {
-                box.setAlignment(Pos.CENTER);
-                minus.setOnAction(e -> adjustQuantity(getTableView().getItems().get(getIndex()), -1));
-                plus.setOnAction(e -> adjustQuantity(getTableView().getItems().get(getIndex()), 1));
-                qtyLabel.setCursor(javafx.scene.Cursor.HAND);
-                qtyLabel.setTooltip(new javafx.scene.control.Tooltip(I18n.t("pos.qty.type.hint")));
-                qtyLabel.setOnMouseClicked(e -> startTyping());
-                qtyField.setPrefColumnCount(3);
-                qtyField.setMaxWidth(54);
-                // digits only, at most three (QuantityInput); the stock limit is applied by changeQuantity, as for "+"
-                qtyField.setTextFormatter(new javafx.scene.control.TextFormatter<String>(change ->
-                        QuantityInput.sanitize(change.getControlNewText()).equals(change.getControlNewText()) ? change : null));
-                qtyField.setOnAction(e -> finishTyping(true));
-                qtyField.setOnKeyPressed(e -> {
-                    if (e.getCode() == javafx.scene.input.KeyCode.ESCAPE) {
-                        finishTyping(false);
-                    }
-                });
-                qtyField.focusedProperty().addListener((o, was, now) -> {
-                    if (!now) {
-                        finishTyping(true);
-                    }
-                });
-            }
-
-            private void startTyping() {
-                if (typing || isEmpty() || paymentInFlight) {
-                    return;
-                }
-                typing = true;
-                qtyField.setText(qtyLabel.getText());
-                box.getChildren().set(1, qtyField);
-                qtyField.requestFocus();
-                qtyField.selectAll();
-            }
-
-            /** {@code apply}: use what was typed; otherwise (Esc) leave the quantity as it was. */
-            private void finishTyping(boolean apply) {
-                if (!typing) {
-                    return;
-                }
-                typing = false; // first, so the focus change below cannot run this twice
-                box.getChildren().set(1, qtyLabel);
-                if (apply && getIndex() >= 0 && getIndex() < getTableView().getItems().size()) {
-                    QuantityInput.parse(qtyField.getText()).ifPresent(
-                            n -> changeQuantity(getTableView().getItems().get(getIndex()), n));
-                }
-            }
-
-            @Override
-            protected void updateItem(Void item, boolean empty) {
-                super.updateItem(item, empty);
-                if (empty) {
-                    typing = false;
-                    setGraphic(null);
-                } else {
-                    if (typing) {
-                        typing = false;
-                        box.getChildren().set(1, qtyLabel);
-                    }
-                    qtyLabel.setText(String.valueOf(getTableView().getItems().get(getIndex()).getQuantity()));
-                    setGraphic(box);
-                }
-            }
-        };
     }
 
     // =================================================================== Table selection & management (3 CỘT x 4 DÒNG)
 
     public void loadTablesFromDb() {
-        loadTablesFromDb(false);
+        tableMap.load(false);
     }
 
-    /** {@code quiet}: a background refresh (TODO 5.37) logs a failure instead of opening an error box every few seconds. */
-    private void loadTablesFromDb(boolean quiet) {
-        if (tableGrid == null) return;
-        Async.run(
-                () -> Map.entry(tableDAO.findAll(), orderDAO.findOpenTakeAway()),
-                loaded -> {
-                    List<DiningTable> tables = loaded.getKey();
-                    tableGrid.getChildren().clear();
-                    tableButtonByNumber.clear();
-                    tableDataByNumber.clear();
-                    if (tables.isEmpty()) { // no table at all: say what to do instead of showing an empty square
-                        tableGrid.add(com.coffeeshop.coffeeshopmanagement.util.DashboardWidgets.emptyTablesNote(),
-                                0, 0, com.coffeeshop.coffeeshopmanagement.service.TableLayout.COLUMNS, 1);
-                    }
-                    int index = 0;
-                    for (DiningTable table : tables) {
-                        int num = table.getTableNumber();
-                        tableDataByNumber.put(num, table);
-                        // the place comes from the position in the list, not from the number (TODO 3.48)
-                        com.coffeeshop.coffeeshopmanagement.service.TableLayout.Cell cell =
-                                com.coffeeshop.coffeeshopmanagement.service.TableLayout.cellAt(index++);
-                        Button btn = TableMapButtons.forTable(table, selectedTableNumber != null && selectedTableNumber == num);
-                        btn.setOnAction(e -> selectTable(num));
-                        tableGrid.add(btn, cell.column(), cell.row());
-                        tableButtonByNumber.put(num, btn);
-                    }
-                    TakeAwayPanel.addButtons(tableGrid, tables.isEmpty() ? com.coffeeshop.coffeeshopmanagement.service.TableLayout.COLUMNS : index, loaded.getValue(), takeAway && takeAwayOrderId == null, takeAwayOrderId,
-                            this::selectTakeAway, () -> selectTakeAway(null)); // "Mang đi" and the open take-away orders (TODO 4.25)
-                    if (selectedTableNumber != null && !tableDataByNumber.containsKey(selectedTableNumber)) {
-                        selectedTableNumber = null; // the table was removed on another till (TODO 4.18): never keep selling on it
-                    }
-                    if (selectedTableNumber == null && !takeAway && !tables.isEmpty()) {
-                        selectTable(tables.get(0).getTableNumber());
-                    } else if (selectedTableNumber != null) {
-                        updateSelectedTableInfo(selectedTableNumber);
-                    }
-                    if (quiet) {
-                        stampRefresh();
-                    }
-                },
-                error -> {
-                    if (quiet) {
-                        LOGGER.log(Level.FINE, "Table refresh failed", error);
-                    } else {
-                        AlertUtil.error(I18n.t("common.error.title"), I18n.t("pos.load.tables", error.getMessage()));
-                    }
-                }
-        );
+    /** The map has been drawn: keep the selected table, or choose one. {@code quiet}: a background refresh (TODO 5.37) also stamps the time. */
+    private void afterTableMapLoaded(boolean quiet) {
+        if (selectedTableNumber != null && !tableMap.has(selectedTableNumber)) {
+            selectedTableNumber = null; // the table was removed on another till (TODO 4.18): never keep selling on it
+        }
+        Integer first = tableMap.firstTableNumber();
+        if (selectedTableNumber == null && !takeAway && first != null) {
+            selectTable(first);
+        } else if (selectedTableNumber != null) {
+            tableMap.showSelected(selectedTableNumber);
+        }
+        if (quiet) stampRefresh();
+    }
+
+    /** "Chuyển / Gộp / Tách" (TODO 4.10): the last autosave is written first, so the move works on what the screen shows. */
+    private void openTableMoves() {
+        if (paymentInFlight || startingOrder) return;
+        Async.flushOrdered(3000);
+        TableMovePanel.open(selectedTableNumber, activeOpenOrder != null && !takeAway && !cart.isEmpty(),
+                tableMap.all(), new ArrayList<>(cart), this::startSplit, number -> {
+                    selectedTableNumber = number;
+                    loadTablesFromDb();
+                    selectTable(number);
+                });
+    }
+
+    /** Pays the pieces chosen in the split box; the rest stays open on the table. */
+    private void startSplit(Map<Integer, Integer> take) {
+        SplitBillRules.Split split = SplitBillRules.split(new ArrayList<>(cart), take);
+        splitPart = split.part();
+        splitRest = split.remainder();
+        try {
+            openPaymentDialog();
+        } finally {
+            splitPart = null;
+            splitRest = null;
+        }
+    }
+
+    /** "Đặt bàn" (TODO 4.43): the booking window; "Nhận bàn" there comes back to {@link #seatReservation}. */
+    private void openReservations() {
+        ReservationPanel.open(tableMap.all().stream().sorted(java.util.Comparator.comparingInt(DiningTable::getTableNumber)).toList(),
+                this::seatReservation);
+    }
+
+    /** Seats the guests of a booking: the table must be free; its order is opened with the customer on it, then the booking is closed as seated. */
+    private void seatReservation(com.coffeeshop.coffeeshopmanagement.model.Reservation booking) {
+        DiningTable table = tableMap.table(booking.tableNumber());
+        switch (OrderScreenRules.canSeat(paymentInFlight, startingOrder, table)) { // the rule is OrderScreenRules (TODO 6.5)
+            case IGNORE -> { return; }
+            case TABLE_BUSY -> { AlertUtil.warning(I18n.t("reservation.title"), I18n.t("reservation.seat.busy", booking.customerName())); return; }
+            case OK -> { }
+        }
+        selectedTableNumber = booking.tableNumber();
+        takeAway = false;
+        takeAwayOrderId = null;
+        tableMap.highlight(booking.tableNumber());
+        tableMap.showSelected(booking.tableNumber());
+        activeOpenOrder = null;
+        cart.clear();
+        orderDetailTable.getItems().clear();
+        if (customerNameField != null) customerNameField.setText(booking.customerName());
+        if (customerPhoneField != null) customerPhoneField.setText(booking.phone() == null ? "" : booking.phone());
+        startOrderForTable(booking.tableNumber(), () -> Async.run(
+                () -> { posService.markSeated(booking.id()); return null; },
+                done -> loadTablesFromDb(),
+                error -> LOGGER.log(Level.WARNING, "Could not close the reservation " + booking.id(), error)));
     }
 
     public void selectTable(int number) {
@@ -832,51 +346,24 @@ public class OrderController {
         selectedTableNumber = number;
         takeAway = false;
         takeAwayOrderId = null;
-        highlightSelectedTableButton(number);
-        updateSelectedTableInfo(number);
+        tableMap.highlight(number);
+        tableMap.showSelected(number);
         loadTableOrderFromDb(number);
-    }
-
-    private void updateSelectedTableInfo(int number) {
-        if (selectedTableLabel != null) {
-            DiningTable named = tableDataByNumber.get(number);
-            selectedTableLabel.setText(named != null ? named.displayName() : I18n.t("orders.table", number)); // the shop's own name (TODO 4.18)
-        }
-        DiningTable table = tableDataByNumber.get(number);
-        boolean occupied = table != null && table.isOccupied();
-        if (selectedTableStatusLabel != null) {
-            selectedTableStatusLabel.setText(I18n.t(occupied ? "tables.status.occupied" : "tables.status.free"));
-            selectedTableStatusLabel.getStyleClass().setAll(occupied ? "occupied-badge" : "empty-badge");
-        }
-        if (selectedTableCapacityLabel != null && table != null) {
-            selectedTableCapacityLabel.setText(I18n.t("pos.capacity", table.getCapacity()));
-        }
     }
 
     /** {@code number} null = the take-away order {@link #takeAwayOrderId} (or none yet), TODO 4.25. */
     private void loadTableOrderFromDb(Integer number) {
         final Integer wantedTakeAway = takeAwayOrderId;
         Async.run(
-                () -> {
-                    Optional<Order> openOrder = number != null ? orderDAO.findOpenOrderByTable(number)
-                            : wantedTakeAway == null ? Optional.<Order>empty() : orderDAO.findOpenTakeAway().stream().filter(o -> o.getId() == wantedTakeAway).findFirst();
-                    if (openOrder.isPresent()) {
-                        List<OrderItem> items = orderDAO.findItemsByOrderId(openOrder.get().getId());
-                        Customer cust = null;
-                        if (openOrder.get().getCustomerId() != null) {
-                            cust = customerDAO.findById(openOrder.get().getCustomerId()).orElse(null);
-                        }
-                        return new TableOrderData(openOrder.get(), items, cust);
-                    }
-                    return new TableOrderData(null, List.of(), null);
-                },
+                () -> orderService.load(number, wantedTakeAway),
                 data -> {
                     // An answer for a table that is no longer the selected one must not overwrite the screen (TODO 2.55).
-                    if (!java.util.Objects.equals(selectedTableNumber, number) || (number == null && !java.util.Objects.equals(takeAwayOrderId, wantedTakeAway))) return;
-                    DiningTable table = tableDataByNumber.get(number);
+                    if (OrderScreenRules.isStale(selectedTableNumber, number, takeAwayOrderId, wantedTakeAway)) return;
+                    DiningTable table = tableMap.table(number);
                     boolean occupied = table != null && table.isOccupied();
                     Order order = data.order();
-                    boolean serving = order != null || occupied; // an order, or a table marked taken with no order saved yet
+                    OrderScreenRules.Shown view = OrderScreenRules.shown(order, data.customer(), occupied, I18n.t("pos.walkin")); // what the box says: OrderScreenRules (TODO 6.5)
+                    boolean serving = view.serving(); // an order, or a table marked taken with no order saved yet
                     activeOpenOrder = order;
                     attachedCustomer = data.customer();
                     cart.setAll(data.items());
@@ -886,44 +373,30 @@ public class OrderController {
                         orderStatusLabel.getStyleClass().setAll(serving ? "order-status-badge" : "order-status-badge-empty");
                     }
                     if (orderIdLabel != null) {
-                        orderIdLabel.setText(order != null ? com.coffeeshop.coffeeshopmanagement.util.OrderNumber.format(order.getId())
-                                : I18n.t(occupied ? "pos.order.serving" : "pos.order.none"));
+                        orderIdLabel.setText(switch (view.idText()) {
+                            case NUMBER -> com.coffeeshop.coffeeshopmanagement.util.OrderNumber.format(order.getId());
+                            case SERVING -> I18n.t("pos.order.serving");
+                            case NONE -> I18n.t("pos.order.none");
+                        });
                     }
-                    if (orderTableLabel != null) {
-                        orderTableLabel.setText(TakeAwayPanel.tableLabel(number));
-                    }
-                    updateClockDisplay();
-                    Customer known = data.customer();
-                    if (customerNameField != null) {
-                        customerNameField.setText(known != null ? known.getFullName() : serving ? I18n.t("pos.walkin") : "");
-                    }
-                    if (customerPhoneField != null) {
-                        customerPhoneField.setText(known != null && known.getPhone() != null ? known.getPhone() : "");
-                    }
-                    if (order != null) {
-                        showCustomerInfo(known, false);
-                    }
+                    if (orderTableLabel != null) orderTableLabel.setText(TakeAwayPanel.tableLabel(number));
+                    clock.update();
+                    if (customerNameField != null) customerNameField.setText(view.customerName());
+                    if (customerPhoneField != null) customerPhoneField.setText(view.customerPhone());
+                    if (view.showCustomerBox()) customerBox.show(data.customer(), false);
                     orderDetailTable.getItems().setAll(cart);
-                    totalAmountLabel.setText(order != null ? CurrencyUtil.format(cartSubtotal()) : I18n.t("pos.money.zero"));
+                    totalAmountLabel.setText(view.totalFromCart() ? CurrencyUtil.format(cartSubtotal()) : I18n.t("pos.money.zero"));
                     if (cartItemCountLabel != null) {
                         long totalQty = cartRules.totalQuantity();
                         cartItemCountLabel.setText(I18n.t("pos.cart.count", cart.size(), totalQty));
                     }
+                    catalog.reload(true); // what this order may still take depends on which order it is (TODO 3.1)
                 },
                 error -> {
                     LOGGER.log(Level.WARNING, "Could not load the order of table " + number, error);
                     AlertUtil.error(I18n.t("common.error.title"), I18n.t("pos.load.order", number, error.getMessage()));
                 }
         );
-    }
-
-    private void highlightSelectedTableButton(int number) {
-        for (Map.Entry<Integer, Button> entry : tableButtonByNumber.entrySet()) {
-            entry.getValue().getStyleClass().remove("table-button-selected");
-            if (entry.getKey() == number) {
-                entry.getValue().getStyleClass().add("table-button-selected");
-            }
-        }
     }
 
     /** The till moves to a take-away order (TODO 4.25): a saved one ({@code orderId}), or a new one that is saved at the first product. */
@@ -942,65 +415,21 @@ public class OrderController {
         if (paymentInFlight) {
             return; // a payment is being saved (TODO 2.79)
         }
-        if (selectedTableNumber == null) {
-            if (takeAway && activeOpenOrder != null) { // the take-away way of emptying a table: cancel the unpaid order (TODO 4.25)
-                TakeAwayPanel.cancel(activeOpenOrder, () -> selectTakeAway(null));
-                return;
-            }
-            AlertUtil.info(I18n.t("pos.notable.title"), I18n.t("pos.notable.toggle"));
-            return;
-        }
-        DiningTable table = tableDataByNumber.get(selectedTableNumber);
-        if (table == null) return;
-
-        boolean newOccupied = !table.isOccupied();
-        final int tNum = selectedTableNumber;
-        // Emptying a table cancels its unpaid order: only the cashier who opened it, or an admin, may (TODO 3.8).
-        if (!newOccupied && activeOpenOrder != null
-                && !com.coffeeshop.coffeeshopmanagement.service.TablePolicy.canEmptyTableWithOpenOrder(
-                Session.isAdmin(),
-                Session.getCurrentEmployee() != null ? Session.getCurrentEmployee().getId() : null,
-                activeOpenOrder.getEmployeeId())) {
-            AlertUtil.warning(I18n.t("admin.only.title"),
-                    com.coffeeshop.coffeeshopmanagement.service.TablePolicy.refusedMessage());
-            return;
-        }
-        // setEmpty() also cancels the table's OPEN order, so never do that silently.
-        if (!newOccupied && activeOpenOrder != null && !cart.isEmpty()
-                && !AlertUtil.confirm(I18n.t("pos.cancel.title"),
-                I18n.t("pos.cancel.message", tNum))) {
-            return;
-        }
-        Async.run(
-                () -> {
-                    if (newOccupied) {
-                        tableDAO.setOccupied(tNum, null);
-                    } else {
-                        tableDAO.setEmpty(tNum);
-                    }
-                    return null;
-                },
-                result -> {
+        TableStatusActions.toggle(selectedTableNumber, takeAway, activeOpenOrder, tableOnMap(), cart.isEmpty(), tableService,
+                () -> selectTakeAway(null), tNum -> {
                     loadTablesFromDb();
                     loadTableOrderFromDb(tNum);
-                    AlertUtil.info(I18n.t("common.success"),
-                            I18n.t("pos.toggle.done", tNum, I18n.t(newOccupied ? "tables.status.occupied" : "tables.status.free")));
-                },
-                error -> AlertUtil.error(I18n.t("common.error.title"), I18n.t("pos.toggle.fail", error.getMessage()))
-        );
+                });
     }
 
     @FXML
     public void handleTableDetail() {
-        if (selectedTableNumber == null) {
-            AlertUtil.info(I18n.t("pos.notable.title"), I18n.t("pos.notable.detail"));
-            return;
-        }
-        DiningTable table = tableDataByNumber.get(selectedTableNumber);
-        String status = I18n.t((table != null && table.isOccupied()) ? "tables.status.occupied" : "tables.status.free");
-        AlertUtil.info(I18n.t("pos.detail.title", selectedTableLabel.getText()),
-                (table != null ? I18n.t("pos.capacity", table.getCapacity()) + "\n" : "") +
-                I18n.t("pos.detail.status", status));
+        TableStatusActions.detail(selectedTableNumber, tableOnMap(), selectedTableLabel.getText());
+    }
+
+    /** The selected table as the map has it, or null (nothing selected, or a take-away order). */
+    private DiningTable tableOnMap() {
+        return selectedTableNumber == null ? null : tableMap.table(selectedTableNumber);
     }
 
     @FXML
@@ -1012,42 +441,24 @@ public class OrderController {
             AlertUtil.warning(I18n.t("pos.notable.title"), I18n.t("pos.notable.start"));
             return;
         }
-        startOrderForTable(selectedTableNumber, null);
+        if (BookedTables.confirm(selectedTableNumber, I18n.t("orders.table", selectedTableNumber))) startOrderForTable(selectedTableNumber, null);
     }
 
-    private record StartedOrder(Order order, Customer customer) {}
-
-    /**
-     * Starts a new OPEN order for the table (the one place that does this): resolves the customer
-     * typed into the fields, saves the order and marks the table occupied, then updates the screen.
-     * {@code afterStart} runs on the FX thread once the order is on screen (may be null).
-     */
+    /** Starts a new OPEN order for the table (the one place that does this); {@code afterStart} runs on the FX thread once it is on screen (may be null). */
     private void startOrderForTable(Integer tNum, Runnable afterStart) { // null: a take-away order, no table (TODO 4.25)
         if (startingOrder) return;
         startingOrder = true;
         final String name = customerNameField != null && customerNameField.getText() != null ? customerNameField.getText().trim() : "";
         final String phone = customerPhoneField != null && customerPhoneField.getText() != null ? customerPhoneField.getText().trim() : "";
+        final Integer employeeId = Session.getCurrentEmployee() != null ? Session.getCurrentEmployee().getId() : null; // read on the screen thread
         Async.runOrdered(
-                () -> {
-                    Customer cust = ensureCustomerInDb(name, phone);
-                    Order order = new Order();
-                    order.setOrderDate(AppClock.now()); // the same clock as paid_at (TODO 6.50)
-                    order.setEmployeeId(Session.getCurrentEmployee() != null ? Session.getCurrentEmployee().getId() : null);
-                    order.setCustomerId(cust != null ? cust.getId() : null);
-                    order.setStatus(OrderStatus.OPEN);
-                    order.setSubtotal(BigDecimal.ZERO);
-                    order.setDiscount(BigDecimal.ZERO);
-                    order.setTotal(BigDecimal.ZERO);
-                    order.setTableNumber(tNum);
-                    Order saved = orderDAO.insert(order, List.of());
-                    return new StartedOrder(saved, cust);
-                },
+                () -> orderService.start(tNum, TakeAwayPanel.current(), name, phone, employeeId),
                 started -> {
                     startingOrder = false;
                     activeOpenOrder = started.order();
                     if (tNum == null) takeAwayOrderId = started.order().getId();
                     attachedCustomer = started.customer();
-                    showCustomerInfo(started.customer(), false);
+                    customerBox.show(started.customer(), false);
                     orderInProgress = true;
                     cart.clear();
                     if (orderStatusLabel != null) {
@@ -1060,7 +471,7 @@ public class OrderController {
                     if (orderTableLabel != null) {
                         orderTableLabel.setText(TakeAwayPanel.tableLabel(tNum));
                     }
-                    updateClockDisplay();
+                    clock.update();
                     orderDetailTable.getItems().setAll(cart);
                     totalAmountLabel.setText(I18n.t("pos.money.zero"));
                     loadTablesFromDb();
@@ -1080,14 +491,17 @@ public class OrderController {
         if (paymentInFlight) {
             return; // a payment is being saved (TODO 2.79)
         }
-        Cart.Result result = cartRules.add(product);
+        var choice = CartLineFlow.choose(product); // TODO 4.47: size and extras
+        if (choice.isEmpty()) {
+            return;
+        }
+        Cart.Result result = cartRules.add(product, choice.get());
         if (result.outcome() == Cart.Outcome.LINE_LIMIT) {
             AlertUtil.warning(I18n.t("pos.qty.limit.title"), I18n.t("pos.qty.limit.message", Limits.MAX_LINE_QUANTITY));
             return;
         }
         if (result.outcome() == Cart.Outcome.NOT_ENOUGH_STOCK) {
-            AlertUtil.warning(I18n.t("pos.stock.short.title"),
-                    I18n.t("pos.stock.short.message", SeedNames.product(product.getName()), result.stock()));
+            AlertUtil.warning(I18n.t("pos.stock.short.title"), StockHolds.refusal(product));
             return;
         }
         refreshCart();
@@ -1105,26 +519,15 @@ public class OrderController {
         if (paymentInFlight) {
             return; // a payment is being saved (TODO 2.79)
         }
-        int current = line.getQuantity();
-        if (newQty == current) {
-            return;
-        }
-        if (newQty > current) {
-            if (Cart.exceedsLineLimit(newQty)) { // TODO 3.59: same ceiling for "+" and a typed number
-                AlertUtil.warning(I18n.t("pos.qty.limit.title"), I18n.t("pos.qty.limit.message", Limits.MAX_LINE_QUANTITY));
-                return;
+        // The decision (limit, stock, "remove the line?") is Cart.decideQuantity (TODO 6.5); the stock is read only when it is needed.
+        switch (Cart.decideQuantity(line.getQuantity(), newQty, () -> cartRules.exceedsStock(findProductById(line.getProductId()), line, newQty))) {
+            case UNCHANGED -> { return; }
+            case LINE_LIMIT -> { AlertUtil.warning(I18n.t("pos.qty.limit.title"), I18n.t("pos.qty.limit.message", Limits.MAX_LINE_QUANTITY)); return; }
+            case NOT_ENOUGH_STOCK -> { AlertUtil.warning(I18n.t("pos.stock.short.title"), StockHolds.refusal(findProductById(line.getProductId()))); return; }
+            case ASK_REMOVE -> { // taking the last cup off a line removes it: ask first, one mis-tap should not lose it (TODO 5.5)
+                if (!AlertUtil.confirm(I18n.t("pos.remove.title"), I18n.t("pos.remove.message", SeedNames.product(line.getProductName())))) return;
             }
-            Product product = findProductById(line.getProductId());
-            if (cartRules.exceedsStock(product, line, newQty)) { // counts the product's other lines too (TODO 4.9)
-                AlertUtil.warning(I18n.t("pos.stock.short.title"),
-                        I18n.t("pos.stock.short.message", SeedNames.product(line.getProductName()), product.getStock()));
-                return;
-            }
-        }
-        // Taking the last cup off a line (with "−" or by typing 0) removes the line: ask first, one mis-tap should not lose it (TODO 5.5).
-        if (newQty < current && newQty <= 0 && !AlertUtil.confirm(I18n.t("pos.remove.title"),
-                I18n.t("pos.remove.message", SeedNames.product(line.getProductName())))) {
-            return;
+            case SET -> { }
         }
         setLineQuantity(line, newQty);
     }
@@ -1138,10 +541,7 @@ public class OrderController {
     }
 
     private Product findProductById(Integer id) {
-        if (id == null) {
-            return null;
-        }
-        return allProducts.stream().filter(p -> p.getId() == id).findFirst().orElse(null);
+        return catalog.findById(id);
     }
 
     private BigDecimal cartSubtotal() {
@@ -1158,27 +558,32 @@ public class OrderController {
         syncOpenOrderToDb();
     }
 
+    /** Shows the saved order again: the tables and, when one is selected (or a take-away), its lines. */
+    private void reloadSelected() {
+        loadTablesFromDb();
+        if (OrderScreenRules.somethingSelected(selectedTableNumber, takeAway)) loadTableOrderFromDb(selectedTableNumber);
+    }
+
     private void syncOpenOrderToDb() {
-        if (activeOpenOrder != null && activeOpenOrder.getId() > 0) {
-            activeOpenOrder.setSubtotal(cartSubtotal());
-            activeOpenOrder.setTotal(cartSubtotal());
-            activeOpenOrder.setCustomerId(attachedCustomer != null ? attachedCustomer.getId() : null);
+        if (OrderScreenRules.isSaved(activeOpenOrder)) {
+            OrderService.applyCart(activeOpenOrder, cartSubtotal(), attachedCustomer);
             final Order orderToSave = activeOpenOrder;
             final List<OrderItem> itemsToSave = new ArrayList<>(cart);
             // Ordered: saves (and the payment that follows) run in the order they were made, so an
             // older cart can never overwrite a newer one or land after the order was paid.
             Async.runOrdered(
-                    () -> orderDAO.updateIfStillOpen(orderToSave, itemsToSave),
-                    stillOpen -> {
+                    () -> orderService.autosave(orderToSave, itemsToSave),
+                    result -> {
                         autosaveWarningShown = false;
-                        if (!stillOpen) {
+                        holdNotice.after(result, () -> { catalog.reload(true); if (OrderScreenRules.somethingSelected(selectedTableNumber, takeAway)) loadTableOrderFromDb(selectedTableNumber); });
+                        if (!result.stillOpen()) {
                             // Paid or cancelled elsewhere: say so now, not at the payment (TODO 3.28).
                             AlertUtil.warning(I18n.t("pos.closed.title"), I18n.t("pos.closed.message"));
-                            loadTablesFromDb();
-                            if (selectedTableNumber != null || takeAway) loadTableOrderFromDb(selectedTableNumber);
+                            reloadSelected();
                         }
                     },
                     err -> {
+                        if (StaleOrderAlert.show(err, itemsToSave, this::reloadSelected)) return; // another till changed the order (TODO 2.91)
                         LOGGER.log(Level.WARNING, "Autosave of the open order failed", err);
                         if (!autosaveWarningShown) {
                             autosaveWarningShown = true;
@@ -1207,20 +612,50 @@ public class OrderController {
         });
     }
 
+    /** "The same as last time" (TODO 4.56): the lines of the customer's last paid order into the cart; says what was left out. */
+    private void repeatLast(OrderDAO.LastOrder last) {
+        if (paymentInFlight) return;
+        if (selectedTableNumber == null && !takeAway) {
+            AlertUtil.warning(I18n.t("pos.notable.title"), I18n.t("pos.notable.order"));
+            return;
+        }
+        List<Product> onSale = catalog.onSale();
+        boolean fresh = !orderInProgress || activeOpenOrder == null;
+        if (fresh) { // no table is taken for a repeat that would put nothing in the cart
+            RepeatOrder.Result dry = RepeatOrder.apply(new Cart(new ArrayList<>()), last.items(), onSale);
+            if (dry.nothing()) {
+                AlertUtil.warning(I18n.t("pos.repeat.title"), I18n.t("pos.repeat.nothing") + "\n" + RepeatOrder.notice(dry));
+                return;
+            }
+        }
+        Runnable fill = () -> {
+            RepeatOrder.Result result = RepeatOrder.apply(cartRules, last.items(), onSale);
+            if (result.pieces() > 0) refreshCart();
+            if (!result.left().isEmpty()) AlertUtil.warning(I18n.t("pos.repeat.title"), RepeatOrder.notice(result));
+        };
+        if (fresh) startOrderForTable(selectedTableNumber, fill); else fill.run();
+    }
+
     // =================================================================== Payment / checkout
 
     @FXML
     public void handlePayment() {
-        if (paymentInFlight) {
-            return; // a payment is being saved (TODO 2.79)
-        }
-        if (!orderInProgress) {
-            AlertUtil.warning(I18n.t("pos.noorder.title"), I18n.t("pos.noorder.pay"));
-            return;
-        }
-        if (cart.isEmpty()) {
-            AlertUtil.warning(I18n.t("pos.empty.title"), I18n.t("pos.empty.message"));
-            return;
+        beginPayment(this::openPaymentDialog);
+    }
+
+    /** "Tặng / Free drink" (TODO 4.61): closes the bill with no money for the staff, the owner or a tasting; the window is {@link ComplimentaryDialog}. */
+    @FXML
+    public void handleGiveAway() {
+        if (splitPart != null) { AlertUtil.warning(I18n.t("pos.giveaway"), I18n.t("complimentary.problem.split")); return; }
+        beginPayment(() -> ComplimentaryDialog.ask(new ArrayList<>(cart), Session.getCurrentRole()).ifPresent(payment -> completeOrder(payment, null, null)));
+    }
+
+    private void beginPayment(Runnable open) {
+        switch (PaymentFlowRules.canStart(paymentInFlight, orderInProgress, cart.isEmpty())) { // the rule is PaymentFlowRules (TODO 6.5)
+            case ALREADY_PAYING -> { return; } // a payment is being saved (TODO 2.79)
+            case NO_ORDER -> { AlertUtil.warning(I18n.t("pos.noorder.title"), I18n.t("pos.noorder.pay")); return; }
+            case EMPTY_CART -> { AlertUtil.warning(I18n.t("pos.empty.title"), I18n.t("pos.empty.message")); return; }
+            case OK -> { }
         }
         // An account locked mid-shift must not be able to complete a sale.
         if (!SessionGuard.validateNow()) {
@@ -1228,317 +663,44 @@ public class OrderController {
             SessionGuard.forceLogout();
             return;
         }
-        verifyStockThenOpenPayment();
+        verifyStockThenOpenPayment(open);
     }
 
     /**
-     * TODO 3.1 (small version): the cart holds no stock, so before the payment box opens the stock of the products in it is read
-     * again. If an item ran out (another table sold the last one, the list on screen was 20 seconds old, or the product was
-     * switched off) the cashier is told which one, with nothing charged, and the product tiles are refreshed. The screen is locked
-     * while the one short query runs, the way it is while a payment is saved, so a second click cannot open two boxes. This is only
-     * a warning: the payment itself still refuses a sale the stock cannot cover. If the re-read fails (database unreachable) the
-     * box opens anyway and the payment will say what is wrong.
+     * TODO 3.1: the cart holds no stock, so before the payment (or free-drink) box opens the stock is read again; if an item ran out the cashier is
+     * told which, nothing is charged and the tiles are refreshed. The screen is locked during the one short query so a second click cannot open two
+     * boxes. Only a warning: the payment itself still refuses a sale the stock cannot cover. If the re-read fails the box opens anyway.
      */
-    private void verifyStockThenOpenPayment() {
+    private void verifyStockThenOpenPayment(Runnable open) {
         final List<OrderItem> lines = new ArrayList<>(cart);
         setPaymentInFlight(true);
         Async.run(
-                () -> com.coffeeshop.coffeeshopmanagement.service.StockCheck.check(lines, productDAO),
+                () -> posService.stockShortages(lines),
                 shortages -> {
                     setPaymentInFlight(false);
                     if (shortages.isEmpty()) {
-                        openPaymentDialog();
+                        open.run();
                         return;
                     }
-                    StringBuilder message = new StringBuilder();
-                    for (com.coffeeshop.coffeeshopmanagement.service.StockCheck.Shortage shortage : shortages) {
-                        String name = SeedNames.product(shortage.name());
-                        message.append(shortage.kind() == com.coffeeshop.coffeeshopmanagement.service.StockCheck.Kind.UNAVAILABLE
-                                ? I18n.t("pos.stock.recheck.off", name)
-                                : I18n.t("pos.stock.recheck.short", name, shortage.wanted(), shortage.available())).append('\n');
-                    }
-                    message.append('\n').append(I18n.t("pos.stock.recheck.footer"));
-                    AlertUtil.warning(I18n.t("pos.stock.short.title"), message.toString());
-                    loadCategoriesAndProducts(true); // the tiles and the "+" limits show the stock that was just found
+                    AlertUtil.warning(I18n.t("pos.stock.short.title"), com.coffeeshop.coffeeshopmanagement.service.StockCheck.message(shortages));
+                    catalog.reload(true); // the tiles and the "+" limits show the stock that was just found
                 },
                 error -> {
                     setPaymentInFlight(false);
                     LOGGER.log(Level.WARNING, "The stock could not be re-read before the payment box", error);
-                    openPaymentDialog();
+                    open.run();
                 });
     }
 
     private void openPaymentDialog() {
-        BigDecimal subtotal = cartSubtotal();
-
-        Dialog<PaymentResult> dialog = new Dialog<>();
-        dialog.setTitle(I18n.t("pos.pay.title"));
-        AlertUtil.configure(dialog);
-        ButtonType confirmButtonType = new ButtonType(I18n.t("pos.pay.confirm"), ButtonData.OK_DONE);
-        dialog.getDialogPane().getButtonTypes().addAll(confirmButtonType, ButtonType.CANCEL);
-        AlertUtil.setCancelButton(dialog, ButtonType.CANCEL);
-
-        ToggleGroup methodGroup = new ToggleGroup();
-        RadioButton cashRadio = new RadioButton(PaymentMethod.CASH.label());
-        cashRadio.setToggleGroup(methodGroup);
-        cashRadio.setSelected(true);
-        RadioButton cardRadio = new RadioButton(PaymentMethod.CARD.label());
-        cardRadio.setToggleGroup(methodGroup);
-        RadioButton transferRadio = new RadioButton(PaymentMethod.TRANSFER.label());
-        transferRadio.setToggleGroup(methodGroup);
-        // The e-wallets (TODO 4.34): one radio each, in a second row, so the report can tell them from a bank transfer.
-        java.util.Map<PaymentMethod, RadioButton> walletRadios = new java.util.LinkedHashMap<>();
-        for (PaymentMethod wallet : PaymentMethod.eWallets()) {
-            RadioButton walletRadio = new RadioButton(wallet.label());
-            walletRadio.setToggleGroup(methodGroup);
-            walletRadios.put(wallet, walletRadio);
-        }
-        // What is chosen now; cash when nothing is (cannot happen: cash starts selected and a toggle group keeps one).
-        java.util.function.Supplier<PaymentMethod> chosenMethod = () -> {
-            for (java.util.Map.Entry<PaymentMethod, RadioButton> entry : walletRadios.entrySet()) {
-                if (entry.getValue().isSelected()) return entry.getKey();
-            }
-            return cashRadio.isSelected() ? PaymentMethod.CASH : transferRadio.isSelected() ? PaymentMethod.TRANSFER : PaymentMethod.CARD;
-        };
-
-        TextField discountField = new TextField("0");
-        TextField discountReasonField = new TextField();
-        discountReasonField.setPromptText(I18n.t("pos.discount.reason.prompt"));
-        TextLengthLimiter.limit(discountReasonField, DiscountPolicy.REASON_MAX_LENGTH);
-        // Only worth asking for a reason when there is a discount.
-        discountReasonField.setDisable(true);
-        discountField.textProperty().addListener((obs, o, n) -> {
-            BigDecimal typed = parseNonNegative(n);
-            discountReasonField.setDisable(typed == null || typed.signum() == 0);
-        });
-        Role currentRole = Session.getCurrentRole();
-        BigDecimal maxDiscount = DiscountPolicy.maxDiscount(currentRole, subtotal);
-        Label discountHint = new Label(currentRole == Role.ADMIN ? I18n.t("pos.discount.admin")
-                : I18n.t("pos.discount.staff", DiscountPolicy.STAFF_MAX_PERCENT, CurrencyUtil.format(maxDiscount)));
-        discountHint.setStyle("-fx-font-size: 11px; -fx-text-fill: #5b7e45;");
-        TextField cashReceivedField = new TextField();
-        TextLengthLimiter.limit(discountField, TextLengthLimiter.NUMBER_MAX);
-        TextLengthLimiter.limit(cashReceivedField, TextLengthLimiter.NUMBER_MAX);
-        cashReceivedField.disableProperty().bind(cashRadio.selectedProperty().not()); // only cash has "tiền khách đưa"
-        Label totalPreviewLabel = new Label(CurrencyUtil.format(subtotal));
-        Label changePreviewLabel = new Label(CurrencyUtil.format(BigDecimal.ZERO));
-        SplitPaymentPanel split = new SplitPaymentPanel(subtotal); // part in cash, the rest with another method (TODO 4.32)
-
-        // Spending loyalty points (TODO 4.16): only for a customer already attached to this sale, and only when they have some. The
-        // balance is read again now (the attached object can be older than the last sale). The database checks it once more at payment.
-        final Customer pointsCustomer = attachedCustomer;
-        final int pointsBalance = pointsCustomer == null ? 0 : currentPoints(pointsCustomer);
-        final boolean canSpendPoints = pointsCustomer != null && pointsBalance > 0;
-        TextField pointsField = new TextField("0");
-        TextLengthLimiter.limit(pointsField, 9);
-        Label pointsHint = new Label();
-        pointsHint.setStyle("-fx-font-size: 11px; -fx-text-fill: #5b7e45;");
-        Button pointsMaxButton = new Button(I18n.t("pos.points.max"));
-        // The points that count in the preview: what is typed when it is allowed, else none (the confirm button says why not).
-        java.util.function.IntSupplier previewPoints = () -> {
-            Integer typed = LoyaltyPolicy.parsePoints(pointsField.getText());
-            BigDecimal discountNow = parseNonNegative(discountField.getText());
-            if (!canSpendPoints || typed == null || discountNow == null || discountNow.compareTo(subtotal) > 0) return 0;
-            return LoyaltyPolicy.redemptionProblem(typed, pointsBalance, subtotal.subtract(discountNow)) == null ? typed : 0;
-        };
-        Runnable refreshPointsHint = () -> {
-            BigDecimal discountNow = parseNonNegative(discountField.getText());
-            BigDecimal after = discountNow == null || discountNow.compareTo(subtotal) > 0 ? subtotal : subtotal.subtract(discountNow);
-            pointsHint.setText(I18n.t("pos.points.hint", pointsBalance, CurrencyUtil.format(LoyaltyPolicy.VND_PER_POINT_SPENT),
-                    LoyaltyPolicy.maxRedeemable(pointsBalance, after)));
-        };
-        refreshPointsHint.run();
-        pointsMaxButton.setOnAction(e -> {
-            BigDecimal discountNow = parseNonNegative(discountField.getText());
-            BigDecimal after = discountNow == null || discountNow.compareTo(subtotal) > 0 ? subtotal : subtotal.subtract(discountNow);
-            pointsField.setText(String.valueOf(LoyaltyPolicy.maxRedeemable(pointsBalance, after)));
-        });
-        pointsField.setDisable(!canSpendPoints);
-        pointsMaxButton.setDisable(!canSpendPoints);
-
-        // Quick cash buttons (TODO 5.1): "Đủ tiền" fills the exact total, the others a common note; a note below the total is disabled.
-        BigDecimal[] currentTotal = {subtotal};
-        Button exactButton = new Button(I18n.t("pos.pay.exact"));
-        HBox quickCash = new HBox(6, exactButton);
-        java.util.Map<Button, BigDecimal> noteButtons = new java.util.LinkedHashMap<>();
-        for (long note : new long[]{50_000, 100_000, 200_000, 500_000}) {
-            Button b = new Button(CurrencyUtil.format(BigDecimal.valueOf(note)));
-            noteButtons.put(b, BigDecimal.valueOf(note));
-            b.setOnAction(e -> cashReceivedField.setText(String.valueOf(note)));
-            quickCash.getChildren().add(b);
-        }
-        exactButton.setOnAction(e -> cashReceivedField.setText(currentTotal[0].toBigInteger().toString()));
-        quickCash.disableProperty().bind(cashRadio.selectedProperty().not());
-
-        Runnable updatePreview = () -> {
-            BigDecimal discount = parseNonNegative(discountField.getText());
-            if (discount == null || discount.compareTo(subtotal) > 0) {
-                discount = BigDecimal.ZERO;
-            }
-            BigDecimal total = subtotal.subtract(discount).subtract(LoyaltyPolicy.redemptionOf(previewPoints.getAsInt()).value());
-            currentTotal[0] = total;
-            split.totalChanged(total);
-            noteButtons.forEach((button, value) -> button.setDisable(value.compareTo(total) < 0));
-            totalPreviewLabel.setText(CurrencyUtil.format(total));
-            BigDecimal received = parseNonNegative(cashReceivedField.getText());
-            BigDecimal change = received != null ? received.subtract(total) : null;
-            changePreviewLabel.setText(change != null && change.compareTo(BigDecimal.ZERO) >= 0
-                    ? CurrencyUtil.format(change) : "-");
-        };
-        discountField.textProperty().addListener((obs, o, n) -> {
-            refreshPointsHint.run();
-            updatePreview.run();
-        });
-        pointsField.textProperty().addListener((obs, o, n) -> updatePreview.run());
-        cashReceivedField.textProperty().addListener((obs, o, n) -> updatePreview.run());
-        cardRadio.selectedProperty().addListener((obs, o, n) -> updatePreview.run());
-        transferRadio.selectedProperty().addListener((obs, o, n) -> updatePreview.run());
-        updatePreview.run();
-
-        GridPane grid = new GridPane();
-        grid.setHgap(10);
-        grid.setVgap(10);
-        grid.setPadding(new Insets(20));
-        grid.addRow(0, new Label(I18n.t("pos.pay.subtotal")), new Label(CurrencyUtil.format(subtotal)));
-        grid.addRow(1, new Label(I18n.t("pos.pay.discount")), new VBox(2, discountField, discountHint));
-        grid.addRow(2, new Label(I18n.t("pos.pay.discount.reason")), discountReasonField);
-        if (canSpendPoints) {
-            grid.addRow(3, new Label(I18n.t("pos.points.label")), new VBox(2, new HBox(8, pointsField, pointsMaxButton), pointsHint));
-        } else if (pointsCustomer != null) {
-            grid.addRow(3, new Label(I18n.t("pos.points.label")), new Label(I18n.t("pos.points.none")));
-        } else {
-            grid.addRow(3, new Label(I18n.t("pos.points.label")), new Label(I18n.t("pos.points.attach")));
-        }
-        grid.addRow(4, new Label(I18n.t("pos.pay.total")), totalPreviewLabel);
-        grid.addRow(5, new Label(I18n.t("pos.pay.method")), new VBox(6, new HBox(14, cashRadio, cardRadio, transferRadio),
-                new HBox(14, walletRadios.values().toArray(new RadioButton[0]))));
-        grid.addRow(6, new Label(I18n.t("pos.pay.cash")), new VBox(6, cashReceivedField, quickCash));
-        grid.addRow(7, new Label(I18n.t("pos.pay.change")), changePreviewLabel);
-
-        // Bank transfer: the shop's own QR picture and the amount, shown only for this method.
-        // The cashier must tick that the money arrived before the order can be paid.
-        CheckBox transferReceivedBox = new CheckBox(I18n.t("pos.pay.transfer.received"));
-        // The bank's reference of this transfer, so a disputed one can be traced later; optional (TODO 4.31).
-        TextField transferRefField = new TextField();
-        transferRefField.setPromptText(I18n.t("pos.pay.transfer.ref.prompt"));
-        TextLengthLimiter.limit(transferRefField, com.coffeeshop.coffeeshopmanagement.service.PaymentDetails.REFERENCE_MAX);
-        VBox transferBox = PaymentBoxes.transfer(split.dueLabel(), transferReceivedBox, transferRefField, activeOpenOrder);
-        transferBox.visibleProperty().bind(transferRadio.selectedProperty());
-        transferBox.managedProperty().bind(transferRadio.selectedProperty());
-        grid.add(split.node(), 0, 8, 2, 1);
-        grid.add(transferBox, 0, 9, 2, 1);
-        // An e-wallet: the amount, the transaction code (optional) and the same "money arrived" tick as a bank transfer (TODO 4.34).
-        CheckBox walletReceivedBox = new CheckBox(I18n.t("pos.pay.wallet.received"));
-        TextField walletRefField = new TextField();
-        walletRefField.setPromptText(I18n.t("pos.pay.wallet.ref.prompt"));
-        TextLengthLimiter.limit(walletRefField, com.coffeeshop.coffeeshopmanagement.service.PaymentDetails.REFERENCE_MAX);
-        VBox walletBox = PaymentBoxes.wallet(split.dueLabel(), walletReceivedBox, walletRefField);
-        javafx.beans.binding.BooleanBinding walletChosen = javafx.beans.binding.Bindings.createBooleanBinding(
-                () -> chosenMethod.get().isEWallet(), methodGroup.selectedToggleProperty());
-        walletBox.visibleProperty().bind(walletChosen);
-        walletBox.managedProperty().bind(walletChosen);
-        grid.add(walletBox, 0, 10, 2, 1);
-        dialog.getDialogPane().setContent(grid);
-
-        PaymentResult[] pendingResult = {null};
-        Button confirmButton = (Button) dialog.getDialogPane().lookupButton(confirmButtonType);
-        methodGroup.selectedToggleProperty().addListener((obs, was, isNow) -> {
-            split.methodChanged(chosenMethod.get());
-            confirmButton.setText(I18n.t(chosenMethod.get().needsReceivedConfirmation() ? "pos.pay.received" : "pos.pay.confirm"));
-            // The dialog was sized for the short layout; grow or shrink it when the QR appears or goes.
-            javafx.application.Platform.runLater(() -> {
-                if (dialog.getDialogPane().getScene() != null && dialog.getDialogPane().getScene().getWindow() != null) {
-                    dialog.getDialogPane().getScene().getWindow().sizeToScene();
-                }
-            });
-        });
-        confirmButton.addEventFilter(ActionEvent.ACTION, event -> {
-            BigDecimal discount = parseNonNegative(discountField.getText());
-            if (discount == null) {
-                AlertUtil.warning(I18n.t("pos.discount.invalid.title"), I18n.t("pos.discount.invalid.number"));
-                event.consume();
-                return;
-            }
-            DiscountPolicy.Result discountResult = DiscountPolicy.check(currentRole, subtotal, discount, discountReasonField.getText());
-            String discountProblem = discountResult == DiscountPolicy.Result.OK ? null
-                    : DiscountPolicy.messageFor(discountResult, currentRole, subtotal);
-            if (discountProblem != null) {
-                AlertUtil.warning(I18n.t("pos.discount.invalid.title"), discountProblem);
-                event.consume();
-                return;
-            }
-            // Points spent (TODO 4.16): a typed number that is not allowed stops the payment with the reason in plain words.
-            Integer typedPoints = LoyaltyPolicy.parsePoints(pointsField.getText());
-            String pointsProblem = typedPoints == null ? I18n.t("pos.points.invalid")
-                    : LoyaltyPolicy.redemptionProblem(typedPoints, canSpendPoints ? pointsBalance : (pointsCustomer == null ? null : 0),
-                            subtotal.subtract(discount));
-            if (pointsProblem != null) {
-                AlertUtil.warning(I18n.t("pos.points.label"), pointsProblem);
-                event.consume();
-                return;
-            }
-            final int spentPoints = typedPoints;
-            BigDecimal total = subtotal.subtract(discount).subtract(LoyaltyPolicy.redemptionOf(spentPoints).value());
-            PaymentMethod method = chosenMethod.get();
-            if (split.problem() != null) {
-                AlertUtil.warning(I18n.t("pos.split.title"), split.problem());
-                event.consume();
-                return;
-            }
-            if (method == PaymentMethod.TRANSFER && !transferReceivedBox.isSelected()) {
-                AlertUtil.warning(I18n.t("pos.unconfirmed.title"), I18n.t("pos.unconfirmed.message"));
-                event.consume();
-                return;
-            }
-            if (method.isEWallet() && !walletReceivedBox.isSelected()) {
-                AlertUtil.warning(I18n.t("pos.unconfirmed.title"), I18n.t("pos.unconfirmed.wallet", method.label()));
-                event.consume();
-                return;
-            }
-            BigDecimal cashHandedOver = null; // what the customer gave, saved with the order (TODO 3.17)
-            if (method == PaymentMethod.CASH) {
-                BigDecimal received = parseNonNegative(cashReceivedField.getText());
-                if (received == null) {
-                    AlertUtil.warning(I18n.t("pos.amount.invalid.title"), I18n.t("pos.amount.invalid.message"));
-                    event.consume();
-                    return;
-                }
-                if (received.compareTo(total) < 0) {
-                    AlertUtil.warning(I18n.t("pos.amount.short.title"), I18n.t("pos.amount.short.message"));
-                    event.consume();
-                    return;
-                }
-                cashHandedOver = received;
-            }
-            pendingResult[0] = new PaymentResult(method, discount,
-                    DiscountPolicy.reasonToStore(discount, discountReasonField.getText()), total, cashHandedOver,
-                    method == PaymentMethod.TRANSFER
-                            ? com.coffeeshop.coffeeshopmanagement.service.PaymentDetails.cleanReference(transferRefField.getText())
-                            : method.isEWallet()
-                            ? com.coffeeshop.coffeeshopmanagement.service.PaymentDetails.cleanReference(walletRefField.getText()) : null,
-                    spentPoints, split.cashPart());
-        });
-
-        dialog.showAndWait();
-        if (pendingResult[0] != null) {
-            completeOrder(pendingResult[0]);
-        }
+        BigDecimal subtotal = splitPart != null ? SplitBillRules.sum(splitPart) : cartSubtotal();
+        final List<OrderItem> part = splitPart, rest = splitRest; // startSplit clears them as soon as this returns; the box opens a moment later
+        setPaymentInFlight(true); // the box is built from what is read in the background: one click only (TODO 6.14)
+        PaymentDialog.ask(subtotal, splitPart != null ? splitPart : cart, attachedCustomer, activeOpenOrder, customerService, () -> setPaymentInFlight(false),
+                payment -> completeOrder(payment, part, rest)); // the box itself is PaymentDialog (TODO 6.54)
     }
 
-    private BigDecimal parseNonNegative(String text) {
-        return MoneyParser.parseOptionalDong(text);
-    }
-
-    /** The points the customer has now (TODO 4.16): read again from the database, falling back to what the screen holds. */
-    private static int currentPoints(Customer customer) {
-        try {
-            return new CustomerDAO().findById(customer.getId()).map(Customer::getLoyaltyPoints).orElse(customer.getLoyaltyPoints());
-        } catch (RuntimeException e) {
-            return customer.getLoyaltyPoints();
-        }
-    }
-
-    private void completeOrder(PaymentResult payment) {
+    private void completeOrder(CheckoutService.Payment payment, List<OrderItem> part, List<OrderItem> rest) { // part and rest: the split of TODO 4.10, or null
         final Integer tNum = selectedTableNumber; // null for a take-away order
         final List<OrderItem> items = new ArrayList<>(cart);
         final Customer knownCustomer = attachedCustomer;
@@ -1546,45 +708,50 @@ public class OrderController {
         final String phone = customerPhoneField != null && customerPhoneField.getText() != null ? customerPhoneField.getText().trim() : "";
         final Order openOrder = activeOpenOrder;
         final BigDecimal subtotal = cartSubtotal();
+        final List<OrderItem> receipt = PaymentFlowRules.receiptLines(part, payment.complimentary() != null, items); // TODO 4.10, 4.61, 6.5
         final Integer employeeId = Session.getCurrentEmployee() != null ? Session.getCurrentEmployee().getId() : null;
         final Role actingRole = Session.getCurrentRole(); // read here, on the screen thread; the service enforces the discount rule (TODO 6.45)
         setPaymentInFlight(true);
         paymentButton.setDisable(true);
         // Ordered so it runs after any autosave still in flight.
         Async.runOrdered(
-                () -> checkoutService.pay(tNum, items, subtotal, knownCustomer, name, phone, openOrder,
-                        new CheckoutService.Payment(payment.method(), payment.discount(), payment.discountReason(), payment.total(),
-                                payment.cashReceived(), payment.transferRef(), payment.pointsRedeemed(), payment.cashPart()),
-                        employeeId, actingRole),
+                () -> {
+                    CheckoutService.Payment paying = payment;
+                    return part != null
+                            ? checkoutService.paySplit(tNum, openOrder, part, rest, knownCustomer, name, phone, paying, employeeId, actingRole)
+                            : checkoutService.pay(tNum, items, subtotal, knownCustomer, name, phone, openOrder, paying, employeeId, actingRole);
+                },
                 paid -> {
                     // First thing, so nothing below can leave the screen locked (TODO 2.79).
                     setPaymentInFlight(false);
                     Order savedOrder = paid.order();
                     paymentButton.setDisable(false);
                     lastCompletedOrder = savedOrder;
-                    lastCompletedItems = items;
+                    lastCompletedItems = receipt;
                     lastCompletedCustomerName = paid.customer() != null ? paid.customer().getFullName() : null;
                     String customerName = paid.customer() != null ? paid.customer().getFullName() : null;
                     // The sale is saved: make the till ready for the next one BEFORE the receipt is opened (TODO 2.65). If the
                     // receipt window fails to open, the paid lines are already gone from the screen and a second click cannot
                     // record the same sale twice. The screen is cleared only when it still shows the table that was paid.
-                    if (tNum != null ? java.util.Objects.equals(selectedTableNumber, tNum) : takeAway && activeOpenOrder == openOrder) {
-                        activeOpenOrder = null;
-                        takeAwayOrderId = null;
-                        orderInProgress = false;
-                        attachedCustomer = paid.customer();
-                        loadProducts();
-                        cart.clear();
-                        orderDetailTable.getItems().clear();
-                        totalAmountLabel.setText(I18n.t("pos.money.zero"));
-                        resetOrderAfterPayment();
-                    } else {
-                        loadProducts();
+                    catalog.refreshProducts(); // in every case; what else the screen does is PaymentFlowRules.screenAfter (TODO 6.5)
+                    switch (PaymentFlowRules.screenAfter(part != null, tNum, selectedTableNumber, takeAway, activeOpenOrder == openOrder)) {
+                        case RELOAD_REST -> loadTableOrderFromDb(tNum); // the rest of the order stays open: show it again (TODO 4.10)
+                        case CLEAR_ORDER -> {
+                            activeOpenOrder = null;
+                            takeAwayOrderId = null;
+                            orderInProgress = false;
+                            attachedCustomer = paid.customer();
+                            cart.clear();
+                            orderDetailTable.getItems().clear();
+                            totalAmountLabel.setText(I18n.t("pos.money.zero"));
+                            resetOrderAfterPayment();
+                        }
+                        case KEEP -> { }
                     }
                     loadTablesFromDb();
                     try {
                         // No "success" box any more: the receipt window opens with a green "ĐÃ THANH TOÁN" line (TODO 5.21).
-                        openInvoiceWindow(savedOrder, items, customerName);
+                        openInvoiceWindow(savedOrder, receipt, customerName, true);
                     } catch (RuntimeException e) {
                         LOGGER.log(Level.WARNING, "The receipt window could not be opened", e);
                         AlertUtil.warning(I18n.t("pos.paid.status", savedOrder.getId()),
@@ -1594,9 +761,11 @@ public class OrderController {
                 error -> {
                     setPaymentInFlight(false);
                     paymentButton.setDisable(false);
+                    if (StaleOrderAlert.show(error, items, this::reloadSelected)) return; // another till changed the order (TODO 2.91)
                     LOGGER.log(Level.WARNING, "Payment failed", error);
+                    com.coffeeshop.coffeeshopmanagement.util.AlertPlayer.play(com.coffeeshop.coffeeshopmanagement.util.AlertSounds.Cue.PAYMENT_REFUSED); // TODO 5.47
                     AlertUtil.error(I18n.t("pos.pay.fail.title"), I18n.t("pos.pay.fail.message", error.getMessage()));
-                    loadProducts();
+                    catalog.refreshProducts();
                     loadTablesFromDb();
                 }
         );
@@ -1619,9 +788,12 @@ public class OrderController {
         return true;
     }
 
+    private javafx.stage.Window screenWindow() {
+        return paymentButton != null && paymentButton.getScene() != null ? paymentButton.getScene().getWindow() : null;
+    }
+
     private void installCloseGuard() {
-        javafx.stage.Window window = paymentButton != null && paymentButton.getScene() != null
-                ? paymentButton.getScene().getWindow() : null;
+        javafx.stage.Window window = screenWindow();
         if (window != null) {
             window.setOnCloseRequest(e -> {
                 if (!confirmLeaveOrder()) e.consume();
@@ -1630,8 +802,7 @@ public class OrderController {
     }
 
     private void removeCloseGuard() {
-        javafx.stage.Window window = paymentButton != null && paymentButton.getScene() != null
-                ? paymentButton.getScene().getWindow() : null;
+        javafx.stage.Window window = screenWindow();
         if (window != null) {
             window.setOnCloseRequest(null);
         }
@@ -1646,15 +817,15 @@ public class OrderController {
         orderIdLabel.setText("-");
         if (customerNameField != null) customerNameField.clear();
         if (customerPhoneField != null) customerPhoneField.clear();
-        showCustomerInfo(null, false);
+        customerBox.show(null, false);
     }
 
-    private void openInvoiceWindow(Order order, List<OrderItem> items, String customerName) {
+    private void openInvoiceWindow(Order order, List<OrderItem> items, String customerName, boolean afterPayment) {
         HoaDonController controller = SceneNavigator.loadAndShowNewWindow(
                 "/fxml/donthanhtoan.fxml", ReceiptText.t("pos.invoice.title", order.getId()), ReceiptText.bundle());
-        if (controller != null) {
-            controller.setInvoiceData(order, items, Session.getDisplayName(), customerName);
-        }
+        if (controller == null) return;
+        controller.setInvoiceData(order, items, Session.getDisplayName(), customerName);
+        if (afterPayment) javafx.application.Platform.runLater(controller::printAfterPayment); // TODO 5.39: only right after a sale
     }
 
     @FXML
@@ -1668,71 +839,39 @@ public class OrderController {
             AlertUtil.warning(I18n.t("pos.noreceipt.title"), I18n.t("pos.noreceipt.message"));
             return;
         }
-        openInvoiceWindow(lastCompletedOrder, lastCompletedItems, lastCompletedCustomerName);
+        openInvoiceWindow(lastCompletedOrder, lastCompletedItems, lastCompletedCustomerName, false);
+    }
+
+    // =================================================================== Language switch guard (TODO 1.7)
+
+    @Override
+    public List<String> unsavedWork() {
+        boolean saved = Async.flushOrdered(3000) && !autosaveWarningShown; // the last autosave reached the database
+        Customer c = attachedCustomer;
+        boolean typed = PosLeaveRules.customerTyped(customerNameField.getText(), customerPhoneField.getText(),
+                c == null ? null : c.getFullName(), c == null ? null : c.getPhone(), I18n.t("pos.walkin"));
+        return PosLeaveRules.lost(new PosLeaveRules.State(saved, startingOrder,
+                OrderScreenRules.isSaved(activeOpenOrder), cart.size(), typed));
+    }
+
+    @Override
+    public Object snapshot() {
+        return new PosLeaveRules.Place(selectedTableNumber, takeAway, takeAwayOrderId);
+    }
+
+    @Override
+    public void resume(Object place) {
+        if (!(place instanceof PosLeaveRules.Place p)) return;
+        if (p.table() != null) selectTable(p.table());
+        else if (p.takeAway()) selectTakeAway(p.takeAwayOrderId());
     }
 
     // =================================================================== Navigation
-    // Duplicated from AdminScreen rather than shared - see the class javadoc.
+    // The sidebar buttons and the sign-out are in ScreenNavigation (TODO 6.54); the till only adds the question that goes before them.
 
-    @FXML
-    public void openDashboard(ActionEvent event) {
-        if (!confirmLeaveOrder()) return;
-        String target = Session.isAdmin() ? "/fxml/admin-trangchu.fxml" : "/fxml/employee-trangchu.fxml";
-        SceneNavigator.switchScene(event, target);
-    }
-
-    @FXML
-    public void openProductManagement(ActionEvent event) {
-        if (!Session.isAdmin()) {
-            AlertUtil.warning(I18n.t("admin.only.title"), I18n.t("admin.only.message"));
-            return;
-        }
-        if (!confirmLeaveOrder()) return;
-        SceneNavigator.switchScene(event, "/fxml/quanlysanpham.fxml");
-    }
-
-    @FXML
-    public void openCustomerManagement(ActionEvent event) {
-        if (!confirmLeaveOrder()) return;
-        SceneNavigator.switchScene(event, "/fxml/quanlykhachhang.fxml");
-    }
-
-    @FXML
-    public void openCategoryManagement(ActionEvent event) {
-        if (!Session.isAdmin()) {
-            AlertUtil.warning(I18n.t("admin.only.title"), I18n.t("admin.only.message"));
-            return;
-        }
-        if (!confirmLeaveOrder()) return;
-        SceneNavigator.switchScene(event, "/fxml/quanlydanhmuc.fxml");
-    }
-
-    @FXML
-    public void openAccountManagement(ActionEvent event) {
-        if (!Session.isAdmin()) {
-            AlertUtil.warning(I18n.t("admin.only.title"), I18n.t("admin.only.message"));
-            return;
-        }
-        if (!confirmLeaveOrder()) return;
-        SceneNavigator.switchScene(event, "/fxml/quanlytaikhoan.fxml");
-    }
-
-    @FXML
-    public void openStaffManagement(ActionEvent event) {
-        if (!Session.isAdmin()) {
-            AlertUtil.warning(I18n.t("admin.only.title"), I18n.t("admin.only.message"));
-            return;
-        }
-        if (!confirmLeaveOrder()) return;
-        SceneNavigator.switchScene(event, "/fxml/quanlynhanvien.fxml");
-    }
-
-    @FXML
-    public void logout(ActionEvent event) {
-        if (!confirmLeaveOrder()) return;
-        BackupDialogs.offerBeforeLeaving(BackupDialogs.windowOf(event), () -> { // TODO 5.18
-            Session.clear();
-            SceneNavigator.switchScene(event, "/fxml/dangnhap.fxml");
-        });
+    /** Before any sidebar button or the sign-out: an order that is still open is asked about (and saved) first. */
+    @Override
+    protected boolean confirmLeaving() {
+        return confirmLeaveOrder();
     }
 }

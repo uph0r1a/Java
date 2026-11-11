@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- TODO 6.79: findings SpotBugs reports that were read and judged not to be bugs. One <Match> per finding, each with a comment saying
+     why. Empty on purpose until the first real run (docs/STATIC-ANALYSIS.md). -->
+<FindBugsFilter>
+</FindBugsFilter>

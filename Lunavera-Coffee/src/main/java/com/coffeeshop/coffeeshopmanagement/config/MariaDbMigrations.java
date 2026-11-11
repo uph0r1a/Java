@@ -34,7 +34,9 @@ final class MariaDbMigrations {
 
     /**
      * Version -> step. Version 2 is the first MariaDB schema and has no step; version 3 (TODO 3.36) is registered by
-     * {@link SchemaMigrations#ensureMariaPaidAtIndex}: the index on {@code orders.paid_at}.
+     * {@link SchemaMigrations#ensureMariaPaidAtIndex}: the index on {@code orders.paid_at}; version 4 (TODO 4.37) by
+     * {@link SchemaMigrations#ensureMariaRefundIndexes}: the two indexes on {@code refunds}; version 5 (TODO 6.72) by
+     * {@link SchemaMigrations#ensureMariaMirroredIndexes}: the other plain indexes both databases share.
      */
     static final Map<Integer, Step> STEPS = new TreeMap<>();
 
@@ -42,6 +44,8 @@ final class MariaDbMigrations {
         // Registered here, not from SchemaMigrations: DatabaseConfig runs MariaDbMigrations.upgrade first, and a step put into
         // this map by another class's static initialiser would be missing if that class had not been loaded yet.
         STEPS.put(3, SchemaMigrations::ensureMariaPaidAtIndex); // TODO 3.36
+        STEPS.put(4, SchemaMigrations::ensureMariaRefundIndexes); // TODO 4.37
+        STEPS.put(5, SchemaMigrations::ensureMariaMirroredIndexes); // TODO 6.72
     }
 
     private MariaDbMigrations() {
@@ -69,7 +73,11 @@ final class MariaDbMigrations {
     /** Brings an existing MariaDB database up to {@link #LATEST_VERSION}; a no-op when it already is. */
     static void upgrade(Connection connection) throws SQLException {
         int current = DatabaseConfig.readSchemaVersion(connection);
-        for (int version : plan(current, LATEST_VERSION, STEPS.keySet())) {
+        List<Integer> missing = plan(current, LATEST_VERSION, STEPS.keySet());
+        if (!missing.isEmpty()) {
+            PreUpgradeBackup.takeIfNeeded(connection, current, LATEST_VERSION); // TODO 6.9 (a dump; needs mysqldump, else only logged)
+        }
+        for (int version : missing) {
             LOGGER.info("Upgrading the MariaDB database to version " + version + " ...");
             STEPS.get(version).apply(connection);
             DatabaseConfig.writeSchemaVersion(connection, version);

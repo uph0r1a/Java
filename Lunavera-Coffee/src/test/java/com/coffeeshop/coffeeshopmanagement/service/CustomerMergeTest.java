@@ -70,7 +70,12 @@ public class CustomerMergeTest {
             o.setPaymentMethod(PaymentMethod.CASH);
             o.setPaidAt(AppClock.now());
         }
-        return orderDAO.insert(o, List.of());
+        com.coffeeshop.coffeeshopmanagement.model.OrderItem line = new com.coffeeshop.coffeeshopmanagement.model.OrderItem();
+        line.setProductName("test line"); // no product: a paid order needs a line, and this one touches no stock
+        line.setQuantity(1);
+        line.setUnitPrice(new BigDecimal("20000"));
+        line.setLineTotal(new BigDecimal("20000"));
+        return orderDAO.insert(o, List.of(line));
     }
 
     private Customer reload(Customer c) {
@@ -132,19 +137,26 @@ public class CustomerMergeTest {
     }
 
     @Test
-    public void theMergeIsWrittenDownWithoutThePhoneOrEmail() {
+    public void theMergeIsOneLogLineWithoutThePhoneOrEmailAndThereIsNoMergeTable() throws Exception {
         Customer keep = customer(phone(), null, 0);
-        Customer dup = customer(phone(), "secret@example.com", 0);
+        String secretPhone = phone();
+        Customer dup = customer(secretPhone, "secret@example.com", 0);
         order(dup, OrderStatus.PAID);
 
         service.merge(keep.getId(), dup.getId());
 
-        List<CustomerMergeService.MergeNote> notes = service.notesFor(keep.getId());
-        assertEquals(1, notes.size());
-        assertEquals(dup.getId(), notes.get(0).removedId());
-        assertEquals(dup.getFullName(), notes.get(0).removedName());
-        assertEquals(1, notes.get(0).ordersMoved());
-        assertNotNull(notes.get(0).mergedAt());
+        var lines = new com.coffeeshop.coffeeshopmanagement.dao.AuditDAO().find(new com.coffeeshop.coffeeshopmanagement.dao.AuditDAO.Filter(
+                null, null, com.coffeeshop.coffeeshopmanagement.model.AuditAction.CUSTOMER_MERGED, null, keep.getFullName()), 10, 0);
+        assertEquals(1, lines.size());
+        assertTrue(lines.get(0).oldValue().contains(dup.getFullName()));
+        assertEquals("one order and the 2 points it earned", "1|2", lines.get(0).detail());
+        for (String text : new String[]{lines.get(0).oldValue(), lines.get(0).detail(), lines.get(0).targetLabel()}) {
+            assertFalse(text.contains(secretPhone));
+            assertFalse(text.contains("secret@example.com"));
+        }
+        try (var c = com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig.getConnection(); var rs = c.getMetaData().getTables(null, null, "customer_merges", null)) {
+            assertFalse("the table of merges is gone", rs.next());
+        }
     }
 
     @Test
@@ -230,7 +242,7 @@ public class CustomerMergeTest {
     }
 
     @Test
-    public void anonymiseAlsoRemovesTheNamesOfDuplicatesMergedIntoIt() {
+    public void anonymiseAlsoScrubsTheNamesOfDuplicatesFromTheMergeLine() {
         Customer keep = customer(phone(), null, 0);
         Customer dup = customer(phone(), null, 0);
         order(keep, OrderStatus.PAID);
@@ -238,9 +250,11 @@ public class CustomerMergeTest {
 
         service.anonymise(keep.getId());
 
-        List<CustomerMergeService.MergeNote> notes = service.notesFor(keep.getId());
-        assertEquals(1, notes.size());
-        assertNotEquals(dup.getFullName(), notes.get(0).removedName());
+        var lines = new com.coffeeshop.coffeeshopmanagement.dao.AuditDAO().find(new com.coffeeshop.coffeeshopmanagement.dao.AuditDAO.Filter(
+                null, null, com.coffeeshop.coffeeshopmanagement.model.AuditAction.CUSTOMER_MERGED, null, null), 200, 0).stream()
+                .filter(e -> e.targetId() != null && e.targetId() == keep.getId()).toList();
+        assertEquals(1, lines.size());
+        assertNull(lines.get(0).oldValue());
     }
 
     @Test
@@ -270,41 +284,94 @@ public class CustomerMergeTest {
     }
 
     @Test
-    public void deleteRemovesACustomerNothingPointsAt() {
-        Customer c = customer(phone(), null, 0);
-        assertTrue(service.impact(c.getId()).deletable());
-
-        assertTrue(service.delete(c.getId()));
-
-        assertTrue(customerDAO.findById(c.getId()).isEmpty());
-    }
-
-    @Test
-    public void deleteRefusesACustomerWithOrdersPointsOrALogin() {
-        Customer withOrder = customer(phone(), null, 0);
-        order(withOrder, OrderStatus.PAID);
-        assertFalse(service.impact(withOrder.getId()).deletable());
-        assertFalse(service.delete(withOrder.getId()));
-        assertTrue(customerDAO.findById(withOrder.getId()).isPresent());
-
-        Customer withPoints = customer(phone(), null, 7);
-        assertFalse(service.delete(withPoints.getId()));
-
-        Customer withLogin = customer(phone(), null, 0);
-        login(withLogin);
-        assertFalse(service.delete(withLogin.getId()));
-    }
-
-    @Test
     public void onlyAnAdministratorMayDoAnyOfIt() {
         Customer a = customer(phone(), null, 0);
         Customer b = customer(phone(), null, 0);
         TestSession.clear();
         assertThrows(RuntimeException.class, () -> service.merge(a.getId(), b.getId()));
         assertThrows(RuntimeException.class, () -> service.anonymise(a.getId()));
-        assertThrows(RuntimeException.class, () -> service.delete(a.getId()));
         TestSession.admin();
         assertTrue(customerDAO.findById(a.getId()).isPresent());
         assertTrue(customerDAO.findById(b.getId()).isPresent());
+    }
+
+    // ---- TODO 2.88: the bookings of a customer made anonymous
+
+    private final com.coffeeshop.coffeeshopmanagement.dao.ReservationDAO reservations = new com.coffeeshop.coffeeshopmanagement.dao.ReservationDAO();
+    private final java.util.List<Integer> madeBookings = new java.util.ArrayList<>();
+
+    @After
+    public void removeBookings() throws java.sql.SQLException {
+        try (java.sql.Connection c = com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig.getConnection();
+             java.sql.Statement st = c.createStatement()) {
+            for (int id : madeBookings) st.executeUpdate("DELETE FROM reservations WHERE id = " + id);
+        }
+        madeBookings.clear();
+    }
+
+    private int book(String name, String phone, int minutesFromNow) {
+        var made = reservations.add(1, name, phone, AppClock.now().plusDays(3).plusMinutes(minutesFromNow), 2, null);
+        madeBookings.add(made.id());
+        return made.id();
+    }
+
+    private String[] bookingRow(int id) throws java.sql.SQLException {
+        try (java.sql.Connection c = com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig.getConnection();
+             java.sql.PreparedStatement st = c.prepareStatement("SELECT customer_name, phone, customer_id FROM reservations WHERE id = ?")) {
+            st.setInt(1, id);
+            try (java.sql.ResultSet rs = st.executeQuery()) {
+                rs.next();
+                return new String[]{rs.getString(1), rs.getString(2), rs.getString(3)};
+            }
+        }
+    }
+
+    @Test
+    public void aBookingMadeWithACustomersPhoneKnowsTheCustomer() throws Exception {
+        String phone = phone();
+        Customer c = customer(phone, null, 0);
+        int known = book("Khách đặt bàn", phone, 0);
+        int stranger = book("Người lạ", phone(), 300);
+        assertEquals(String.valueOf(c.getId()), bookingRow(known)[2]);
+        assertNull(bookingRow(stranger)[2]);
+    }
+
+    @Test
+    public void anonymiseBlanksTheNameAndPhoneOfTheirBookings() throws Exception {
+        String phone = phone();
+        Customer c = customer(phone, null, 0);
+        int byId = book("Chị Lan", phone, 0);
+        int other = book("Anh Bình", phone(), 300);
+        // an older booking: no customer id, the phone written another way (+84 ... with spaces)
+        int older = book("Chị Lan (cũ)", phone, 600);
+        try (java.sql.Connection conn = com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig.getConnection();
+             java.sql.PreparedStatement st = conn.prepareStatement("UPDATE reservations SET customer_id = NULL, phone = ? WHERE id = ?")) {
+            st.setString(1, "+84 " + phone.substring(1, 4) + " " + phone.substring(4));
+            st.setInt(2, older);
+            st.executeUpdate();
+        }
+
+        service.anonymise(c.getId());
+
+        String former = com.coffeeshop.coffeeshopmanagement.util.I18n.t("customers.former.name", c.getId());
+        for (int id : new int[]{byId, older}) {
+            String[] row = bookingRow(id);
+            assertEquals(former, row[0]);
+            assertNull("no phone left", row[1]);
+            assertEquals(String.valueOf(c.getId()), row[2]);
+        }
+        String[] untouched = bookingRow(other);
+        assertEquals("Anh Bình", untouched[0]);
+        assertNotNull(untouched[1]);
+    }
+
+    @Test
+    public void aMergeMovesTheBookingsToTheKeptCustomer() throws Exception {
+        String phone = phone();
+        Customer keep = customer(phone(), null, 0);
+        Customer gone = customer(phone, null, 0);
+        int id = book("Khách", phone, 0);
+        service.merge(keep.getId(), gone.getId());
+        assertEquals(String.valueOf(keep.getId()), bookingRow(id)[2]);
     }
 }

@@ -1,0 +1,211 @@
+/* Shared by the category and account screens: page header, statistic cards, search box, paging, tables.
+   Loaded BEFORE the screen's own sheet (the stylesheets attribute of each FXML file), so a screen can still override a rule here.
+   Used by: quanlydanhmuc.css, quanlytaikhoan.css. */
+
+.root {
+    -fx-background-color: #F4F1E8;
+}
+
+/* =========================================================
+   MAIN CONTENT
+========================================================= */
+.content {
+    -fx-background-color: #F7F5EE;
+    -fx-padding: 18px 22px 22px 22px;
+}
+
+/* =========================================================
+   HEADER
+========================================================= */
+.page-header {
+    -fx-background-color: #FAF9F4;
+    -fx-background-radius: 10px;
+    -fx-border-color: #E4E3D8;
+    -fx-border-radius: 10px;
+    -fx-border-width: 1px;
+    -fx-padding: 14px 18px;
+    -fx-effect: dropshadow(gaussian, rgba(70,80,60,0.07), 8, 0.1, 0, 2);
+}
+
+.page-title {
+    -fx-font-size: 25px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #354D3B;
+}
+
+.page-description {
+    -fx-font-size: 12px;
+    -fx-text-fill: #75766A;
+}
+
+.header-icon {
+    -fx-background-color: #E8EBDD;
+    -fx-background-radius: 50%;
+    -fx-min-width: 34px;
+    -fx-min-height: 34px;
+    -fx-max-width: 34px;
+    -fx-max-height: 34px;
+    -fx-alignment: CENTER;
+    -fx-text-fill: #65745E;
+    -fx-font-size: 15px;
+}
+
+.admin-name {
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #435540;
+}
+
+.admin-role {
+    -fx-font-size: 10px;
+    -fx-text-fill: #74776A;
+}
+
+.profile-icon {
+    -fx-background-color: #E2E7DA;
+    -fx-background-radius: 50%;
+    -fx-min-width: 34px;
+    -fx-min-height: 34px;
+    -fx-max-width: 34px;
+    -fx-max-height: 34px;
+    -fx-alignment: CENTER;
+    -fx-text-fill: #596954;
+    -fx-font-size: 16px;
+}
+
+/* =========================================================
+   STATISTICS
+========================================================= */
+.statistics {
+    -fx-padding: 0;
+}
+
+.stat-card {
+    -fx-background-color: #FFFFFF;
+    -fx-background-radius: 10px;
+    -fx-border-color: #E0E3D7;
+    -fx-border-radius: 10px;
+    -fx-padding: 12px 15px;
+    -fx-spacing: 3px;
+    -fx-effect: dropshadow(gaussian, rgba(70,80,60,0.10), 10, 0.12, 0, 2);
+}
+
+.stat-card:hover {
+    -fx-border-color: #CBD4C1;
+}
+
+.stat-title {
+    -fx-font-size: 12px;
+    -fx-text-fill: #697A63;
+}
+
+.stat-value {
+    -fx-font-size: 25px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #405541;
+}
+
+.stat-description {
+    -fx-font-size: 10px;
+    -fx-text-fill: #73766B;
+}
+
+/* =========================================================
+   CATEGORY CARD
+========================================================= */
+.section-title {
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #405741;
+}
+
+/* =========================================================
+   SEARCH
+========================================================= */
+.search-field {
+    -fx-background-color: #F9F9F5;
+    -fx-background-radius: 7px;
+    -fx-border-color: #E0E2D6;
+    -fx-border-radius: 7px;
+    -fx-padding: 9px 12px;
+    -fx-font-size: 12px;
+    -fx-text-fill: #4E5C4D;
+    -fx-prompt-text-fill: #A4A79B;
+}
+
+/* =========================================================
+   PRIMARY BUTTON
+========================================================= */
+.primary-button {
+    -fx-background-color: #697A63;
+    -fx-background-radius: 7px;
+    -fx-text-fill: white;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+    -fx-padding: 10px 15px;
+    -fx-cursor: hand;
+}
+
+.primary-button:hover {
+    -fx-background-color: #596B54;
+}
+
+.primary-button:pressed {
+    -fx-background-color: #4F604A;
+}
+
+/* =========================================================
+   TABLE
+========================================================= */
+.empty-label {
+    -fx-font-size: 12px;
+    -fx-text-fill: #73766B;
+}
+
+/* =========================================================
+   PAGINATION
+========================================================= */
+.table-footer {
+    -fx-font-size: 11px;
+    -fx-text-fill: #71776C;
+}
+
+.page-button {
+    -fx-background-color: #F8F8F3;
+    -fx-background-radius: 6px;
+    -fx-border-color: #DEE2D6;
+    -fx-border-radius: 6px;
+    -fx-min-width: 32px;
+    -fx-min-height: 30px;
+    -fx-max-height: 30px;
+    -fx-padding: 5px 9px;
+    -fx-text-fill: #64705E;
+    -fx-font-size: 11px;
+    -fx-cursor: hand;
+}
+
+.page-button:hover {
+    -fx-background-color: #EEF2E8;
+    -fx-border-color: #C9D1C2;
+}
+
+.page-button:pressed {
+    -fx-background-color: #E2E9DA;
+}
+
+.page-button-active {
+    -fx-background-color: #E2E9DA;
+    -fx-border-color: #CBD6C3;
+    -fx-text-fill: #4F604A;
+    -fx-font-weight: bold;
+}
+
+/* =========================================================
+   GENERAL FOCUS
+========================================================= */
+.button:focused,
+.text-field:focused,
+.combo-box:focused {
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
+}

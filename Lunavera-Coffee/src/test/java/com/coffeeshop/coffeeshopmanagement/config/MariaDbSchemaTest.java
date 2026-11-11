@@ -65,6 +65,67 @@ public class MariaDbSchemaTest {
         }
     }
 
+    /** The plain (non-unique) {@code INDEX name (columns)} lines of MariaDB's tables, as "table(columns)". Names may differ between the two databases. */
+    private static Set<String> mariaPlainIndexes() {
+        Set<String> found = new java.util.TreeSet<>();
+        java.util.regex.Pattern line = java.util.regex.Pattern.compile("^\\s*INDEX\\s+\\w+\\s*\\(([^)]*)\\)");
+        for (String ddl : MariaDbSchema.TABLES) {
+            String table = SchemaColumns.tableName(ddl);
+            for (String raw : ddl.split("\n")) {
+                java.util.regex.Matcher m = line.matcher(raw);
+                if (m.find()) found.add(table + "(" + m.group(1).replaceAll("\\s+", "") + ")");
+            }
+        }
+        return found;
+    }
+
+    private static Set<String> sqlitePlainIndexes() {
+        Set<String> found = new java.util.TreeSet<>();
+        for (String[][] group : new String[][][] {SchemaMigrations.INDEXES_BEFORE_V5, SchemaMigrations.INDEXES_SINCE_V5,
+                SchemaMigrations.INDEXES_SQLITE_ONLY_SINCE_V5}) {
+            for (String[] index : group) found.add(index[1] + "(" + index[2].replaceAll("\\s+", "") + ")");
+        }
+        return found;
+    }
+
+    /**
+     * TODO 6.72: SQLite had indexes only for orders, order_items and products; now every plain index MariaDB creates exists on SQLite too (same
+     * table and columns; the one old name that differs is {@code idx_orders_table_number} against {@code idx_orders_table}). The reverse is not
+     * required: SQLite also indexes five columns that MariaDB gets another way, listed here so a new gap cannot hide among them.
+     */
+    @Test
+    public void everyMariaDbIndexAlsoExistsOnSqlite() {
+        Set<String> missing = mariaPlainIndexes();
+        missing.removeAll(sqlitePlainIndexes());
+        assertTrue("MariaDB indexes SQLite does not have: " + missing, missing.isEmpty());
+
+        Set<String> sqliteOnly = sqlitePlainIndexes();
+        sqliteOnly.removeAll(mariaPlainIndexes());
+        assertEquals("indexes SQLite has and MariaDB does not create by name: customer_id, order_id, product_id and category_id are indexed by MariaDB's "
+                        + "foreign keys, status is the first column of idx_orders_status_date; order_date alone has no MariaDB index",
+                new java.util.TreeSet<>(List.of("orders(order_date)", "orders(status)", "orders(customer_id)", "order_items(order_id)",
+                        "products(category_id)", "order_items(product_id)")), sqliteOnly);
+    }
+
+    /** A name that MariaDB and SQLite both use must stand for the same columns, so a person comparing the two files is not misled. */
+    @Test
+    public void aSharedIndexNameMeansTheSameColumnsOnBoth() {
+        Map<String, String> maria = new java.util.HashMap<>();
+        java.util.regex.Pattern p = java.util.regex.Pattern.compile("(?m)^\\s*INDEX\\s+(\\w+)\\s*\\(([^)]*)\\)");
+        for (String ddl : MariaDbSchema.TABLES) {
+            java.util.regex.Matcher m = p.matcher(ddl);
+            while (m.find()) maria.put(m.group(1), SchemaColumns.tableName(ddl) + "(" + m.group(2).replaceAll("\\s+", "") + ")");
+        }
+        for (String[][] group : new String[][][] {SchemaMigrations.INDEXES_BEFORE_V5, SchemaMigrations.INDEXES_SINCE_V5,
+                SchemaMigrations.INDEXES_SQLITE_ONLY_SINCE_V5}) {
+            for (String[] index : group) {
+                if (maria.containsKey(index[0])) {
+                    assertEquals(index[0], maria.get(index[0]), index[1] + "(" + index[2].replaceAll("\\s+", "") + ")");
+                }
+            }
+        }
+    }
+
     @Test
     public void bothDatabasesHaveTheSameColumnsInEveryTable() {
         Map<String, String> sqlite = SchemaColumns.byTable(SqliteSchema.TABLES);
@@ -77,6 +138,9 @@ public class MariaDbSchemaTest {
             }
             Set<String> actual = new HashSet<>(SchemaColumns.columns(maria.get(table)));
             if (table.equals("users")) actual.remove("username_key"); // MariaDB only: the lower-case key that makes login names unique (TODO 1.9)
+            // MariaDB only (TODO 2.98): the stored generated columns behind its "one at a time" unique keys; SQLite has partial unique indexes
+            if (table.equals("orders")) actual.remove("open_table_key");
+            if (table.equals("time_clock")) actual.remove("open_user_key");
             assertEquals("columns of " + table, expected, actual);
         }
         List<String> onlyInMaria = new ArrayList<>(maria.keySet());

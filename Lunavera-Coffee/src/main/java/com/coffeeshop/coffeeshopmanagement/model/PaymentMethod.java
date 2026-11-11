@@ -19,7 +19,14 @@ public enum PaymentMethod {
      */
     MOMO("payment.momo"),
     ZALOPAY("payment.zalopay"),
-    VNPAY("payment.vnpay");
+    VNPAY("payment.vnpay"),
+    /** A prepaid gift card (TODO 7). Only ever a line of the payment (its code rides in the line), never the main method chosen at the till. */
+    GIFT_CARD("payment.giftcard"),
+    /**
+     * A bill closed with no money (TODO 4.61): a drink for a member of staff, for the owner, or a tasting. Only ever chosen through the
+     * "free drink" window of the till, never as a way to pay, and never part of a split. The stored text fits the 20-character column.
+     */
+    COMPLIMENTARY("payment.complimentary");
 
     /** The key of the name in the language files ({@code /i18n/messages_*.properties}); the name itself follows the language in use. */
     private final String labelKey;
@@ -43,6 +50,11 @@ public enum PaymentMethod {
      */
     public boolean needsReceivedConfirmation() {
         return this == TRANSFER || isEWallet();
+    }
+
+    /** True for a bill closed with no money (a staff, owner or tasting drink, TODO 4.61): nothing was paid and nothing can be refunded. */
+    public boolean isComplimentary() {
+        return this == COMPLIMENTARY;
     }
 
     /** The name shown on screen, the history list and the receipt. */

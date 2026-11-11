@@ -4,12 +4,10 @@ import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.layout.Pane;
 
-import java.text.Collator;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -28,7 +26,6 @@ import java.util.function.Function;
 public final class PagedTable<T> {
 
     public static final int[] DEFAULT_SIZES = {10, 20, 50, 100};
-    private static final Collator COLLATOR = Collator.getInstance(Locale.forLanguageTag("vi"));
 
     private final TableView<T> table;
     private final Pager<T> pager;
@@ -135,7 +132,7 @@ public final class PagedTable<T> {
             return x == y ? 0 : x == null ? -1 : 1;
         }
         if (x instanceof String sx && y instanceof String sy) {
-            return COLLATOR.compare(sx, sy);
+            return VietnameseOrder.compare(sx, sy);
         }
         if (x instanceof Comparable cx && x.getClass().isInstance(y)) {
             return cx.compareTo(y);
@@ -143,6 +140,6 @@ public final class PagedTable<T> {
         if (x instanceof Number nx && y instanceof Number ny) {
             return Double.compare(nx.doubleValue(), ny.doubleValue());
         }
-        return COLLATOR.compare(String.valueOf(x), String.valueOf(y));
+        return VietnameseOrder.compare(String.valueOf(x), String.valueOf(y));
     }
 }

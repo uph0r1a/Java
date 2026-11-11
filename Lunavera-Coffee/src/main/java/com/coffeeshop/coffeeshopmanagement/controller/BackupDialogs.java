@@ -34,7 +34,7 @@ public final class BackupDialogs {
     public static void run(Window owner, Consumer<Boolean> setBusy, Runnable afterSaved, Runnable whenOver) {
         // TODO 2A.4: the backup can be locked with a passphrase; both boxes empty means a plain zip as before. Only for
         // SQLite: the in-app restore is what opens a locked file again, and a MariaDB shop restores by hand (docs/DATABASE.md).
-        final boolean sqlite = com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig.isSqlite();
+        final boolean sqlite = com.coffeeshop.coffeeshopmanagement.service.DatabaseInfo.isSqlite();
         final char[] passphrase;
         if (sqlite) {
             java.util.Optional<char[]> asked = BackupPassphraseDialog.askForNew();
@@ -126,6 +126,7 @@ public final class BackupDialogs {
      * {@code then}; "No" or nothing to ask runs {@code then} at once. {@code then} is the log-out or the close.
      */
     public static void offerBeforeLeaving(Window owner, Runnable then) {
+        com.coffeeshop.coffeeshopmanagement.service.BackupService.autoBackupInBackground(); // logging out: the daily backup if it is due (TODO 2.62)
         if (!Session.isAdmin() || !BackupReminder.shouldAskNow(BackupReminder.now())) {
             then.run();
             return;

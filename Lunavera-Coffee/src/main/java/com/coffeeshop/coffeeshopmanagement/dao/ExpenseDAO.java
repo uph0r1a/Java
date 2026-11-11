@@ -1,6 +1,9 @@
 package com.coffeeshop.coffeeshopmanagement.dao;
 
+import com.coffeeshop.coffeeshopmanagement.util.BusinessDay;
 import com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig;
+import com.coffeeshop.coffeeshopmanagement.model.AuditAction;
+import com.coffeeshop.coffeeshopmanagement.model.AuditTarget;
 import com.coffeeshop.coffeeshopmanagement.model.Expense;
 import com.coffeeshop.coffeeshopmanagement.service.ExpenseRules;
 import com.coffeeshop.coffeeshopmanagement.service.StockRules;
@@ -47,20 +50,40 @@ public class ExpenseDAO {
         } else {
             Permissions.requireAdmin("record an expense");
         }
-        LocalDate today = AppClock.today();
+        LocalDate today = BusinessDay.today(); // the shop's day (TODO 4.50)
         LocalDate day = fromDrawer ? today : spentOn;
         String problem = ExpenseRules.problem(day, amount, category, today);
         if (problem != null) {
             throw new DataAccessException(problem);
         }
+        try (Connection connection = DatabaseConfig.getConnection()) {
+            connection.setAutoCommit(false); // the row and its audit line are one change (TODO 2A.44)
+            try {
+                Expense saved = insert(connection, day, amount, category, note, fromDrawer);
+                connection.commit();
+                return saved;
+            } catch (SQLException | RuntimeException e) {
+                connection.rollback();
+                throw e;
+            }
+        } catch (SQLException e) {
+            throw new DataAccessException("Failed to record the expense", e);
+        }
+    }
+
+    /**
+     * Writes the line on a connection the caller already holds, so that a delivery of ingredients (TODO 4.51) can record what it cost
+     * in the same transaction as the stock it adds. The values must already have passed {@link ExpenseRules#problem}.
+     */
+    static Expense insert(Connection connection, LocalDate day, BigDecimal amount, String category, String note, boolean fromDrawer)
+            throws SQLException {
         String cleanNote = StockRules.cleanText(note);
         Integer by = Session.getCurrentEmployee() == null ? null : Session.getCurrentEmployee().getId();
         String byName = Session.getDisplayName() == null ? "" : Session.getDisplayName();
         var createdAt = AppClock.now();
         String sql = "INSERT INTO expenses (spent_on, amount, category, note, from_drawer, recorded_by, recorded_by_name, created_at) "
                 + "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-        try (Connection connection = DatabaseConfig.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql, java.sql.Statement.RETURN_GENERATED_KEYS)) {
+        try (PreparedStatement statement = connection.prepareStatement(sql, java.sql.Statement.RETURN_GENERATED_KEYS)) {
             statement.setString(1, day.toString());
             statement.setLong(2, Money.toDong(amount));
             statement.setString(3, category);
@@ -75,25 +98,64 @@ public class ExpenseDAO {
                 keys.next();
                 id = keys.getInt(1);
             }
+            AuditDAO.write(connection, AuditAction.EXPENSE_RECORDED, AuditTarget.EXPENSE, id, category, null,
+                    String.valueOf(Money.toDong(amount)), expenseDetail(day, fromDrawer, cleanNote));
             SecurityLog.event(SecurityLog.actor() + " recorded an expense of " + Money.toDong(amount) + " (" + category
                     + (fromDrawer ? ", from the drawer" : "") + ")");
             return new Expense(id, day, amount, category, cleanNote, fromDrawer, by, byName, createdAt);
-        } catch (SQLException e) {
-            throw new DataAccessException("Failed to record the expense", e);
         }
     }
 
-    /** Deletes a line written by mistake (administrators only). A shift already closed keeps the cash-out figure it stored. */
+    /**
+     * The note of an audit line about an expense: {@code day|1 or 0 (from the drawer)|note}. The note comes last and may hold a
+     * {@code |} itself (TODO 2A.44; {@code AuditText} reads it back in words).
+     */
+    static String expenseDetail(LocalDate day, boolean fromDrawer, String note) {
+        return day + "|" + (fromDrawer ? "1" : "0") + "|" + (note == null ? "" : note);
+    }
+
+    /**
+     * Deletes a line written by mistake (administrators only). A shift already closed keeps the cash-out figure it stored. The audit
+     * line keeps what the row held (amount, category, day, note, from the drawer), because the row itself is gone (TODO 2A.44).
+     */
     public boolean delete(int id) {
         Permissions.requireAdmin("delete an expense");
-        try (Connection connection = DatabaseConfig.getConnection();
-             PreparedStatement statement = connection.prepareStatement("DELETE FROM expenses WHERE id = ?")) {
-            statement.setInt(1, id);
-            boolean deleted = statement.executeUpdate() > 0;
-            if (deleted) {
-                SecurityLog.event(SecurityLog.actor() + " deleted expense " + id);
+        try (Connection connection = DatabaseConfig.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                String category;
+                long dong;
+                String detail;
+                try (PreparedStatement read = connection.prepareStatement(
+                        "SELECT spent_on, amount, category, note, from_drawer FROM expenses WHERE id = ?")) {
+                    read.setInt(1, id);
+                    try (ResultSet rs = read.executeQuery()) {
+                        if (!rs.next()) {
+                            connection.rollback();
+                            return false;
+                        }
+                        category = rs.getString(3);
+                        dong = rs.getLong(2);
+                        detail = expenseDetail(LocalDate.parse(rs.getString(1).substring(0, 10)), rs.getInt(5) != 0, rs.getString(4));
+                    }
+                }
+                boolean deleted;
+                try (PreparedStatement statement = connection.prepareStatement("DELETE FROM expenses WHERE id = ?")) {
+                    statement.setInt(1, id);
+                    deleted = statement.executeUpdate() > 0;
+                }
+                if (deleted) {
+                    AuditDAO.write(connection, AuditAction.EXPENSE_DELETED, AuditTarget.EXPENSE, id, category, String.valueOf(dong), null, detail);
+                }
+                connection.commit();
+                if (deleted) {
+                    SecurityLog.event(SecurityLog.actor() + " deleted expense " + id + " (" + dong + ", " + category + ")");
+                }
+                return deleted;
+            } catch (SQLException | RuntimeException e) {
+                connection.rollback();
+                throw e;
             }
-            return deleted;
         } catch (SQLException e) {
             throw new DataAccessException("Failed to delete the expense", e);
         }

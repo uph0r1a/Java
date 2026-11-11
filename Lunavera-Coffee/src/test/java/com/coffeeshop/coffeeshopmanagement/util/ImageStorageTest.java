@@ -225,16 +225,16 @@ public class ImageStorageTest {
 
     @Test
     public void aTextFileWithAPngNameIsRefused() throws IOException {
-        assertNotNull(ImageStorage.pictureProblem(tempImage(".png", "not a picture")));
+        assertNotNull(PictureCheck.pictureProblem(tempImage(".png", "not a picture")));
     }
 
     @Test
     public void anEmptyOrHugeFileIsRefused() throws IOException {
-        assertNotNull(ImageStorage.pictureProblem(tempImage(".png", "")));
+        assertNotNull(PictureCheck.pictureProblem(tempImage(".png", "")));
         File huge = Files.createTempFile("huge", ".png").toFile();
         try (java.io.RandomAccessFile f = new java.io.RandomAccessFile(huge, "rw")) {
             f.setLength(ImageStorage.MAX_PICTURE_BYTES + 1);
         }
-        assertNotNull(ImageStorage.pictureProblem(huge));
+        assertNotNull(PictureCheck.pictureProblem(huge));
     }
 }

@@ -34,16 +34,16 @@ import static org.junit.Assert.*;
 /**
  * TODO 3.13 (rule D1): a sale stays on the day it was paid, a refund is a negative line on the day it was made. The report, the
  * dashboard's revenue and 7-day chart, the payment split and the shift totals all follow it, so cancelling a paid order never changes
- * a day that was already counted. Rows are made by hand with dates in 2031 (no other test writes there) and removed afterwards;
+ * a day that was already counted. Rows are made by hand with dates in 2037 (no other test writes there: EdgeCasesTest used March 2031 and its order was counted here, TODO 2.90) and removed afterwards;
  * the checks on today use before-and-after differences because the database is shared.
  */
 public class RefundDayRuleTest {
 
-    private static final LocalDate D3 = LocalDate.of(2031, 3, 3);
-    private static final LocalDate D10 = LocalDate.of(2031, 3, 10);
-    private static final LocalDate D20 = LocalDate.of(2031, 3, 20);
-    private static final LocalDate FIRST = LocalDate.of(2031, 3, 1);
-    private static final LocalDate LAST = LocalDate.of(2031, 3, 31);
+    private static final LocalDate D3 = LocalDate.of(2037, 3, 3);
+    private static final LocalDate D10 = LocalDate.of(2037, 3, 10);
+    private static final LocalDate D20 = LocalDate.of(2037, 3, 20);
+    private static final LocalDate FIRST = LocalDate.of(2037, 3, 1);
+    private static final LocalDate LAST = LocalDate.of(2037, 3, 31);
 
     private final ReportDAO reports = new ReportDAO();
     private final OrderDAO orders = new OrderDAO();
@@ -294,7 +294,7 @@ public class RefundDayRuleTest {
 
     @Test
     public void aShiftTakesARefundMadeAfterItsCloseIntoTheNextShift() throws SQLException {
-        LocalDate day = LocalDate.of(2031, 4, 1);
+        LocalDate day = LocalDate.of(2037, 4, 1);
         int id = order("CANCELLED", day, at(day, 10), at(day, 16), 100000, 0, 100000, "CASH");
         made.size();
         ShiftDAO shifts = new ShiftDAO();

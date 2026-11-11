@@ -49,7 +49,6 @@ public class FxmlControllerCheckTest {
             "admin-trangchu.fxml:phpMyAdminButton", "admin-trangchu.fxml:reportButton", "admin-trangchu.fxml:revenueXAxis",
             "admin-trangchu.fxml:revenueYAxis", "admin-trangchu.fxml:transferQrButton",
             "dangnhap.fxml:loginCard",
-            "donthanhtoan.fxml:printButton",
             "quanlydanhmuc.fxml:QuanLyDanhMucRoot", "quanlydanhmuc.fxml:addCategoryButton",
             "quanlydonhang.fxml:accountMenuButton", "quanlydonhang.fxml:categoryMenuButton", "quanlydonhang.fxml:editOrderButton",
             "quanlydonhang.fxml:orderHistoryButton", "quanlydonhang.fxml:printOrderButton", "quanlydonhang.fxml:startOrderButton",

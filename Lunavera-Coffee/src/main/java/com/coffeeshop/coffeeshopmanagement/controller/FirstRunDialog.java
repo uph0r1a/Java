@@ -1,7 +1,7 @@
 package com.coffeeshop.coffeeshopmanagement.controller;
 
 import com.coffeeshop.coffeeshopmanagement.util.I18n;
-import com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig;
+import com.coffeeshop.coffeeshopmanagement.service.DatabaseInfo;
 import com.coffeeshop.coffeeshopmanagement.dao.DataAccessException;
 import com.coffeeshop.coffeeshopmanagement.model.Employee;
 import com.coffeeshop.coffeeshopmanagement.model.Role;
@@ -113,7 +113,7 @@ public final class FirstRunDialog {
         }
         if (password == null || !ValidationUtil.isValidPassword(password)
                 || ValidationUtil.containsUsername(password, name)
-                || DatabaseConfig.DEFAULT_ADMIN_PASSWORD.equals(password)) {
+                || DatabaseInfo.isFactoryAdminPassword(password)) {
             return I18n.t("password.problem.weak");
         }
         if (!password.equals(confirm)) return I18n.t("password.mismatch.message");

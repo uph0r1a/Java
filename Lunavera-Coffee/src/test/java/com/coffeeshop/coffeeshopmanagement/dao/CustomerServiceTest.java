@@ -27,7 +27,7 @@ public class CustomerServiceTest {
 
     private String uniquePhone() {
         String digits = UUID.randomUUID().toString().replaceAll("\\D", "");
-        return "0" + digits.substring(0, 9);
+        return "09" + digits.substring(0, 8); // a real mobile number never has 0 after the 0: the +84 forms are read exactly (TODO 3.71)
     }
 
     @Test

@@ -24,7 +24,7 @@ public final class BackupReminder {
 
     /** "Now" for the reminder, from {@link AppClock} so a test that pins the date reaches it too (TODO 6.50). */
     public static Instant now() {
-        return AppClock.now().atZone(java.time.ZoneId.systemDefault()).toInstant();
+        return AppClock.now().atZone(AppClock.zone()).toInstant(); // the zone AppClock reads in (TODO 3.68)
     }
 
     /** When a backup was last saved by hand outside the data folder on this computer, or null. */

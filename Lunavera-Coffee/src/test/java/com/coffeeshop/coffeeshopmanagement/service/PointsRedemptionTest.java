@@ -144,17 +144,17 @@ public class PointsRedemptionTest {
         Product product = newProduct(10, "40000", null);
         Customer customer = newCustomer(100);
 
-        CheckoutService.PaidOrder paid = pay(product, 1, customer, cash("0", null, "30000", 10), Role.ADMIN);
+        CheckoutService.PaidOrder paid = pay(product, 1, customer, cash("0", null, "20000", 20), Role.ADMIN);
 
         Order order = orderDAO.findById(paid.order().getId()).orElseThrow();
         assertEquals(OrderStatus.PAID, order.getStatus());
-        assertEquals(0, new BigDecimal("30000").compareTo(order.getTotal()));
-        assertEquals("the value of the points is inside the discount", 0, new BigDecimal("10000").compareTo(order.getDiscount()));
-        assertEquals(Integer.valueOf(10), order.getPointsRedeemed());
-        assertEquals(0, new BigDecimal("10000").compareTo(order.getPointsValue()));
-        assertEquals(I18n.t("order.discount.reason.points", 10), order.getDiscountReason());
-        assertEquals("earned on what was paid: 30.000 = 3 points", Integer.valueOf(3), order.getPointsEarned());
-        assertEquals("100 - 10 spent + 3 earned", 93, pointsOf(customer));
+        assertEquals(0, new BigDecimal("20000").compareTo(order.getTotal()));
+        assertEquals("the value of the points is inside the discount", 0, new BigDecimal("20000").compareTo(order.getDiscount()));
+        assertEquals(Integer.valueOf(20), order.getPointsRedeemed());
+        assertEquals(0, new BigDecimal("20000").compareTo(order.getPointsValue()));
+        assertEquals(I18n.t("order.discount.reason.points", 20), order.getDiscountReason());
+        assertEquals("earned on what was paid: 20.000 = 2 points", Integer.valueOf(2), order.getPointsEarned());
+        assertEquals("100 - 20 spent + 2 earned", 82, pointsOf(customer));
         assertEquals(9, stockOf(product));
     }
 
@@ -172,20 +172,20 @@ public class PointsRedemptionTest {
     public void theCashiersDiscountLimitDoesNotApplyToPoints() {
         Product product = newProduct(10, "40000", null);
         Customer customer = newCustomer(100);
-        // an ordinary employee may give 10% = 4.000 of their own; the customer's own points are worth 10.000 here
-        CheckoutService.PaidOrder paid = pay(product, 1, customer, cash("0", null, "30000", 10), Role.EMPLOYEE);
-        assertEquals(Integer.valueOf(10), orderDAO.findById(paid.order().getId()).orElseThrow().getPointsRedeemed());
+        // an ordinary employee may give 10% = 4.000 of their own; the customer's own points are worth 20.000 here
+        CheckoutService.PaidOrder paid = pay(product, 1, customer, cash("0", null, "20000", 20), Role.EMPLOYEE);
+        assertEquals(Integer.valueOf(20), orderDAO.findById(paid.order().getId()).orElseThrow().getPointsRedeemed());
     }
 
     @Test
     public void aCashiersOwnDiscountAndPointsAddUpAndBothReasonsAreKept() {
         Product product = newProduct(10, "40000", null);
         Customer customer = newCustomer(100);
-        CheckoutService.PaidOrder paid = pay(product, 1, customer, cash("2000", "Khách quen", "28000", 10), Role.ADMIN);
+        CheckoutService.PaidOrder paid = pay(product, 2, customer, cash("2000", "Khách quen", "58000", 20), Role.ADMIN);
         Order order = orderDAO.findById(paid.order().getId()).orElseThrow();
-        assertEquals(0, new BigDecimal("12000").compareTo(order.getDiscount()));
-        assertEquals(0, new BigDecimal("28000").compareTo(order.getTotal()));
-        assertEquals("Khách quen · " + I18n.t("order.discount.reason.points", 10), order.getDiscountReason());
+        assertEquals(0, new BigDecimal("22000").compareTo(order.getDiscount()));
+        assertEquals(0, new BigDecimal("58000").compareTo(order.getTotal()));
+        assertEquals("Khách quen · " + I18n.t("order.discount.reason.points", 20), order.getDiscountReason());
     }
 
     @Test
@@ -193,7 +193,7 @@ public class PointsRedemptionTest {
         Product product = newProduct(10, "40000", null);
         Customer customer = newCustomer(5);
         DataAccessException refused = assertThrows(DataAccessException.class,
-                () -> pay(product, 1, customer, cash("0", null, "30000", 10), Role.ADMIN));
+                () -> pay(product, 1, customer, cash("0", null, "20000", 20), Role.ADMIN));
         assertEquals(I18n.t("pos.points.notenough", 5), refused.getMessage());
         assertEquals("no stock was taken", 10, stockOf(product));
         assertEquals("no points were taken", 5, pointsOf(customer));
@@ -216,7 +216,7 @@ public class PointsRedemptionTest {
     public void pointsNeedACustomerAndANegativeNumberIsNotAPayment() {
         Product product = newProduct(10, "40000", null);
         DataAccessException none = assertThrows(DataAccessException.class,
-                () -> pay(product, 1, null, cash("0", null, "30000", 10), Role.ADMIN));
+                () -> pay(product, 1, null, cash("0", null, "20000", 20), Role.ADMIN));
         assertEquals(I18n.t("pos.points.nocustomer"), none.getMessage());
         Customer customer = newCustomer(100);
         DataAccessException negative = assertThrows(DataAccessException.class,
@@ -232,7 +232,7 @@ public class PointsRedemptionTest {
         Customer onScreen = newCustomer(100); // what this till's screen still shows
         setPoints(onScreen, 3);               // what the database holds now
         DataAccessException refused = assertThrows(DataAccessException.class,
-                () -> pay(product, 1, onScreen, cash("0", null, "30000", 10), Role.ADMIN));
+                () -> pay(product, 1, onScreen, cash("0", null, "20000", 20), Role.ADMIN));
         assertEquals(I18n.t("order.points.notenough"), refused.getMessage());
         assertEquals("the sale was rolled back: stock", 10, stockOf(product));
         assertEquals("the balance is what it was", 3, pointsOf(onScreen));
@@ -252,13 +252,13 @@ public class PointsRedemptionTest {
         open = orderDAO.saveOrUpdateOpenOrder(open, List.of());
 
         CheckoutService.PaidOrder paid = checkout.pay(null, List.of(lineFor(product, 1)), new BigDecimal("40000"), customer, "", "", open,
-                cash("0", null, "30000", 10), null, Role.ADMIN);
+                cash("0", null, "20000", 20), null, Role.ADMIN);
 
         Order order = orderDAO.findById(paid.order().getId()).orElseThrow();
         assertEquals(open.getId(), order.getId());
-        assertEquals(Integer.valueOf(10), order.getPointsRedeemed());
-        assertEquals(0, new BigDecimal("10000").compareTo(order.getDiscount()));
-        assertEquals(40 + 3, pointsOf(customer));
+        assertEquals(Integer.valueOf(20), order.getPointsRedeemed());
+        assertEquals(0, new BigDecimal("20000").compareTo(order.getDiscount()));
+        assertEquals(30 + 2, pointsOf(customer));
     }
 
     // ------------------------------------------------------------------ refunds (rule D5)
@@ -267,8 +267,8 @@ public class PointsRedemptionTest {
     public void aRefundGivesTheSpentPointsBackAndTakesTheEarnedOnesBack() {
         Product product = newProduct(10, "40000", null);
         Customer customer = newCustomer(100);
-        int orderId = pay(product, 1, customer, cash("0", null, "30000", 10), Role.ADMIN).order().getId();
-        assertEquals(93, pointsOf(customer));
+        int orderId = pay(product, 1, customer, cash("0", null, "20000", 20), Role.ADMIN).order().getId();
+        assertEquals(82, pointsOf(customer));
 
         orderDAO.cancelPaidOrder(orderId, true);
 
@@ -281,12 +281,12 @@ public class PointsRedemptionTest {
     public void aRefundNeverTakesTheBalanceBelowZeroButStillGivesTheSpentPointsBack() {
         Product product = newProduct(10, "40000", null);
         Customer customer = newCustomer(100);
-        int orderId = pay(product, 1, customer, cash("0", null, "30000", 10), Role.ADMIN).order().getId();
+        int orderId = pay(product, 1, customer, cash("0", null, "20000", 20), Role.ADMIN).order().getId();
         setPoints(customer, 1); // the customer has spent the rest since (decision 3.7: the balance floors at 0)
 
         orderDAO.cancelPaidOrder(orderId, false);
 
-        assertEquals("1 - 3 earned floors at 0, then the 10 spent come back", 10, pointsOf(customer));
+        assertEquals("1 - 2 earned floors at 0, then the 20 spent come back", 20, pointsOf(customer));
     }
 
     @Test
@@ -303,7 +303,7 @@ public class PointsRedemptionTest {
     public void aRefundDoesNotGivePointsToACustomerWhoWasMadeAnonymousSince() {
         Product product = newProduct(10, "40000", null);
         Customer customer = newCustomer(100);
-        int orderId = pay(product, 1, customer, cash("0", null, "30000", 10), Role.ADMIN).order().getId();
+        int orderId = pay(product, 1, customer, cash("0", null, "20000", 20), Role.ADMIN).order().getId();
         try (Connection c = DatabaseConfig.getConnection();
              PreparedStatement st = c.prepareStatement("UPDATE customers SET loyalty_points = 0, anonymised_at = ? WHERE id = ?")) {
             st.setString(1, com.coffeeshop.coffeeshopmanagement.util.DbTime.write(AppClock.now()));
@@ -329,15 +329,15 @@ public class PointsRedemptionTest {
 
         Product product = newProduct(10, "40000", "10000");
         Customer customer = newCustomer(100);
-        pay(product, 1, customer, cash("0", null, "30000", 10), Role.ADMIN);
+        pay(product, 1, customer, cash("0", null, "20000", 20), Role.ADMIN);
 
         ReportDAO.Profit after = reports.profit(day, day);
         ReportDAO.Summary summaryAfter = reports.summary(day, day);
-        assertEquals("revenue is what was paid", 0, new BigDecimal("30000").compareTo(
+        assertEquals("revenue is what was paid", 0, new BigDecimal("20000").compareTo(
                 summaryAfter.revenue().subtract(summaryBefore.revenue())));
-        assertEquals("profit = what was paid - the cost of the goods", 0, new BigDecimal("20000").compareTo(
+        assertEquals("profit = what was paid - the cost of the goods", 0, new BigDecimal("10000").compareTo(
                 after.grossProfit().subtract(before.grossProfit())));
-        assertEquals("the discounts total includes the points", 0, new BigDecimal("10000").compareTo(
+        assertEquals("the discounts total includes the points", 0, new BigDecimal("20000").compareTo(
                 summaryAfter.discounts().subtract(summaryBefore.discounts())));
     }
 }

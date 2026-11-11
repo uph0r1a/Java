@@ -22,7 +22,7 @@ public class CustomerDAOTest {
         // Matches ValidationUtil.isValidPhone's pattern (0 + 9-10 digits); last 9 digits from a
         // random UUID keep every test's phone number unique without colliding with another test.
         String digits = UUID.randomUUID().toString().replaceAll("\\D", "");
-        return "0" + digits.substring(0, 9);
+        return "09" + digits.substring(0, 8); // a real mobile number never has 0 after the 0: the +84 forms are read exactly (TODO 3.71)
     }
 
     @Test

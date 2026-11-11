@@ -1,6 +1,5 @@
 package com.coffeeshop.coffeeshopmanagement.controller;
 
-import com.coffeeshop.coffeeshopmanagement.dao.CategoryDAO;
 import com.coffeeshop.coffeeshopmanagement.dao.DataAccessException;
 import com.coffeeshop.coffeeshopmanagement.model.Category;
 import com.coffeeshop.coffeeshopmanagement.util.AlertUtil;
@@ -25,7 +24,8 @@ import javafx.scene.layout.GridPane;
  */
 public final class CategoryDialog {
 
-    private static final CategoryDAO CATEGORIES = new CategoryDAO();
+    private static final com.coffeeshop.coffeeshopmanagement.service.CategoryService SERVICE =
+            new com.coffeeshop.coffeeshopmanagement.service.CategoryService();
 
     private CategoryDialog() {
     }
@@ -71,22 +71,9 @@ public final class CategoryDialog {
                 event.consume();
                 return;
             }
-            // Edit a copy: the table shows `existing`, so it must not change until the database accepted the save (TODO 2.76).
-            Category category = existing != null
-                    ? new Category(existing.getId(), existing.getName(), existing.getDescription(), existing.isActive())
-                    : new Category();
-            category.setName(nameField.getText().trim());
-            category.setDescription(descriptionField.getText());
-            category.setActive(activeBox.isSelected());
             try {
-                if (existing == null) {
-                    CATEGORIES.insert(category);
-                } else {
-                    CATEGORIES.update(category);
-                    existing.setName(category.getName());
-                    existing.setDescription(category.getDescription());
-                    existing.setActive(category.isActive());
-                }
+                // The permission, the copy-then-apply and the save are in CategoryService.save (TODO 6.21, 2.76).
+                SERVICE.save(existing, nameField.getText(), descriptionField.getText(), activeBox.isSelected());
                 saved[0] = true;
             } catch (DataAccessException e) {
                 AlertUtil.error(Messages.get("category.dialog.saveFailed.title"), e.getMessage());

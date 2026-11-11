@@ -67,18 +67,37 @@ public final class ImageStorage {
             extension = "jpg";
         }
         Path dir = directory();
+        // What is stored is not the picked file but a cleaned copy of it: the right way up, at most PictureCleaner.MAX_SIDE pixels on
+        // the long side, and none of the original's metadata (the GPS position of a phone photo, TODO 3.73).
+        PictureCleaner.Cleaned cleaned = cleaned(source.toPath(), extension);
+        extension = cleaned.extension();
         for (int attempt = 0; attempt < MAX_NAME_ATTEMPTS; attempt++) {
             String fileName = baseNames.get() + "." + extension;
             try {
-                // No REPLACE_EXISTING: Files.copy then fails with FileAlreadyExistsException
-                // instead of overwriting another product's picture.
-                Files.copy(source.toPath(), dir.resolve(fileName));
+                // CREATE_NEW: fails with FileAlreadyExistsException instead of overwriting another product's picture.
+                Files.write(dir.resolve(fileName), cleaned.bytes(), java.nio.file.StandardOpenOption.CREATE_NEW);
                 return fileName;
             } catch (FileAlreadyExistsException taken) {
                 // Pick another name and try again.
             }
         }
         throw new IOException(I18n.t("image.name.fail"));
+    }
+
+    /**
+     * The bytes to store for a picked file. A picture {@link PictureCleaner} can read is cleaned; one it cannot (an unusual JPEG, a file
+     * that only JavaFX opens, or one with more pixels than we decode) is kept as it is, but a JPEG still loses its Exif, XMP, IPTC and
+     * comment segments, which is where the position is. Anything else that is not a picture is copied, as before.
+     */
+    static PictureCleaner.Cleaned cleaned(Path source, String extension) throws IOException {
+        byte[] original = Files.readAllBytes(source);
+        boolean jpeg = extension.equals("jpg") || extension.equals("jpeg");
+        ImageSize.Size size = ImageSize.read(source);
+        if (size == null || size.pixels() <= MAX_PICTURE_PIXELS) {
+            PictureCleaner.Cleaned made = PictureCleaner.clean(original, extension);
+            if (made != null) return made;
+        }
+        return new PictureCleaner.Cleaned(jpeg ? JpegMetadata.withoutMetadata(original) : original, extension);
     }
 
     /** Lowercase extension without the dot, or an empty string when there is none. */
@@ -89,29 +108,6 @@ public final class ImageStorage {
     public static final long MAX_PICTURE_PIXELS = 16_000_000L;
     /** The longest side of a picture; stops a one-pixel-high strip of enormous width that stays under the pixel count. */
     public static final int MAX_PICTURE_SIDE = 8_000;
-
-    /**
-     * Looks at a picked file before it is copied: not empty, not larger than {@link #MAX_PICTURE_BYTES}, not larger in pixels than
-     * {@link #MAX_PICTURE_PIXELS} (read from the file's header, nothing is decoded for this), and the content really decodes as a
-     * picture (a renamed text file with a .png name is refused). Returns the problem in the language in use, or null when the
-     * picture is fine.
-     *
-     * <p>Reading and decoding a picture takes time, so call this from a background thread ({@code Async}), not the screen thread.
-     */
-    public static String pictureProblem(File file) {
-        String problem = sizeProblem(file);
-        if (problem != null) return problem;
-        try {
-            // A small requested size: the picture is only checked to decode, so there is no need to build it at full size.
-            javafx.scene.image.Image image = new javafx.scene.image.Image(file.toURI().toString(), 64, 64, true, false);
-            if (image.isError() || image.getWidth() <= 0 || image.getHeight() <= 0) {
-                return I18n.t("image.invalid");
-            }
-        } catch (RuntimeException e) {
-            return I18n.t("image.invalid");
-        }
-        return null;
-    }
 
     /** The checks that need no picture library: present, not empty, not too many bytes, not too many pixels (TODO 3.43). */
     static String sizeProblem(File file) {

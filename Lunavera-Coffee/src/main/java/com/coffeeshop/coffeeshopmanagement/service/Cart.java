@@ -1,5 +1,6 @@
 package com.coffeeshop.coffeeshopmanagement.service;
 
+import com.coffeeshop.coffeeshopmanagement.model.LineChoice;
 import com.coffeeshop.coffeeshopmanagement.model.OrderItem;
 import com.coffeeshop.coffeeshopmanagement.model.Product;
 
@@ -42,9 +43,19 @@ public final class Cart {
      * topped up by tapping the product again: the second cup may be wanted with the usual sugar.
      */
     public Optional<OrderItem> lineFor(int productId) {
+        return lineFor(productId, LineChoice.NONE);
+    }
+
+    /**
+     * The line of this product with no note and exactly this size and these extras, if any (TODO 4.47): a Large is never topped up by
+     * tapping a Small, and a drink with an extra shot is its own line.
+     */
+    public Optional<OrderItem> lineFor(int productId, LineChoice choice) {
+        String key = LineOptions.key(choice);
         return lines.stream()
                 .filter(item -> item.getProductId() != null && item.getProductId() == productId)
                 .filter(item -> item.getNote() == null)
+                .filter(item -> java.util.Objects.equals(LineOptions.key(item), key))
                 .findFirst();
     }
 
@@ -58,7 +69,15 @@ public final class Cart {
 
     /** One more piece of the product: on its plain line (no note), or on a new line at the product's current price. */
     public Result add(Product product) {
-        Optional<OrderItem> existing = lineFor(product.getId());
+        return add(product, LineChoice.NONE);
+    }
+
+    /**
+     * One more piece of the product with a size and extras (TODO 4.47): on the line that has the same ones, or on a new line priced at
+     * the product's price plus what the choice adds (never below zero), with the names and cost of the choice copied onto it.
+     */
+    public Result add(Product product, LineChoice choice) {
+        Optional<OrderItem> existing = lineFor(product.getId(), choice);
         int newQuantity = existing.map(OrderItem::getQuantity).orElse(0) + 1;
         if (newQuantity > Limits.MAX_LINE_QUANTITY) {
             return new Result(Outcome.LINE_LIMIT, product.getStock());
@@ -74,10 +93,46 @@ public final class Cart {
         item.setProductId(product.getId());
         item.setProductName(product.getName());
         item.setQuantity(1);
-        item.setUnitPrice(product.getPrice());
-        item.setLineTotal(product.getPrice());
+        BigDecimal unitPrice = product.getPrice().add(choice.priceDelta()).max(BigDecimal.ZERO);
+        item.setUnitPrice(unitPrice);
+        item.setLineTotal(unitPrice);
+        LineOptions.apply(item, choice);
         lines.add(item);
         return new Result(Outcome.ADDED, product.getStock());
+    }
+
+    /**
+     * Up to {@code quantity} pieces of the product, with {@code note} (null or empty: none), at the product's current price (TODO 4.56,
+     * "the same as last time"). They go on the line of the same product that carries exactly this note, or on a new one. Never more
+     * than the stock leaves (all lines of the product together) and never past the per-line ceiling.
+     *
+     * @return how many pieces were added: all of them, or fewer, or none when the stock or the ceiling leaves no room
+     */
+    public int addMany(Product product, int quantity, String note) {
+        String cleaned = OrderNote.clean(note);
+        Optional<OrderItem> existing = lines.stream()
+                .filter(item -> item.getProductId() != null && item.getProductId() == product.getId())
+                .filter(item -> Objects.equals(item.getNote(), cleaned))
+                .findFirst();
+        int onLine = existing.map(OrderItem::getQuantity).orElse(0);
+        int room = Math.min(product.getStock() - quantityOf(product.getId()), Limits.MAX_LINE_QUANTITY - onLine);
+        int added = Math.max(0, Math.min(quantity, room));
+        if (added == 0) {
+            return 0;
+        }
+        if (existing.isPresent()) {
+            setQuantity(existing.get(), onLine + added);
+            return added;
+        }
+        OrderItem item = new OrderItem();
+        item.setProductId(product.getId());
+        item.setProductName(product.getName());
+        item.setNote(cleaned);
+        item.setUnitPrice(product.getPrice());
+        item.setQuantity(added);
+        item.setLineTotal(product.getPrice().multiply(java.math.BigDecimal.valueOf(added)));
+        lines.add(item);
+        return added;
     }
 
     /**
@@ -115,7 +170,7 @@ public final class Cart {
         if (line.getProductId() != null) {
             Optional<OrderItem> same = lines.stream()
                     .filter(other -> other != line && java.util.Objects.equals(other.getProductId(), line.getProductId())
-                            && java.util.Objects.equals(other.getNote(), note))
+                            && java.util.Objects.equals(other.getNote(), note) && LineOptions.same(other, line))
                     .findFirst();
             if (same.isPresent() && same.get().getQuantity() + line.getQuantity() <= Limits.MAX_LINE_QUANTITY) {
                 int total = same.get().getQuantity() + line.getQuantity();
@@ -137,6 +192,37 @@ public final class Cart {
         int others = quantityOf(product.getId()) - (line != null && line.getProductId() != null && line.getProductId() == product.getId()
                 ? line.getQuantity() : 0);
         return others + wantedQuantity > product.getStock();
+    }
+
+    /** What a change of one line's quantity should do (TODO 6.5: it was the middle of {@code OrderController.changeQuantity}). */
+    public enum QuantityMove {
+        /** The same number: nothing happens. */
+        UNCHANGED,
+        /** The new number is over the ceiling of one line (TODO 3.59): say so. */
+        LINE_LIMIT,
+        /** The stock cannot cover the new number (TODO 4.9): say so. */
+        NOT_ENOUGH_STOCK,
+        /** The line would go to 0: ask before removing it (TODO 5.5). */
+        ASK_REMOVE,
+        /** Go ahead and set it. */
+        SET
+    }
+
+    /**
+     * "+", "-" and a typed number (TODO 5.27) all come through here, so no way of changing a quantity can skip the limit, the stock warning
+     * or the "remove the line?" question. The checks run in this order; the stock is asked about only when the number goes up and the
+     * ceiling allows it.
+     *
+     * @param overStock answers whether the stock cannot cover the new number (it reads the stock, so it is asked last)
+     */
+    public static QuantityMove decideQuantity(int current, int wanted, java.util.function.BooleanSupplier overStock) {
+        if (wanted == current) return QuantityMove.UNCHANGED;
+        if (wanted > current) {
+            if (exceedsLineLimit(wanted)) return QuantityMove.LINE_LIMIT;
+            if (overStock.getAsBoolean()) return QuantityMove.NOT_ENOUGH_STOCK;
+        }
+        if (wanted < current && wanted <= 0) return QuantityMove.ASK_REMOVE;
+        return QuantityMove.SET;
     }
 
     /** Would {@code wantedQuantity} pieces on one line be more than the ceiling? */

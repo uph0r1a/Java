@@ -74,7 +74,7 @@ public class LanguageFollowsTest {
         assertEquals("The discount cannot be larger than the subtotal.",
                 DiscountPolicy.messageFor(DiscountPolicy.Result.ABOVE_SUBTOTAL, Role.EMPLOYEE, subtotal));
         String limit = DiscountPolicy.messageFor(DiscountPolicy.Result.ABOVE_STAFF_LIMIT, Role.EMPLOYEE, subtotal);
-        assertTrue(limit, limit.startsWith("Staff may give a discount of at most " + DiscountPolicy.STAFF_MAX_PERCENT + "%"));
+        assertTrue(limit, limit.startsWith("Staff may give a discount of at most " + DiscountPolicy.staffMaxPercent() + "%"));
         assertFalse(limit, limit.contains("{"));
         String reason = DiscountPolicy.messageFor(DiscountPolicy.Result.REASON_TOO_LONG, Role.ADMIN, subtotal);
         assertTrue(reason, reason.contains(String.valueOf(DiscountPolicy.REASON_MAX_LENGTH)));

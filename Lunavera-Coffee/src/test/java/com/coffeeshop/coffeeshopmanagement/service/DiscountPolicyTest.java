@@ -91,7 +91,7 @@ public class DiscountPolicyTest {
     @Test
     public void theStaffLimitMessageNamesThePercentage() {
         String message = DiscountPolicy.messageFor(Result.ABOVE_STAFF_LIMIT, Role.EMPLOYEE, d(100_000));
-        assertTrue(message, message.contains(DiscountPolicy.STAFF_MAX_PERCENT + "%"));
+        assertTrue(message, message.contains(DiscountPolicy.staffMaxPercent() + "%"));
     }
 
     @Test

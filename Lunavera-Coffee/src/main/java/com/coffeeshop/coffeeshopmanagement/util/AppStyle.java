@@ -1,14 +1,18 @@
 package com.coffeeshop.coffeeshopmanagement.util;
 
+import com.coffeeshop.coffeeshopmanagement.service.LargeTextSheet;
 import javafx.collections.ListChangeListener;
 import javafx.scene.Scene;
 import javafx.scene.text.Font;
 import javafx.stage.Window;
 
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * One font for the whole app (TODO 1.6). Georgia and Segoe UI differ per machine, and the Georgia that ships
@@ -32,6 +36,9 @@ public final class AppStyle {
 
     public static final String FONT_FAMILY = "Be Vietnam Pro";
     public static final String STYLESHEET = "/css/app.css";
+    /** The folder of the generated sheets of the large text (TODO 5.44): one beside each sheet that sets a font size, plus base.css. */
+    public static final String LARGE_DIR = "/css/" + LargeTextSheet.DIR_NAME + "/";
+    private static final Pattern SHEET_NAME = Pattern.compile("/css/([\\w.-]+\\.css)$");
 
     private static boolean installed;
 
@@ -79,6 +86,49 @@ public final class AppStyle {
         String external = sheet.toExternalForm();
         if (!scene.getStylesheets().contains(external)) {
             scene.getStylesheets().add(external);
+            FitFix.protectScene(scene); // text is not cut to "..." where a label or button can keep its size (TODO 1.7)
+            scene.rootProperty().addListener((o, oldRoot, newRoot) -> {
+                FitFix.protectScene(scene); // a screen swapped into the same window
+                syncLargeText(scene); // and it brings its own sheets
+            });
         }
+        syncLargeText(scene);
+    }
+
+    /**
+     * While the choice is "Lớn" (TODO 5.44): adds {@code large/base.css} and, beside every sheet the window loads (its scene's and its
+     * root's, which is where an FXML file's sheets are), that sheet's generated companion. While it is not, takes them all off.
+     * Each screen gets the companions of its own sheets only, so a class that two screens size differently stays right on both.
+     */
+    static void syncLargeText(Scene scene) {
+        if (scene == null) return;
+        List<String> sceneSheets = scene.getStylesheets();
+        List<String> rootSheets = scene.getRoot() == null ? null : scene.getRoot().getStylesheets();
+        sceneSheets.removeIf(sheet -> sheet.contains(LARGE_DIR));
+        if (rootSheets != null) rootSheets.removeIf(sheet -> sheet.contains(LARGE_DIR));
+        if (!TextSize.isLarge()) return;
+        URL base = AppStyle.class.getResource(LARGE_DIR + LargeTextSheet.BASE_NAME);
+        if (base != null) sceneSheets.add(base.toExternalForm());
+        addCompanions(sceneSheets);
+        if (rootSheets != null) addCompanions(rootSheets);
+    }
+
+    private static void addCompanions(List<String> sheets) {
+        for (String sheet : new ArrayList<>(sheets)) {
+            Matcher name = SHEET_NAME.matcher(sheet);
+            if (!name.find()) continue;
+            URL companion = AppStyle.class.getResource(LARGE_DIR + name.group(1));
+            if (companion != null && !sheets.contains(companion.toExternalForm())) sheets.add(companion.toExternalForm());
+        }
+    }
+
+    /** Chooses the text size ({@link TextSize}) and, when it changed, applies it to every open window at once (screen thread). */
+    public static void chooseTextSize(boolean large) {
+        if (TextSize.choose(large)) refreshAll();
+    }
+
+    /** After the text size was chosen: every open window follows at once (screen thread). */
+    static void refreshAll() {
+        for (Window window : Window.getWindows()) syncLargeText(window.getScene());
     }
 }

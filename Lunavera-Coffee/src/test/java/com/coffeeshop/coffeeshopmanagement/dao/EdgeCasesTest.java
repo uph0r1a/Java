@@ -120,6 +120,26 @@ public class EdgeCasesTest {
                 orderDAO.findHistoryPage(new OrderDAO.HistoryFilter(null, null, day, day), 50, 0).size());
     }
 
+    /** TODO 6.32 (the one case of the 6th scan list that had no test): the summary and the daily chart must count the same PAID order the same way. */
+    @Test
+    public void summaryAndDailySalesAgreeForAPaidOrderWithoutAPayTime() {
+        Product p = product(true);
+        Order o = paid();
+        LocalDateTime opened = TestDatabaseSupport.freshDay().atTime(12, 0); // a day of its own: nothing else of the run is counted
+        o.setOrderDate(opened);
+        o.setPaidAt(null); // an order saved by an older version: PAID, but no pay time; it counts on the day it was opened
+        orderDAO.insert(o, List.of(line(p)));
+        com.coffeeshop.coffeeshopmanagement.dao.ReportDAO reports = new com.coffeeshop.coffeeshopmanagement.dao.ReportDAO();
+        java.time.LocalDate day = opened.toLocalDate();
+        var summary = reports.summary(day, day);
+        var days = reports.dailySales(day, day);
+        assertEquals(1, summary.paidOrders());
+        assertEquals("one day with sales", 1, days.size());
+        assertEquals(summary.paidOrders(), days.get(0).orders());
+        assertEquals("the same money", 0, summary.revenue().compareTo(days.get(0).revenue()));
+        assertEquals(day, days.get(0).date());
+    }
+
     @Test
     public void anAutosaveOfAnOrderThatWasClosedElsewhereIsReported() {
         Order open = new Order();

@@ -8,6 +8,7 @@ import com.coffeeshop.coffeeshopmanagement.dao.ReportDAO.Summary;
 import com.coffeeshop.coffeeshopmanagement.util.AlertUtil;
 import com.coffeeshop.coffeeshopmanagement.util.Async;
 import com.coffeeshop.coffeeshopmanagement.util.CurrencyUtil;
+import com.coffeeshop.coffeeshopmanagement.util.ReportCsv;
 import com.coffeeshop.coffeeshopmanagement.util.Session;
 import com.coffeeshop.coffeeshopmanagement.service.SalesPatterns;
 import com.coffeeshop.coffeeshopmanagement.service.SalesPatternsText;
@@ -37,6 +38,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 
+import static com.coffeeshop.coffeeshopmanagement.util.ReportTexts.*;
+
 /**
  * Admin-only sales report (opened from the admin dashboard): totals for a date range, best
  * sellers, and revenue per day, with CSV export. Non-modal window built in code for the same
@@ -48,9 +51,9 @@ public final class ReportWindow {
     private static final int TOP_PRODUCTS_LIMIT = 20;
     private static final int SHIFT_HISTORY_LIMIT = 100;
 
-    private final ReportDAO reportDAO = new ReportDAO();
-    private final DatePicker fromPicker = new DatePicker(com.coffeeshop.coffeeshopmanagement.util.AppClock.today().withDayOfMonth(1));
-    private final DatePicker toPicker = new DatePicker(com.coffeeshop.coffeeshopmanagement.util.AppClock.today());
+    private final com.coffeeshop.coffeeshopmanagement.service.ReportService reportService = new com.coffeeshop.coffeeshopmanagement.service.ReportService();
+    private final DatePicker fromPicker = com.coffeeshop.coffeeshopmanagement.util.DateBoxes.picker(com.coffeeshop.coffeeshopmanagement.util.BusinessDay.today().withDayOfMonth(1));
+    private final DatePicker toPicker = com.coffeeshop.coffeeshopmanagement.util.DateBoxes.picker(com.coffeeshop.coffeeshopmanagement.util.BusinessDay.today());
     private final Label summaryLabel = new Label(I18n.t("common.loading"));
     private final TableView<ProductSales> productTable = new TableView<>();
     private final TableView<DailySales> dailyTable = new TableView<>();
@@ -62,12 +65,16 @@ public final class ReportWindow {
     private final TableView<SalesPatterns.WeekdaySlot> weekdayTable = new TableView<>();
     private final TableView<ReportDAO.CategorySales> categoryTable = new TableView<>();
     private final Button exportButton = new Button(I18n.t("common.exportcsv"));
+    private final OptionSalesPage optionPage = new OptionSalesPage(); // TODO 4.47
 
     private Summary lastSummary;
     private List<ProductSales> lastProducts = List.of();      // the best sellers shown on screen
     private List<ProductSales> lastAllProducts = List.of();   // every product that sold: what the CSV holds (TODO 5.34)
     private List<DailySales> lastDaily = List.of();
     private List<ReportDAO.PaymentSplit> lastSplit = List.of();
+    private List<ReportDAO.ChannelSales> lastChannels = List.of(); // TODO 4.48
+    private List<ReportDAO.DiscountLine> lastDiscounts = List.of(); // TODO 2.37
+    private com.coffeeshop.coffeeshopmanagement.dao.GiftCardDAO.OpenBalance lastGiftCards; // TODO 4.45: what is still on cards, now (not of the period)
     private ReportDAO.Profit lastProfit;
     private ReportDAO.Waste lastWaste;
     private ReportDAO.Expenses lastExpenses;           // expenses of the range, for "Chi phí" and "Lợi nhuận ròng" (TODO 4.38)
@@ -77,7 +84,7 @@ public final class ReportWindow {
     private List<SalesPatterns.WeekdaySlot> lastWeekdays = List.of();
     private List<ReportDAO.CategorySales> lastCategories = List.of();
     private List<com.coffeeshop.coffeeshopmanagement.dao.ShiftDAO.EmployeeShare> lastEmployees = List.of();
-    private final com.coffeeshop.coffeeshopmanagement.dao.ShiftDAO shiftDAO = new com.coffeeshop.coffeeshopmanagement.dao.ShiftDAO();
+    private final com.coffeeshop.coffeeshopmanagement.service.ShiftService shiftService = new com.coffeeshop.coffeeshopmanagement.service.ShiftService();
     private final TableView<com.coffeeshop.coffeeshopmanagement.dao.ShiftDAO.EmployeeShare> employeeTable = new TableView<>();
     private final TableView<com.coffeeshop.coffeeshopmanagement.model.ShiftClose> shiftTable = new TableView<>();
     private LocalDate lastFrom;
@@ -133,7 +140,7 @@ public final class ReportWindow {
         HBox.setHgrow(spacer, Priority.ALWAYS);
         HBox filters = new HBox(10, new Label(I18n.t("report.from")), fromPicker, new Label(I18n.t("report.to")), toPicker);
         filters.getChildren().addAll(com.coffeeshop.coffeeshopmanagement.util.DatePresets.buttons(fromPicker, toPicker, this::reload));
-        filters.getChildren().addAll(viewButton, spacer, exportButton);
+        filters.getChildren().addAll(viewButton, spacer, discountButton(), RevenueBookExport.button(() -> lastFrom, () -> lastTo), exportButton);
         filters.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
 
         summaryLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
@@ -206,12 +213,11 @@ public final class ReportWindow {
         shiftTable.getColumns().add(this.<com.coffeeshop.coffeeshopmanagement.model.ShiftClose>column(I18n.t("shift.col.note"), 140, c -> c.note() == null ? "" : c.note()));
         shiftTable.setPlaceholder(new Label(I18n.t("shift.empty")));
         VBox employeeBox = new VBox(6, new Label(I18n.t("report.employee.title")), employeeTable);
-        VBox shiftBox = new VBox(6, new Label(I18n.t("shift.history.title")), shiftTable);
+        VBox shiftBox = new VBox(6, new Label(I18n.t("shift.history.title")), shiftTable, ShiftSheetActions.listButtons(shiftTable)); // reprint / save the sheet (TODO 4.53)
         VBox.setVgrow(employeeTable, Priority.ALWAYS);
         VBox.setVgrow(shiftTable, Priority.ALWAYS);
         HBox staffTables = new HBox(14, employeeBox, shiftBox);
-        HBox.setHgrow(employeeBox, Priority.ALWAYS);
-        HBox.setHgrow(shiftBox, Priority.ALWAYS);
+        HBox.setHgrow(employeeBox, Priority.ALWAYS); HBox.setHgrow(shiftBox, Priority.ALWAYS);
         VBox staffPage = new VBox(8, staffTables);
         VBox.setVgrow(staffTables, Priority.ALWAYS);
         staffPage.setPadding(new Insets(8, 0, 0, 0));
@@ -222,14 +228,23 @@ public final class ReportWindow {
         mainTab.setClosable(false);
         whenTab.setClosable(false);
         staffTab.setClosable(false);
-        TabPane tabs = new TabPane(mainTab, whenTab, staffTab);
+        TabPane tabs = new TabPane(mainTab, whenTab, staffTab, optionPage.tab());
         VBox.setVgrow(tabs, Priority.ALWAYS);
 
-        summaryLabel.setWrapText(true);
-        paymentLabel.setWrapText(true);
+        summaryLabel.setWrapText(true); summaryLabel.setMinHeight(66); // the bold summary is up to three lines (profit, expenses and net profit follow the sales) at the usual window width (TODO 1.7)
+        paymentLabel.setWrapText(true); comparisonLabel.setWrapText(true);
         loadedLabel.setStyle("-fx-opacity: 0.7;");
-        comparisonLabel.setWrapText(true);
-        VBox root = new VBox(12, filters, summaryLabel, comparisonLabel, loadedLabel, paymentLabel, tabs);
+        // When the owner set a day start (TODO 4.50) the report says which day an evening belongs to; with the calendar day there is nothing to say.
+        Label dayStartLabel = new Label();
+        dayStartLabel.setWrapText(true);
+        if (com.coffeeshop.coffeeshopmanagement.util.BusinessDay.isCalendarDay()) {
+            dayStartLabel.setManaged(false);
+            dayStartLabel.setVisible(false);
+        } else {
+            dayStartLabel.setText(I18n.t("report.daystart.note",
+                    com.coffeeshop.coffeeshopmanagement.util.BusinessDay.format(com.coffeeshop.coffeeshopmanagement.util.BusinessDay.startMinutes())));
+        }
+        VBox root = new VBox(12, filters, dayStartLabel, summaryLabel, comparisonLabel, loadedLabel, paymentLabel, tabs);
         root.setPadding(new Insets(16));
 
         Stage stage = com.coffeeshop.coffeeshopmanagement.util.SceneNavigator.newOwnedStage();
@@ -237,7 +252,7 @@ public final class ReportWindow {
         stage.setTitle(I18n.t("report.title"));
         com.coffeeshop.coffeeshopmanagement.util.AppIcon.apply(stage);
         stage.setScene(new Scene(root, 1040, 600));
-        com.coffeeshop.coffeeshopmanagement.util.UiSettings.rememberSize(stage, "report.window", 1040, 600);
+        com.coffeeshop.coffeeshopmanagement.util.StageSize.remember(stage, "report.window", 1040, 600);
         AlertUtil.closeOnEscape(stage.getScene());
         // A window left open during the day goes stale; coming back to it reloads the range on screen (TODO 5.34).
         stage.focusedProperty().addListener((observable, was, focused) -> {
@@ -281,13 +296,13 @@ public final class ReportWindow {
         Async.run(
                 () -> {
                     SalesPatterns.Range before = SalesPatterns.previousRange(from, to);
-                    List<SalesPatterns.PaidOrder> paid = reportDAO.paidOrders(from, to);
-                    return new Object[]{reportDAO.summary(from, to), reportDAO.allProducts(from, to),
-                            reportDAO.dailySales(from, to), reportDAO.paymentSplit(from, to), reportDAO.profit(from, to),
-                            before, reportDAO.summary(before.from(), before.to()),
-                            SalesPatterns.byHour(paid), SalesPatterns.byWeekday(paid, from, to), reportDAO.categorySales(from, to),
-                            reportDAO.employeeSales(from, to), shiftDAO.findRecent(SHIFT_HISTORY_LIMIT),
-                            reportDAO.waste(from, to), reportDAO.expenses(from, to)};
+                    List<SalesPatterns.PaidOrder> paid = reportService.paidOrders(from, to);
+                    return new Object[]{reportService.summary(from, to), reportService.allProducts(from, to),
+                            reportService.dailySales(from, to), reportService.paymentSplit(from, to), reportService.profit(from, to),
+                            before, reportService.summary(before.from(), before.to()),
+                            SalesPatterns.byHour(paid), SalesPatterns.byWeekday(paid, from, to), reportService.categorySales(from, to),
+                            reportService.employeeSales(from, to), shiftService.findRecent(SHIFT_HISTORY_LIMIT),
+                            reportService.waste(from, to), reportService.expenses(from, to), reportService.channelSales(from, to), reportService.optionSales(from, to), reportService.discountsByCashier(from, to), shiftService.giftCardsOpenBalance()};
                 },
                 result -> {
                     if (myRequest != requestCounter) return;
@@ -306,6 +321,10 @@ public final class ReportWindow {
                     lastEmployees = castList(result[10]);
                     lastWaste = (ReportDAO.Waste) result[12];
                     lastExpenses = (ReportDAO.Expenses) result[13];
+                    lastChannels = castList(result[14]);
+                    optionPage.show(castList(result[15]));
+                    lastDiscounts = castList(result[16]);
+                    lastGiftCards = (com.coffeeshop.coffeeshopmanagement.dao.GiftCardDAO.OpenBalance) result[17];
                     lastFrom = from;
                     lastTo = to;
                     productTable.getItems().setAll(lastProducts);
@@ -314,8 +333,10 @@ public final class ReportWindow {
                             CurrencyUtil.format(lastSummary.averageOrderValue()), CurrencyUtil.format(lastSummary.discounts()),
                             lastSummary.cancelledOrders(), CurrencyUtil.format(lastProfit.grossProfit()), profitNote(lastProfit))
                             + (lastWaste.lines() == 0 ? "" : "\n" + com.coffeeshop.coffeeshopmanagement.util.WasteText.summaryLine(lastWaste))
+                            + com.coffeeshop.coffeeshopmanagement.util.ComplimentaryText.summaryLine(lastSummary) // TODO 4.61
                             + "\n" + com.coffeeshop.coffeeshopmanagement.util.ExpenseText.summaryLines(lastProfit.grossProfit(), lastWaste, lastExpenses));
-                    paymentLabel.setText(paymentText(lastSplit));
+                    paymentLabel.setText(paymentText(lastSplit) + com.coffeeshop.coffeeshopmanagement.util.ChannelText.line(lastChannels)
+                            + (lastGiftCards.cards() == 0 ? "" : "\n" + com.coffeeshop.coffeeshopmanagement.util.GiftCardText.line(lastGiftCards)));
                     comparisonLabel.setText(SalesPatternsText.comparison(lastPreviousRange, lastSummary, lastPreviousSummary));
                     hourTable.getItems().setAll(lastHours);
                     weekdayTable.getItems().setAll(lastWeekdays);
@@ -338,54 +359,6 @@ public final class ReportWindow {
         );
     }
 
-    private static BigDecimal maxOrders(List<SalesPatterns.Slot> slots) {
-        return slots.stream().map(x -> BigDecimal.valueOf(x.orders())).max(BigDecimal::compareTo).orElse(BigDecimal.ZERO);
-    }
-
-    private static BigDecimal maxAverage(List<SalesPatterns.WeekdaySlot> slots) {
-        return slots.stream().map(SalesPatterns.WeekdaySlot::average).max(BigDecimal::compareTo).orElse(BigDecimal.ZERO);
-    }
-
-    private static BigDecimal maxRevenue(List<ReportDAO.CategorySales> list) {
-        return list.stream().map(ReportDAO.CategorySales::revenue).max(BigDecimal::compareTo).orElse(BigDecimal.ZERO);
-    }
-
-    private static String categoryName(ReportDAO.CategorySales category) {
-        return category.categoryName() == null ? I18n.t("report.category.none")
-                : com.coffeeshop.coffeeshopmanagement.config.SeedNames.category(category.categoryName());
-    }
-
-    /** "Busiest hour: 10:00 - 11:00 (12 orders) • Best weekday: Saturday (about 1.200.000đ per day)". */
-    static String busiestText(List<SalesPatterns.Slot> hours, List<SalesPatterns.WeekdaySlot> weekdays) {
-        SalesPatterns.Slot hour = SalesPatterns.busiest(hours);
-        SalesPatterns.WeekdaySlot day = SalesPatterns.bestWeekday(weekdays);
-        if (hour == null || day == null) return I18n.t("report.busiest.none");
-        return I18n.t("report.busiest.hour", SalesPatternsText.hourLabel(hour.key()), hour.orders()) + "   •   "
-                + I18n.t("report.busiest.weekday", SalesPatternsText.weekdayName(day.day()), CurrencyUtil.format(day.average()));
-    }
-
-    /** "-" when no cost is known, so a missing cost is never shown as a profit of 0. */
-    static String profitText(java.math.BigDecimal profit) {
-        return profit == null ? "-" : CurrencyUtil.format(profit);
-    }
-
-    static String profitNote(ReportDAO.Profit profit) {
-        return profit.linesWithoutCost() == 0 ? ""
-                : "  " + I18n.t("report.profitnote", profit.linesWithoutCost());
-    }
-
-    static String paymentText(List<ReportDAO.PaymentSplit> split) {
-        if (split.isEmpty()) return I18n.t("report.payment.none");
-        StringBuilder text = new StringBuilder(I18n.t("report.payment.prefix") + " ");
-        for (int i = 0; i < split.size(); i++) {
-            ReportDAO.PaymentSplit part = split.get(i);
-            if (i > 0) text.append("   •   ");
-            text.append(part.method() == null ? I18n.t("report.payment.unknown") : part.method().label()).append(": ")
-                    .append(CurrencyUtil.format(part.revenue())).append(" (").append(I18n.t("report.orders.count", part.orders())).append(")");
-        }
-        return text.toString();
-    }
-
     @SuppressWarnings("unchecked")
     private static <T> List<T> castList(Object value) {
         return (List<T>) value;
@@ -401,57 +374,9 @@ public final class ReportWindow {
         File file = chooser.showSaveDialog(exportButton.getScene().getWindow());
         if (file == null) return;
 
-        List<String> lines = new ArrayList<>();
-        lines.add(I18n.t("report.title") + "," + lastFrom.format(DAY_FORMAT) + "," + lastTo.format(DAY_FORMAT));
-        lines.add(I18n.t("report.csv.paid") + "," + lastSummary.paidOrders());
-        lines.add(I18n.t("report.csv.revenue") + "," + lastSummary.revenue().toPlainString());
-        lines.add(I18n.t("report.csv.discount") + "," + lastSummary.discounts().toPlainString());
-        lines.add(I18n.t("report.csv.cancelled") + "," + lastSummary.cancelledOrders());
-        lines.add(I18n.t("report.csv.profit") + "," + lastProfit.grossProfit().toPlainString());
-        lines.add(I18n.t("report.csv.nocost") + "," + lastProfit.linesWithoutCost());
-        lines.addAll(com.coffeeshop.coffeeshopmanagement.util.WasteText.csvLines(lastWaste)); // TODO 4.33
-        lines.addAll(com.coffeeshop.coffeeshopmanagement.util.ExpenseText.csvLines(lastProfit.grossProfit(), lastWaste, lastExpenses)); // TODO 4.38
-        lines.add(I18n.t("report.csv.prev") + "," + lastPreviousRange.from().format(DAY_FORMAT) + "," + lastPreviousRange.to().format(DAY_FORMAT));
-        lines.add(I18n.t("report.csv.prev.paid") + "," + lastPreviousSummary.paidOrders());
-        lines.add(I18n.t("report.csv.prev.revenue") + "," + lastPreviousSummary.revenue().toPlainString());
-        lines.add("");
-        lines.add(I18n.t("report.csv.method.header"));
-        for (ReportDAO.PaymentSplit part : lastSplit) {
-            lines.add(csv(part.method() == null ? I18n.t("report.payment.unknown") : part.method().label()) + "," + part.orders() + "," + part.revenue().toPlainString());
-        }
-        lines.add("");
-        lines.add(I18n.t("report.csv.product.header"));
-        for (ProductSales p : lastAllProducts) { // every product, not only the top 20 on screen (TODO 5.34)
-            lines.add(csv(p.productName()) + "," + p.quantity() + "," + p.revenue().toPlainString() + ","
-                    + (p.profit() == null ? "" : p.profit().toPlainString()));
-        }
-        lines.add("");
-        lines.add(I18n.t("report.csv.hour.header"));
-        for (SalesPatterns.Slot h : lastHours) {
-            lines.add(csv(SalesPatternsText.hourLabel(h.key())) + "," + h.orders() + "," + h.revenue().toPlainString());
-        }
-        lines.add("");
-        lines.add(I18n.t("report.csv.weekday.header"));
-        for (SalesPatterns.WeekdaySlot d : lastWeekdays) {
-            lines.add(csv(SalesPatternsText.weekdayName(d.day())) + "," + d.orders() + "," + d.revenue().toPlainString() + ","
-                    + d.daysInRange() + "," + d.average().toPlainString());
-        }
-        lines.add("");
-        lines.add(I18n.t("report.csv.category.header"));
-        for (ReportDAO.CategorySales c : lastCategories) {
-            lines.add(csv(categoryName(c)) + "," + c.quantity() + "," + c.revenue().toPlainString());
-        }
-        lines.add("");
-        lines.add(I18n.t("report.csv.employee.header")); // TODO 4.6
-        for (com.coffeeshop.coffeeshopmanagement.dao.ShiftDAO.EmployeeShare x : lastEmployees) {
-            lines.add(csv(employeeName(x)) + "," + x.orders() + "," + x.revenue().toPlainString() + "," + x.cash().toPlainString());
-        }
-        lines.add("");
-        lines.add(I18n.t("report.csv.daily.header"));
-        for (DailySales d : lastDaily) {
-            lines.add(d.date().format(DAY_FORMAT) + "," + d.orders() + "," + d.revenue().toPlainString() + ","
-                    + (d.profit() == null ? "" : d.profit().toPlainString()));
-        }
+        List<String> lines = ReportCsv.lines(new ReportCsv.Data(lastFrom, lastTo, lastSummary, lastProfit, lastWaste, lastExpenses,
+                lastPreviousRange, lastPreviousSummary, lastSplit, lastChannels, lastDiscounts, lastGiftCards, lastAllProducts, lastHours,
+                lastWeekdays, lastCategories, optionPage.csvLines(), lastEmployees, shiftTable.getItems(), lastDaily));
         // The file is written off the screen thread, with a spinner on the button meanwhile (TODO 5.16); the lines above were
         // built from what is on screen, so nothing changes under the writer.
         Runnable release = com.coffeeshop.coffeeshopmanagement.util.BusyIndicator.hold(exportButton, I18n.t("busy.export"));
@@ -471,12 +396,11 @@ public final class ReportWindow {
                 });
     }
 
-    /** The person's name, or "unknown" for an order that has no person on record. */
-    private static String employeeName(com.coffeeshop.coffeeshopmanagement.dao.ShiftDAO.EmployeeShare x) {
-        return x.employeeName() == null || x.employeeName().isBlank() ? I18n.t("report.employee.unknown") : x.employeeName();
-    }
-
-    private static String csv(String value) {
-        return com.coffeeshop.coffeeshopmanagement.util.Csv.cell(value);
+    private Button discountButton() { // TODO 2.37: opens the discounts of the period on screen
+        Button button = new Button(I18n.t("report.discount.button"));
+        button.setOnAction(e -> {
+            if (lastFrom != null) DiscountReportDialog.show(lastDiscounts, lastFrom, lastTo);
+        });
+        return button;
     }
 }

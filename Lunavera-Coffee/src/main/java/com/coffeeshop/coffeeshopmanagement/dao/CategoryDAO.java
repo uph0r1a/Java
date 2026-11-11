@@ -40,7 +40,7 @@ public class CategoryDAO {
         try (Connection connection = DatabaseConfig.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             statement.setString(1, com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.nfc(category.getName()));
-            statement.setString(2, category.getDescription());
+            statement.setString(2, com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.nfc(category.getDescription())); // composed accents (TODO 3.18)
             statement.setBoolean(3, category.isActive());
             statement.setInt(4, nextSortOrder(connection)); // a new category is the last tab (TODO 5.31)
             statement.executeUpdate();
@@ -65,7 +65,7 @@ public class CategoryDAO {
         try (Connection connection = DatabaseConfig.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.nfc(category.getName()));
-            statement.setString(2, category.getDescription());
+            statement.setString(2, com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.nfc(category.getDescription())); // composed accents (TODO 3.18)
             statement.setBoolean(3, category.isActive());
             statement.setInt(4, category.getId());
             statement.executeUpdate();

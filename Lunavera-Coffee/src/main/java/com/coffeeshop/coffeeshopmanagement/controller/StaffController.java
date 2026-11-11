@@ -393,7 +393,7 @@ public class StaffController extends AdminScreen {
         TextField salaryField = limited(text(current == null || current.getSalary() == null ? null : current.getSalary().toPlainString()),
                 TextLengthLimiter.NUMBER_MAX);
         salaryField.setPromptText(I18n.t("accounts.salary.prompt"));
-        DatePicker startPicker = new DatePicker(current == null ? null : current.getHireDate());
+        DatePicker startPicker = com.coffeeshop.coffeeshopmanagement.util.DateBoxes.picker(current == null ? null : current.getHireDate());
 
         GridPane grid = new GridPane();
         grid.setHgap(10);

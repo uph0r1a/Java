@@ -25,7 +25,7 @@ public final class ProductCode {
      */
     public static String clean(String typed) {
         if (typed == null) return null;
-        String trimmed = typed.strip();
+        String trimmed = com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.strip(typed).strip(); // TODO 3.71
         return trimmed.isEmpty() ? null : trimmed.toUpperCase(Locale.ROOT);
     }
 

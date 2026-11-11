@@ -47,7 +47,9 @@ public final class ExportCsv {
                 o.getDiscount() == null ? "0" : o.getDiscount().toPlainString(),
                 Csv.cell(o.getDiscountReason()),
                 o.getTotal() == null ? "0" : o.getTotal().toPlainString(),
-                Csv.cell(statusText(o)));
+                Csv.cell(statusText(o)),
+                HistoryText.plainDong(o.getCashReceived()), // TODO 3.17: the cash the customer gave and the change, empty when not a cash sale
+                HistoryText.plainDong(o.getChangeGiven()));
     }
 
     /** Where the order rows come from: reads them one at a time into {@code sink} and returns how many it gave (TODO 3.54). */

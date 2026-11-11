@@ -1,0 +1,137 @@
+# TODO 2A.6: build the release files in a clean, public runner instead of on somebody's PC, fingerprint them, and sign the
+# Windows installer when a code-signing certificate is available. Started by hand (Actions, "Release", Run workflow) or by
+# pushing a tag such as v1.0.0. The result is a DRAFT release (and a build artifact): nothing is published until the owner
+# reads it and presses "Publish". Written without being able to run it (GitHub and Windows only): the first run is the test,
+# see docs/SIGNING.md. Every action is pinned to a commit, like ci.yml (TODO 6.51); a test checks that.
+name: Release
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Installer version, up to three numbers (for example 1.0.0). Taken from the tag when started by a tag.'
+        required: false
+        default: '1.0.0'
+  push:
+    tags: ['v*']
+# Needed only to attach the files to a draft release of the tag; the build itself reads the repository.
+permissions:
+  contents: write
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    # windows-2022 has the WiX Toolset 3 that jpackage of JDK 21 needs to make an .msi.
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      # A release that does not pass its own tests is not a release.
+      - name: Run tests
+        run: ./mvnw -B clean verify
+        shell: bash
+      # The time of the commit being built stamps the jar (project.build.outputTimestamp), so a second build of the same commit makes
+      # the same jar bytes (TODO 6.79). The jlink image and its zip are not claimed to be reproducible.
+      # The folder is made with moditect (profile modular-image), not javafx:jlink: the MariaDB driver is only an "automatic module", which
+      # jlink refuses, so moditect gives it a module descriptor first (TODO 6.15, docs/PACKAGING.md). Then the two checks look at the
+      # modules and the drivers inside the folder, before an installer is made from it.
+      - name: Build the program folder and zip (moditect and jlink)
+        run: ./mvnw -B -DskipTests -Pmodular-image "-Dproject.build.outputTimestamp=$(git log -1 --format=%cI)" package
+        shell: bash
+      - name: Check the modules and the database drivers in the program folder
+        run: |
+          java tools/ModuleCheck.java target/modules
+          java tools/ImageCheck.java target/lunavera
+        shell: bash
+      # The bill of materials: every library inside the program and its version, so a later warning about one of them can be checked.
+      - name: Write the bill of materials (CycloneDX)
+        run: ./mvnw -B -DskipTests org.cyclonedx:cyclonedx-maven-plugin:makeBom -DoutputFormat=json
+        shell: bash
+      - name: Work out the installer version
+        id: version
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}   # through the environment, never pasted into the script text
+        run: |
+          raw="${GITHUB_REF_NAME}"
+          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then raw="${INPUT_VERSION}"; fi
+          raw="${raw#v}"
+          # jpackage wants one to three numbers; anything else (a tag like v1.0-beta) falls back to 1.0.0 and says so.
+          if ! echo "$raw" | grep -Eq '^[0-9]+(\.[0-9]+){0,2}$'; then
+            echo "::warning::'$raw' is not 1 to 3 numbers; the installer is built as 1.0.0"
+            raw="1.0.0"
+          fi
+          echo "value=$raw" >> "$GITHUB_OUTPUT"
+      # The licence and the notices travel INSIDE the program folder, so they are in the zip and in the installer (TODO 6.80). The zip is
+      # made again from the folder afterwards, because jlink writes it before this step.
+      - name: Put the licence and the notices in the program folder
+        shell: pwsh
+        run: |
+          Copy-Item LICENSE, THIRD-PARTY-NOTICES.md target/lunavera/ -ErrorAction Stop
+          Copy-Item src/main/resources/fonts/OFL.txt target/lunavera/OFL-BeVietnamPro.txt -ErrorAction Stop
+          Remove-Item target/lunavera.zip -Force -ErrorAction Stop
+          Compress-Archive -Path target/lunavera -DestinationPath target/lunavera.zip -ErrorAction Stop
+          Get-ChildItem target/lunavera -File | Select-Object Name
+          if (Test-Path target/lunavera/legal) { Get-ChildItem target/lunavera/legal | Select-Object Name } else { Write-Host "::warning::target/lunavera/legal does not exist: the JavaFX licence files are not in the image (THIRD-PARTY-NOTICES.md says to check this)" }
+      # The installer takes the jlink runtime as it is (it already holds the program's module). Per-user: no administrator needed,
+      # installs to the user's AppData. The data folder is NOT part of the installer (see docs/PACKAGING.md, "Where the data goes").
+      - name: Build the Windows installer (jpackage)
+        shell: pwsh
+        run: |
+          jpackage --type msi --name Lunavera --app-version "${{ steps.version.outputs.value }}" `
+            --vendor "Lunavera Coffee" --description "Coffee shop till and management" `
+            --runtime-image target/lunavera `
+            --module com.coffeeshop.coffeeshopmanagement/com.coffeeshop.coffeeshopmanagement.LunaveraApplication `
+            --win-per-user-install --win-menu --win-shortcut `
+            --dest target/installer
+          if ($LASTEXITCODE -ne 0) { throw "jpackage failed (exit code $LASTEXITCODE)" }
+      # Signed only when the repository has the two secrets; otherwise the installer is unsigned and the log says so.
+      - name: Sign the installer
+        shell: pwsh
+        env:
+          PFX_BASE64: ${{ secrets.WINDOWS_CODESIGN_PFX_BASE64 }}
+          PFX_PASSWORD: ${{ secrets.WINDOWS_CODESIGN_PASSWORD }}
+        run: |
+          if (-not $env:PFX_BASE64) {
+            Write-Host "::warning::No code-signing certificate is configured (secret WINDOWS_CODESIGN_PFX_BASE64): the installer is NOT signed. See docs/SIGNING.md."
+            exit 0
+          }
+          $pfx = Join-Path $env:RUNNER_TEMP "codesign.pfx"
+          try {
+            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:PFX_BASE64))
+            $msi = Get-ChildItem target/installer/*.msi | Select-Object -First 1
+            ./scripts/Sign-Windows.ps1 -Files $msi.FullName -PfxPath $pfx -PfxPassword $env:PFX_PASSWORD
+          } finally {
+            Remove-Item $pfx -Force -ErrorAction SilentlyContinue   # the certificate file never stays on the runner's disk
+          }
+      # A fingerprint of every file, written by the build that made them: anyone can compare it with what they downloaded.
+      - name: Write SHA-256 fingerprints
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release | Out-Null
+          Copy-Item target/lunavera.zip release/ -ErrorAction Stop
+          Copy-Item target/installer/*.msi release/ -ErrorAction Stop
+          Copy-Item target/bom.json release/lunavera-bom.json -ErrorAction Stop
+          Get-ChildItem release -File | Where-Object Name -ne 'SHA256SUMS.txt' | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($_.Name)"
+          } | Set-Content -Encoding ascii release/SHA256SUMS.txt
+          Get-Content release/SHA256SUMS.txt
+      - name: Upload the release files
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: lunavera-release
+          path: release
+          if-no-files-found: error
+      # A draft: the owner reads it and decides. Only for a tag.
+      - name: Attach the files to a draft release
+        if: github.ref_type == 'tag'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" release/* --draft --generate-notes --title "${GITHUB_REF_NAME}"

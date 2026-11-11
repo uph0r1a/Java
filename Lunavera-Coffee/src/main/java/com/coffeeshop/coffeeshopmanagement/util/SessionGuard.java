@@ -91,6 +91,7 @@ public final class SessionGuard {
 
     /** Ends the session and returns to the login screen. */
     public static void forceLogout() {
+        com.coffeeshop.coffeeshopmanagement.service.BackupService.autoBackupInBackground(); // TODO 2.62
         Session.clear();
         stopWatching();
         Stage stage = primaryStage;
@@ -116,10 +117,12 @@ public final class SessionGuard {
      * (dialogs, receipt, history), clears the session and returns to the login screen.
      */
     public static void idleLogout(java.time.Duration idle) {
-        if (Session.getCurrentUser() == null) return;
+        User who = Session.getCurrentUser();
+        if (who == null) return;
         endSession();
         long minutes = Math.max(1, Math.round(idle.toSeconds() / 60.0));
-        AlertUtil.info(I18n.t("session.idle.title"), I18n.t("session.idle.message", minutes));
+        // The notice, and "clock out?" in the same box when the person is still clocked in (TODO 5.38).
+        ClockOffer.afterIdleLogout(who.getId(), minutes);
     }
 
     /**
@@ -127,6 +130,7 @@ public final class SessionGuard {
      * login screen. Used by the idle timeout and by "Đăng xuất" on the lock screen (TODO 4.36).
      */
     public static void endSession() {
+        com.coffeeshop.coffeeshopmanagement.service.BackupService.autoBackupInBackground(); // the idle logout of a till left open (TODO 2.62)
         Stage stage = primaryStage;
         Session.clear();
         stopWatching();

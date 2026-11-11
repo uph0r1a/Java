@@ -163,6 +163,12 @@ public class ShiftDAOTest {
         assertEquals(dayStart.plusHours(4), closed.periodEnd());
 
         TestSession.admin();
+        // TODO 4.2: the close is in the audit log too: expected -> counted, and the difference as the detail
+        com.coffeeshop.coffeeshopmanagement.model.AuditEntry auditLine = new AuditDAO().find(new AuditDAO.Filter(null, null,
+                com.coffeeshop.coffeeshopmanagement.model.AuditAction.SHIFT_CLOSED, null, "#" + closed.id()), 5, 0).get(0);
+        assertEquals("600000", auditLine.oldValue());
+        assertEquals("590000", auditLine.newValue());
+        assertEquals("-10000", auditLine.detail());
         ShiftClose stored = shifts.findRecent(500).stream().filter(c -> c.id() == closed.id()).findFirst().orElseThrow();
         assertEquals(0, new BigDecimal("590000").compareTo(stored.countedCash()));
         assertEquals(dayStart, stored.periodStart());

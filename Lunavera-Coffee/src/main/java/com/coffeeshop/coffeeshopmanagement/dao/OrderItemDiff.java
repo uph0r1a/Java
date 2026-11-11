@@ -11,19 +11,24 @@ import java.util.Objects;
  * What an autosave of an open order has to change (TODO 6.37). Until now every autosave deleted all the lines of the order and
  * inserted them again, which on a shared MariaDB server means a burst of writes every few seconds per till and a gap in
  * which another till could read an empty order. The plan compares the lines already saved with the lines on screen and only
- * touches the difference. A line is "the same line" when product, name, note and unit price match, taken in order; so a changed
- * quantity is an update in place and a removed line is one delete. No database here, so it is unit-tested.
+ * touches the difference. A line is "the same line" when product, name, note, options and unit price match, taken in order; so a changed
+ * quantity is an update in place and a removed line is one delete. A line that matches nothing exactly but has a saved line of the same
+ * product, name, options and price that was not matched either is the SAME LINE WITH A NEW NOTE (TODO 2.100): it is updated in place, so it
+ * keeps its row id and its place in the order instead of going to the end. No database here, so it is unit-tested.
  */
 public final class OrderItemDiff {
 
-    /** A saved line that gets new quantity and total. */
+    /** A saved line that gets new quantity, total and note (the note is the same as before unless {@link #noteChanged}). */
     public static final class Change {
         public final int rowId;
         public final OrderItem item;
+        /** True when the line was paired with a saved line that differed from it only in the note (TODO 2.100). */
+        public final boolean noteChanged;
 
-        Change(int rowId, OrderItem item) {
+        Change(int rowId, OrderItem item, boolean noteChanged) {
             this.rowId = rowId;
             this.item = item;
+            this.noteChanged = noteChanged;
         }
     }
 
@@ -43,24 +48,42 @@ public final class OrderItemDiff {
     public static OrderItemDiff plan(List<OrderItem> saved, List<OrderItem> wanted) {
         OrderItemDiff plan = new OrderItemDiff();
         boolean[] used = new boolean[saved.size()];
-        for (OrderItem want : wanted) {
-            int match = -1;
+        // First every line that matches exactly, so a loose pairing below can never take the row an exact match would have had.
+        int[] paired = new int[wanted.size()];
+        for (int w = 0; w < wanted.size(); w++) {
+            paired[w] = -1;
             for (int i = 0; i < saved.size(); i++) {
-                if (!used[i] && sameLine(saved.get(i), want)) {
-                    match = i;
+                if (!used[i] && sameLine(saved.get(i), wanted.get(w))) {
+                    paired[w] = i;
+                    used[i] = true;
                     break;
                 }
             }
-            if (match < 0) {
+        }
+        // Then, for the lines left over, the first saved line left over that differs only in the note (TODO 2.100).
+        boolean[] noteOnly = new boolean[wanted.size()];
+        for (int w = 0; w < wanted.size(); w++) {
+            if (paired[w] >= 0) continue;
+            for (int i = 0; i < saved.size(); i++) {
+                if (!used[i] && sameLineExceptNote(saved.get(i), wanted.get(w))) {
+                    paired[w] = i;
+                    used[i] = true;
+                    noteOnly[w] = true;
+                    break;
+                }
+            }
+        }
+        for (int w = 0; w < wanted.size(); w++) {
+            OrderItem want = wanted.get(w);
+            if (paired[w] < 0) {
                 plan.inserts.add(want);
                 continue;
             }
-            used[match] = true;
-            OrderItem have = saved.get(match);
-            if (have.getQuantity() == want.getQuantity() && sameMoney(have.getLineTotal(), want.getLineTotal())) {
+            OrderItem have = saved.get(paired[w]);
+            if (!noteOnly[w] && have.getQuantity() == want.getQuantity() && sameMoney(have.getLineTotal(), want.getLineTotal())) {
                 plan.unchanged++;
             } else {
-                plan.updates.add(new Change(have.getId(), want));
+                plan.updates.add(new Change(have.getId(), want, noteOnly[w]));
             }
         }
         for (int i = 0; i < saved.size(); i++) {
@@ -70,10 +93,19 @@ public final class OrderItemDiff {
     }
 
     private static boolean sameLine(OrderItem a, OrderItem b) {
+        return sameLineExceptNote(a, b)
+                && Objects.equals(com.coffeeshop.coffeeshopmanagement.service.OrderNote.clean(a.getNote()),
+                        com.coffeeshop.coffeeshopmanagement.service.OrderNote.clean(b.getNote()));
+    }
+
+    /**
+     * Same product, name, options and price: the lines can differ in the note (and quantity) only, so one can be turned into the other
+     * with an UPDATE of quantity, total and note. Another size, extra or price is another line (TODO 4.47): those columns are not updated.
+     */
+    private static boolean sameLineExceptNote(OrderItem a, OrderItem b) {
         return Objects.equals(a.getProductId(), b.getProductId())
                 && Objects.equals(a.getProductName(), b.getProductName())
-                && Objects.equals(com.coffeeshop.coffeeshopmanagement.service.OrderNote.clean(a.getNote()),
-                        com.coffeeshop.coffeeshopmanagement.service.OrderNote.clean(b.getNote())) // TODO 4.9: a changed note is another line
+                && com.coffeeshop.coffeeshopmanagement.service.LineOptions.same(a, b) // TODO 4.47: another size or extra is another line
                 && sameMoney(a.getUnitPrice(), b.getUnitPrice());
     }
 

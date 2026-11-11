@@ -43,21 +43,12 @@ public final class MariaDbSchema {
                 phone VARCHAR(32),
                 email VARCHAR(255),
                 loyalty_points INT NOT NULL DEFAULT 0,
+                lifetime_points INT NOT NULL DEFAULT 0,
                 created_at DATETIME NOT NULL,
                 anonymised_at DATETIME NULL,
+                birthday DATE NULL,
+                birthday_used_on DATE NULL,
                 UNIQUE KEY ux_customers_phone (phone)
-            """ + TAIL,
-            """
-            CREATE TABLE IF NOT EXISTS customer_merges (
-                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-                kept_id INT NOT NULL,
-                removed_id INT NOT NULL,
-                removed_name VARCHAR(255) NOT NULL,
-                orders_moved INT NOT NULL DEFAULT 0,
-                points_moved INT NOT NULL DEFAULT 0,
-                merged_by INT NULL,
-                merged_at DATETIME NOT NULL,
-                INDEX idx_customer_merges_kept (kept_id)
             """ + TAIL,
             """
             CREATE TABLE IF NOT EXISTS users (
@@ -123,7 +114,24 @@ public final class MariaDbSchema {
                 transfer_ref VARCHAR(64),
                 points_redeemed INT,
                 points_value BIGINT,
+                cancelled_by INT,
                 cancelled_at DATETIME NULL,
+                cancel_reason VARCHAR(200),
+                voucher_code VARCHAR(40) NULL,
+                voucher_value BIGINT NULL,
+                promo_value BIGINT NULL,
+                queue_no INT NULL,
+                rev INT NOT NULL DEFAULT 0,
+                queue_day DATE NULL,
+                open_table_key INT GENERATED ALWAYS AS (CASE WHEN status = 'OPEN' THEN table_number END) STORED,
+                UNIQUE KEY ux_orders_one_open_per_table (open_table_key),
+                UNIQUE KEY ux_orders_queue_day_no (queue_day, queue_no),
+                channel VARCHAR(20) NULL,
+                print_count INT NOT NULL DEFAULT 0,
+                complimentary_kind VARCHAR(20) NULL,
+                complimentary_for INT NULL,
+                complimentary_value BIGINT NULL,
+                complimentary_note VARCHAR(200) NULL,
                 INDEX idx_orders_status_date (status, order_date),
                 INDEX idx_orders_paid_at (paid_at),
                 INDEX idx_orders_table (table_number),
@@ -141,6 +149,12 @@ public final class MariaDbSchema {
                 line_total BIGINT NOT NULL,
                 unit_cost BIGINT,
                 note VARCHAR(200),
+                size_name VARCHAR(40),
+                size_percent INT,
+                extras VARCHAR(400),
+                option_cost BIGINT,
+                promo_name VARCHAR(100) NULL,
+                promo_value BIGINT NULL,
                 FOREIGN KEY (order_id) REFERENCES orders(id),
                 FOREIGN KEY (product_id) REFERENCES products(id)
             """ + TAIL,
@@ -152,6 +166,25 @@ public final class MariaDbSchema {
                 amount BIGINT NOT NULL,
                 UNIQUE KEY ux_order_payments (order_id, method),
                 FOREIGN KEY (order_id) REFERENCES orders(id)
+            """ + TAIL,
+            """
+            CREATE TABLE IF NOT EXISTS refunds (
+                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                order_id INT NOT NULL,
+                order_item_id INT NOT NULL,
+                quantity INT NOT NULL,
+                line_amount BIGINT NOT NULL,
+                amount BIGINT NOT NULL,
+                method VARCHAR(20) NOT NULL,
+                restocked TINYINT(1) NOT NULL DEFAULT 0,
+                reason VARCHAR(200) NULL,
+                refunded_by INT NULL,
+                refunded_by_name VARCHAR(255) NOT NULL,
+                refunded_at DATETIME NOT NULL,
+                INDEX idx_refunds_order (order_id),
+                INDEX idx_refunds_at (refunded_at),
+                FOREIGN KEY (order_id) REFERENCES orders(id),
+                FOREIGN KEY (order_item_id) REFERENCES order_items(id)
             """ + TAIL,
             """
             CREATE TABLE IF NOT EXISTS dining_tables (
@@ -166,6 +199,11 @@ public final class MariaDbSchema {
             """
             CREATE TABLE IF NOT EXISTS app_flags (
                 name VARCHAR(100) NOT NULL PRIMARY KEY
+            """ + TAIL,
+            """
+            CREATE TABLE IF NOT EXISTS settings (
+                name VARCHAR(100) NOT NULL PRIMARY KEY,
+                value VARCHAR(500) NOT NULL
             """ + TAIL,
             """
             CREATE TABLE IF NOT EXISTS login_attempts (
@@ -209,6 +247,160 @@ public final class MariaDbSchema {
                 INDEX idx_expenses_created_at (created_at)
             """ + TAIL,
             """
+            CREATE TABLE IF NOT EXISTS ingredients (
+                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                unit VARCHAR(20) NOT NULL,
+                stock BIGINT NOT NULL DEFAULT 0,
+                min_stock BIGINT NOT NULL DEFAULT 0,
+                created_at DATETIME NOT NULL,
+                unit_cost BIGINT NULL,
+                UNIQUE KEY uq_ingredients_name (name)
+            """ + TAIL,
+            """
+            CREATE TABLE IF NOT EXISTS stock_takes (
+                order_item_id INT NOT NULL,
+                ingredient_id INT NULL,
+                amount BIGINT NOT NULL,
+                UNIQUE KEY ux_stock_takes (order_item_id, ingredient_id),
+                FOREIGN KEY (order_item_id) REFERENCES order_items(id) ON DELETE CASCADE
+            """ + TAIL,
+            """
+            CREATE TABLE IF NOT EXISTS recipes (
+                product_id INT NOT NULL,
+                ingredient_id INT NOT NULL,
+                amount BIGINT NOT NULL,
+                PRIMARY KEY (product_id, ingredient_id),
+                FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+                FOREIGN KEY (ingredient_id) REFERENCES ingredients(id)
+            """ + TAIL,
+            """
+            CREATE TABLE IF NOT EXISTS product_options (
+                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                product_id INT NOT NULL,
+                kind VARCHAR(10) NOT NULL,
+                name VARCHAR(40) NOT NULL,
+                price_delta BIGINT NOT NULL DEFAULT 0,
+                cost_delta BIGINT NOT NULL DEFAULT 0,
+                recipe_percent INT NOT NULL DEFAULT 100,
+                is_default TINYINT(1) NOT NULL DEFAULT 0,
+                active TINYINT(1) NOT NULL DEFAULT 1,
+                UNIQUE KEY uq_product_option (product_id, kind, name),
+                FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+            """ + TAIL,
+            """
+            CREATE TABLE IF NOT EXISTS time_clock (
+                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL,
+                user_name VARCHAR(255) NOT NULL,
+                clock_in DATETIME NOT NULL,
+                clock_out DATETIME NULL,
+                open_user_key INT GENERATED ALWAYS AS (CASE WHEN clock_out IS NULL THEN user_id END) STORED,
+                UNIQUE KEY ux_time_clock_one_open (open_user_key),
+                INDEX idx_time_clock_user_out (user_id, clock_out)
+            """ + TAIL,
+            """
+            CREATE TABLE IF NOT EXISTS gift_cards (
+                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                code VARCHAR(32) NOT NULL,
+                initial_amount BIGINT NOT NULL,
+                balance BIGINT NOT NULL,
+                sold_by VARCHAR(255) NOT NULL,
+                sold_by_id INT NULL,
+                created_at DATETIME NOT NULL,
+                UNIQUE KEY uq_gift_cards_code (code)
+            """ + TAIL,
+            """
+            CREATE TABLE IF NOT EXISTS gift_card_moves (
+                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                card_id INT NOT NULL,
+                order_id INT NULL,
+                amount BIGINT NOT NULL,
+                moved_at DATETIME NOT NULL,
+                INDEX idx_gift_card_moves_order (order_id),
+                FOREIGN KEY (card_id) REFERENCES gift_cards(id)
+            """ + TAIL,
+            """
+            CREATE TABLE IF NOT EXISTS reservations (
+                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                table_number INT NOT NULL,
+                customer_name VARCHAR(255) NOT NULL,
+                phone VARCHAR(20) NULL,
+                reserved_for DATETIME NOT NULL,
+                people INT NOT NULL,
+                note VARCHAR(200) NULL,
+                status VARCHAR(12) NOT NULL DEFAULT 'BOOKED',
+                created_by VARCHAR(255) NOT NULL,
+                created_by_id INT NULL,
+                created_at DATETIME NOT NULL,
+                closed_at DATETIME NULL,
+                customer_id INT NULL,
+                INDEX idx_reservations_when (reserved_for),
+                INDEX idx_reservations_table (table_number, status)
+            """ + TAIL,
+            """
+            CREATE TABLE IF NOT EXISTS vouchers (
+                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                code VARCHAR(40) NOT NULL,
+                kind VARCHAR(10) NOT NULL,
+                value BIGINT NOT NULL,
+                min_subtotal BIGINT NOT NULL DEFAULT 0,
+                valid_from DATE NULL,
+                valid_to DATE NULL,
+                max_uses INT NULL,
+                used_count INT NOT NULL DEFAULT 0,
+                active TINYINT(1) NOT NULL DEFAULT 1,
+                created_at DATETIME NOT NULL,
+                once_per_customer INT NOT NULL DEFAULT 0,
+                UNIQUE KEY uq_vouchers_code (code)
+            """ + TAIL,
+            """
+            CREATE TABLE IF NOT EXISTS promotions (
+                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                kind VARCHAR(12) NOT NULL,
+                percent INT NOT NULL DEFAULT 0,
+                fixed_price BIGINT NOT NULL DEFAULT 0,
+                buy_qty INT NOT NULL DEFAULT 0,
+                free_qty INT NOT NULL DEFAULT 0,
+                days VARCHAR(7) NOT NULL DEFAULT '',
+                time_from VARCHAR(5) NULL,
+                time_to VARCHAR(5) NULL,
+                valid_from DATE NULL,
+                valid_to DATE NULL,
+                active TINYINT(1) NOT NULL DEFAULT 1,
+                created_at DATETIME NOT NULL
+            """ + TAIL,
+            """
+            CREATE TABLE IF NOT EXISTS promotion_targets (
+                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                promotion_id INT NOT NULL,
+                product_id INT NULL,
+                category_id INT NULL,
+                quantity INT NOT NULL DEFAULT 1,
+                FOREIGN KEY (promotion_id) REFERENCES promotions(id) ON DELETE CASCADE,
+                FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+                FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
+            """ + TAIL,
+            """
+            CREATE TABLE IF NOT EXISTS audit_log (
+                id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                logged_at DATETIME NOT NULL,
+                actor_user_id INT NULL,
+                actor_employee_id INT NULL,
+                actor_name VARCHAR(255) NOT NULL,
+                action VARCHAR(40) NOT NULL,
+                target_type VARCHAR(20) NULL,
+                target_id INT NULL,
+                target_label VARCHAR(255) NULL,
+                old_value VARCHAR(500) NULL,
+                new_value VARCHAR(500) NULL,
+                detail VARCHAR(500) NULL,
+                INDEX idx_audit_log_logged_at (logged_at),
+                INDEX idx_audit_log_action (action),
+                INDEX idx_audit_log_target (target_type, target_id)
+            """ + TAIL,
+            """
             CREATE TABLE IF NOT EXISTS shift_closes (
                 id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
                 period_start DATETIME NOT NULL,
@@ -234,8 +426,8 @@ public final class MariaDbSchema {
     );
 
     /** Tables to drop (children first) when a throw-away test database is reset. */
-    public static final List<String> DROP_ORDER = List.of("dining_tables", "order_payments", "order_items", "orders", "products",
-            "categories", "users", "customer_merges", "customers", "employees", "app_flags", "login_attempts", "stock_log", "expenses", "shift_closes", "schema_version");
+    public static final List<String> DROP_ORDER = List.of("dining_tables", "promotion_targets", "promotions", "gift_card_moves", "gift_cards", "time_clock", "product_options", "recipes", "ingredients", "refunds", "order_payments", "stock_takes", "order_items", "orders", "products",
+            "categories", "users", "customers", "employees", "app_flags", "settings", "login_attempts", "stock_log", "expenses", "vouchers", "reservations", "shift_closes", "audit_log", "schema_version");
 
     private MariaDbSchema() {
     }

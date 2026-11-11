@@ -2,178 +2,9 @@
    ROOT
 ========================================================= */
 
-.root {
-    -fx-background-color: #F4F1E8;
-}
-
-/* ==================== SIDEBAR ==================== */
-
-.sidebar {
-    -fx-background-color: #e4eed6;
-    -fx-border-color: #cbdbba;
-    -fx-border-width: 0 1px 0 0;
-}
-
-.sidebar-separator {
-    -fx-background-color: #d1dfc1;
-    -fx-padding: 0 15px;
-}
-
-.sidebar-separator .line {
-    -fx-border-color: #d1dfc1;
-    -fx-border-width: 0.5px;
-}
-
-/* Menu Button */
-.menu-button {
-    -fx-background-color: transparent;
-    -fx-background-radius: 9px;
-    -fx-border-radius: 9px;
-    -fx-text-fill: #345823;
-    -fx-font-size: 14px;
-    -fx-font-weight: bold;
-    -fx-alignment: CENTER_LEFT;
-    -fx-padding: 10px 18px;
-    -fx-cursor: hand;
-}
-
-.menu-button:hover {
-    -fx-background-color: #d5e6bf;
-    -fx-text-fill: #1c380f;
-}
-
-/* Menu Active: Xanh lá mạ non đậm, tương phản cao */
-.menu-button-active {
-    -fx-background-color: #3e7728;
-    -fx-background-radius: 9px;
-    -fx-text-fill: #ffffff;
-    -fx-font-weight: bold;
-    -fx-effect: dropshadow(gaussian, rgba(45, 85, 25, 0.28), 8, 0, 0, 2);
-}
-
-.menu-button-active:hover {
-    -fx-background-color: #356722;
-    -fx-text-fill: #ffffff;
-}
-
-.logout-button {
-    -fx-background-color: #d9e8c6;
-    -fx-background-radius: 8px;
-    -fx-border-color: #c4d9ab;
-    -fx-border-radius: 8px;
-    -fx-border-width: 1px;
-    -fx-text-fill: #395f26;
-    -fx-font-size: 13px;
-    -fx-font-weight: bold;
-    -fx-alignment: CENTER_LEFT;
-    -fx-padding: 9px 14px;
-    -fx-cursor: hand;
-}
-
-.logout-button:hover {
-    -fx-background-color: #cce0b5;
-    -fx-text-fill: #1d3a10;
-    -fx-border-color: #b0cb93;
-}
-
-.sidebar-footer {
-    -fx-text-fill: #5b7e45;
-    -fx-font-size: 12px;
-    -fx-font-style: italic;
-    -fx-line-spacing: 4px;
-    -fx-padding: 6px 0 0 0;
-}
-
-/* =========================================================
-   MAIN CONTENT
-========================================================= */
-
-.content {
-    -fx-background-color: #F7F5EE;
-    -fx-padding: 18px 22px 22px 22px;
-}
-
-/* =========================================================
-   HEADER
-========================================================= */
-
-.page-header {
-    -fx-background-color: #FAF9F4;
-    -fx-background-radius: 10px;
-    -fx-border-color: #E4E3D8;
-    -fx-border-radius: 10px;
-    -fx-border-width: 1px;
-    -fx-padding: 14px 18px;
-    -fx-effect: dropshadow(gaussian, rgba(70,80,60,0.07), 8, 0.1, 0, 2);
-}
-
-.page-title {
-    -fx-font-size: 25px;
-    -fx-font-weight: bold;
-    -fx-text-fill: #354D3B;
-}
-
-.page-description {
-    -fx-font-size: 12px;
-    -fx-text-fill: #9A9B8B;
-}
-
-.header-icon {
-    -fx-background-color: #E8EBDD;
-    -fx-background-radius: 50%;
-    -fx-min-width: 34px;
-    -fx-min-height: 34px;
-    -fx-max-width: 34px;
-    -fx-max-height: 34px;
-    -fx-alignment: CENTER;
-    -fx-text-fill: #65745E;
-    -fx-font-size: 15px;
-}
-
-.admin-name {
-    -fx-font-size: 13px;
-    -fx-font-weight: bold;
-    -fx-text-fill: #435540;
-}
-
-.admin-role {
-    -fx-font-size: 10px;
-    -fx-text-fill: #999D8C;
-}
-
-.profile-icon {
-    -fx-background-color: #E2E7DA;
-    -fx-background-radius: 50%;
-    -fx-min-width: 34px;
-    -fx-min-height: 34px;
-    -fx-max-width: 34px;
-    -fx-max-height: 34px;
-    -fx-alignment: CENTER;
-    -fx-text-fill: #596954;
-    -fx-font-size: 16px;
-}
-
 /* =========================================================
    STATISTICS
 ========================================================= */
-
-.statistics {
-    -fx-padding: 0;
-}
-
-.stat-card {
-    -fx-background-color: #FFFFFF;
-    -fx-background-radius: 10px;
-    -fx-border-color: #E0E3D7;
-    -fx-border-radius: 10px;
-    -fx-padding: 12px 15px;
-    -fx-spacing: 3px;
-    -fx-effect: dropshadow(gaussian, rgba(70,80,60,0.10), 10, 0.12, 0, 2);
-}
-
-.stat-card:hover {
-    -fx-border-color: #CBD4C1;
-}
 
 .stat-icon {
     -fx-text-fill: #6F8068;
@@ -181,29 +12,13 @@
 }
 
 .stat-icon-active {
-    -fx-text-fill: #45A864;
+    -fx-text-fill: #44A663;
     -fx-font-size: 17px;
 }
 
 .stat-icon-locked {
     -fx-text-fill: #D96D68;
     -fx-font-size: 17px;
-}
-
-.stat-title {
-    -fx-font-size: 12px;
-    -fx-text-fill: #6F8068;
-}
-
-.stat-value {
-    -fx-font-size: 25px;
-    -fx-font-weight: bold;
-    -fx-text-fill: #405541;
-}
-
-.stat-description {
-    -fx-font-size: 10px;
-    -fx-text-fill: #A0A495;
 }
 
 /* =========================================================
@@ -217,17 +32,6 @@
     -fx-border-radius: 10px;
     -fx-padding: 9px;
     -fx-effect: dropshadow(gaussian, rgba(70,80,60,0.07), 8, 0.1, 0, 2);
-}
-
-.search-field {
-    -fx-background-color: #F9F9F5;
-    -fx-background-radius: 7px;
-    -fx-border-color: #E0E2D6;
-    -fx-border-radius: 7px;
-    -fx-padding: 9px 12px;
-    -fx-font-size: 12px;
-    -fx-text-fill: #4E5C4D;
-    -fx-prompt-text-fill: #A4A79B;
 }
 
 .search-field:focused {
@@ -259,28 +63,6 @@
 }
 
 /* =========================================================
-   PRIMARY BUTTON
-========================================================= */
-
-.primary-button {
-    -fx-background-color: #6F8068;
-    -fx-background-radius: 7px;
-    -fx-text-fill: white;
-    -fx-font-size: 12px;
-    -fx-font-weight: bold;
-    -fx-padding: 10px 15px;
-    -fx-cursor: hand;
-}
-
-.primary-button:hover {
-    -fx-background-color: #596B54;
-}
-
-.primary-button:pressed {
-    -fx-background-color: #4F604A;
-}
-
-/* =========================================================
    ACCOUNT AREA
 ========================================================= */
 
@@ -301,15 +83,9 @@
     -fx-effect: dropshadow(gaussian, rgba(70,80,60,0.10), 10, 0.1, 0, 2);
 }
 
-.section-title {
-    -fx-font-size: 15px;
-    -fx-font-weight: bold;
-    -fx-text-fill: #405741;
-}
-
 .account-count {
     -fx-font-size: 11px;
-    -fx-text-fill: #8D9585;
+    -fx-text-fill: #71776A;
 }
 
 /* =========================================================
@@ -382,11 +158,6 @@
     -fx-background-color: #FFFFFF;
 }
 
-.empty-label {
-    -fx-font-size: 12px;
-    -fx-text-fill: #A0A495;
-}
-
 /* =========================================================
    TABLE SCROLLBAR
 ========================================================= */
@@ -413,45 +184,6 @@
 .account-table .scroll-bar .decrement-button {
     -fx-background-color: transparent;
     -fx-padding: 0;
-}
-
-/* =========================================================
-   PAGINATION
-========================================================= */
-
-.table-footer {
-    -fx-font-size: 11px;
-    -fx-text-fill: #8C9385;
-}
-
-.page-button {
-    -fx-background-color: #F8F8F3;
-    -fx-background-radius: 6px;
-    -fx-border-color: #DEE2D6;
-    -fx-border-radius: 6px;
-    -fx-min-width: 32px;
-    -fx-min-height: 30px;
-    -fx-max-height: 30px;
-    -fx-padding: 5px 9px;
-    -fx-text-fill: #64705E;
-    -fx-font-size: 11px;
-    -fx-cursor: hand;
-}
-
-.page-button:hover {
-    -fx-background-color: #EEF2E8;
-    -fx-border-color: #C9D1C2;
-}
-
-.page-button:pressed {
-    -fx-background-color: #E2E9DA;
-}
-
-.page-button-active {
-    -fx-background-color: #E2E9DA;
-    -fx-border-color: #CBD6C3;
-    -fx-text-fill: #4F604A;
-    -fx-font-weight: bold;
 }
 
 /* =========================================================
@@ -515,7 +247,7 @@
     -fx-background-color: #F1E7D2;
     -fx-background-radius: 15px;
     -fx-padding: 4px 10px;
-    -fx-text-fill: #9A7742;
+    -fx-text-fill: #806337;
     -fx-font-size: 10px;
     -fx-font-weight: bold;
 }
@@ -530,7 +262,7 @@
 
 .info-label {
     -fx-font-size: 10px;
-    -fx-text-fill: #7A8375;
+    -fx-text-fill: #6F776A;
 }
 
 .info-value {
@@ -546,7 +278,7 @@
     -fx-background-color: #DDEEDB;
     -fx-background-radius: 15px;
     -fx-padding: 4px 9px;
-    -fx-text-fill: #42814F;
+    -fx-text-fill: #3B7447;
     -fx-font-size: 10px;
     -fx-font-weight: bold;
 }
@@ -600,7 +332,7 @@
 }
 
 .danger-button {
-    -fx-background-color: #6F8068;
+    -fx-background-color: #697A63;
     -fx-background-radius: 7px;
     -fx-text-fill: white;
     -fx-font-size: 10px;
@@ -615,17 +347,6 @@
 
 .danger-button:pressed {
     -fx-background-color: #4F604A;
-}
-
-/* =========================================================
-   GENERAL FOCUS
-========================================================= */
-
-.button:focused,
-.text-field:focused,
-.combo-box:focused {
-    -fx-focus-color: transparent;
-    -fx-faint-focus-color: transparent;
 }
 
 /* =========================================================

@@ -1,5 +1,8 @@
 package com.coffeeshop.coffeeshopmanagement.service;
 
+import com.coffeeshop.coffeeshopmanagement.dao.AuditDAO;
+import com.coffeeshop.coffeeshopmanagement.model.AuditAction;
+import com.coffeeshop.coffeeshopmanagement.model.AuditTarget;
 import com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig;
 import com.coffeeshop.coffeeshopmanagement.config.SqlStatus;
 import com.coffeeshop.coffeeshopmanagement.dao.CustomerDAO;
@@ -22,37 +25,28 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Duplicate customers and customers who ask to be forgotten (TODO 4.8 and 3.4). Three actions, all for an administrator, each one
+ * Duplicate customers and customers who ask to be forgotten (TODO 4.8 and 3.4). Two actions, both for an administrator, each one
  * transaction, each refusing in the database itself (not only on the screen) when the data changed since the screen was loaded.
  *
- * <p><b>The rule between deleting and anonymising (decision D21).</b> A customer row that nothing points at (no order, no points,
- * no login) is <em>deleted</em>: there is nothing to keep. A customer who has orders can never be deleted, because the orders are
- * the shop's sales and the reports must not change; on request such a customer is <em>anonymised</em> instead: the name becomes
- * "Former customer #12", the phone and e-mail are cleared, the points are set to zero, a login is locked and renamed, and the
- * orders keep pointing at the row, so every total stays the same. Two rows that are the same person are <em>merged</em>: the
- * duplicate's orders and points move to the row that is kept and the duplicate disappears. Merging and anonymising cannot be
- * undone. This is the same pattern as for former staff ({@code AccountService.anonymiseStaff}, TODO 4.29).
+ * <p><b>Never delete (decision D21, as the owner answered).</b> There is no "delete a customer": a customer who asks to be forgotten is
+ * <em>anonymised</em>: the name becomes "Former customer #12", the phone and e-mail are cleared, the points are set to zero, a login
+ * is locked and renamed, and the orders keep pointing at the row, so every total stays the same. Two rows that are the same person
+ * are <em>merged</em>: the duplicate's orders and points move to the row that is kept (which keeps its own name and phone; it only
+ * takes the duplicate's phone or e-mail when it has none) and the duplicate disappears. Merging and anonymising cannot be undone.
+ * This is the same pattern as for former staff ({@code AccountService.anonymiseStaff}, TODO 4.29).
  *
- * <p>A merge is written down in {@code customer_merges}: the two ids, the name the duplicate had, how many orders and points moved,
- * who did it and when. The duplicate's phone and e-mail are not kept there (a mistyped phone can belong to a stranger, TODO 3.29);
- * when the kept customer is anonymised or deleted later, the names in its merge notes are removed with it.
+ * <p>A merge is written as one line of the audit log and of the security log (the two ids, how many orders and points moved, who
+ * and when). There is no table of merges: the audit line names the duplicate, and it is scrubbed when the kept customer is made
+ * anonymous later. The duplicate's phone and e-mail are not written anywhere (a mistyped phone can belong to a stranger, TODO 3.29).
  */
 public class CustomerMergeService {
 
     /** What a customer holds, to word the confirmation and to see what a button would refuse. */
     public record Impact(int orders, int openOrders, int points, boolean hasLogin, boolean anonymous) {
-        /** True when a delete is allowed: nothing points at the row (the same test as {@link CustomerDAO#deleteIfUnused}). */
-        public boolean deletable() {
-            return orders == 0 && points == 0 && !hasLogin;
-        }
     }
 
     /** What one merge moved. */
     public record MergeResult(int ordersMoved, int pointsMoved, String keptName) {
-    }
-
-    /** One line of the merge history of a kept customer. */
-    public record MergeNote(int removedId, String removedName, int ordersMoved, int pointsMoved, LocalDateTime mergedAt) {
     }
 
     private final CustomerDAO customerDAO;
@@ -123,11 +117,18 @@ public class CustomerMergeService {
                     throw new DataAccessException(I18n.t("customers.merge.points"));
                 }
 
+                // TODO 3.66: the kept customer keeps the LATER of the two "birthday discount given" days, so a merge cannot give it twice.
+                final java.time.LocalDate birthdayUsed = later(usedOn(connection, keepId), usedOn(connection, removeId));
                 int ordersMoved;
                 try (PreparedStatement st = connection.prepareStatement("UPDATE orders SET customer_id = ? WHERE customer_id = ?")) {
                     st.setInt(1, keepId);
                     st.setInt(2, removeId);
                     ordersMoved = st.executeUpdate();
+                }
+                try (PreparedStatement st = connection.prepareStatement("UPDATE reservations SET customer_id = ? WHERE customer_id = ?")) {
+                    st.setInt(1, keepId); // TODO 2.88: the bookings follow the customer that is kept
+                    st.setInt(2, removeId);
+                    st.executeUpdate();
                 }
                 // Removed only if it is still exactly what was read: the same points, no order or login that appeared meanwhile.
                 // The foreign keys would stop a delete that still has orders; this makes it a clear message instead of an SQL error.
@@ -144,31 +145,23 @@ public class CustomerMergeService {
                 }
                 // After the delete, so a phone taken from the duplicate is free again for the unique key.
                 try (PreparedStatement st = connection.prepareStatement(
-                        "UPDATE customers SET loyalty_points = loyalty_points + ?, phone = ?, email = ? WHERE id = ? AND anonymised_at IS NULL")) {
+                        "UPDATE customers SET loyalty_points = loyalty_points + ?, lifetime_points = lifetime_points + ?, phone = ?, email = ?, birthday_used_on = ? "
+                                + "WHERE id = ? AND anonymised_at IS NULL")) {
                     st.setInt(1, removed.points());
-                    st.setString(2, blank(kept.phone()) ? blankToNull(removed.phone()) : kept.phone());
-                    st.setString(3, blank(kept.email()) ? blankToNull(removed.email()) : kept.email());
-                    st.setInt(4, keepId);
+                    st.setInt(2, Math.max(removed.lifetime(), removed.points())); // what the duplicate earned goes with its orders
+                    st.setString(3, blank(kept.phone()) ? blankToNull(removed.phone()) : kept.phone());
+                    st.setString(4, blank(kept.email()) ? blankToNull(removed.email()) : kept.email());
+                    st.setString(5, birthdayUsed == null ? null : birthdayUsed.toString());
+                    st.setInt(6, keepId);
                     if (st.executeUpdate() == 0) {
                         throw new DataAccessException(I18n.t("customers.merge.changed"));
                     }
                 }
-                try (PreparedStatement st = connection.prepareStatement("INSERT INTO customer_merges "
-                        + "(kept_id, removed_id, removed_name, orders_moved, points_moved, merged_by, merged_at) VALUES (?, ?, ?, ?, ?, ?, ?)")) {
-                    User me = Session.getCurrentUser();
-                    st.setInt(1, keepId);
-                    st.setInt(2, removeId);
-                    st.setString(3, removed.name());
-                    st.setInt(4, ordersMoved);
-                    st.setInt(5, removed.points());
-                    if (me == null) {
-                        st.setNull(6, Types.INTEGER);
-                    } else {
-                        st.setInt(6, me.getId());
-                    }
-                    st.setString(7, DbTime.write(AppClock.now()));
-                    st.executeUpdate();
-                }
+                // The merge is one log line (rule D21, as the owner answered): the kept customer is the target, the duplicate's name and
+                // number are the "old" value, the detail is "orders|points" and the screen turns it into words. There is no table of
+                // merges: the line is scrubbed when the kept customer is made anonymous.
+                AuditDAO.write(connection, AuditAction.CUSTOMER_MERGED, AuditTarget.CUSTOMER, keepId, kept.name(),
+                        "#" + removeId + " " + removed.name(), null, ordersMoved + "|" + removed.points());
                 connection.commit();
                 SecurityLog.event(SecurityLog.actor() + " merged customer " + removeId + " into customer " + keepId
                         + " (" + ordersMoved + " orders, " + removed.points() + " points)");
@@ -180,6 +173,22 @@ public class CustomerMergeService {
         } catch (SQLException e) {
             throw new DataAccessException(I18n.t("customers.merge.fail"), e);
         }
+    }
+
+    /** The day the birthday discount was given to this customer (TODO 3.66), or null. */
+    private static java.time.LocalDate usedOn(Connection connection, int customerId) throws SQLException {
+        try (PreparedStatement st = connection.prepareStatement("SELECT birthday_used_on FROM customers WHERE id = ?")) {
+            st.setInt(1, customerId);
+            try (java.sql.ResultSet rs = st.executeQuery()) {
+                return rs.next() ? com.coffeeshop.coffeeshopmanagement.service.BirthdayRules.parse(rs.getString(1)) : null;
+            }
+        }
+    }
+
+    private static java.time.LocalDate later(java.time.LocalDate a, java.time.LocalDate b) {
+        if (a == null) return b;
+        if (b == null) return a;
+        return a.isAfter(b) ? a : b;
     }
 
     /**
@@ -207,7 +216,7 @@ public class CustomerMergeService {
                     throw new DataAccessException(I18n.t("customers.anon.open"));
                 }
                 try (PreparedStatement st = connection.prepareStatement("UPDATE customers SET full_name = ?, phone = NULL, email = NULL, "
-                        + "loyalty_points = 0, anonymised_at = ? WHERE id = ? AND anonymised_at IS NULL")) {
+                        + "loyalty_points = 0, lifetime_points = 0, birthday = NULL, birthday_used_on = NULL, anonymised_at = ? WHERE id = ? AND anonymised_at IS NULL")) {
                     st.setString(1, newName);
                     st.setString(2, DbTime.write(AppClock.now()));
                     st.setInt(3, customerId);
@@ -216,11 +225,10 @@ public class CustomerMergeService {
                     }
                 }
                 lockLogins(connection, customerId);
-                try (PreparedStatement st = connection.prepareStatement("UPDATE customer_merges SET removed_name = ? WHERE kept_id = ?")) {
-                    st.setString(1, newName);
-                    st.setInt(2, customerId);
-                    st.executeUpdate();
-                }
+                com.coffeeshop.coffeeshopmanagement.dao.ReservationDAO.anonymiseFor(connection, customerId, row.phone(), newName); // TODO 2.88
+                // TODO 4.2: older audit lines about this customer lose the name and the old and new values; this one names nobody
+                AuditDAO.scrubTarget(connection, AuditTarget.CUSTOMER, customerId, newName, true);
+                AuditDAO.write(connection, AuditAction.CUSTOMER_ANONYMISED, AuditTarget.CUSTOMER, customerId, newName, null, null, null);
                 connection.commit();
                 SecurityLog.event(SecurityLog.actor() + " made customer " + customerId + " anonymous");
             } catch (SQLException | RuntimeException e) {
@@ -232,60 +240,6 @@ public class CustomerMergeService {
         }
     }
 
-    /**
-     * Deletes a customer that nothing points at (rule D21): no order, no points, no login. Its merge notes go with it.
-     *
-     * @return false when something points at it, so it was not deleted (the person then has {@link #anonymise}); also false when
-     *         it is already gone
-     */
-    public boolean delete(int customerId) {
-        Permissions.requireAdmin("delete a customer");
-        try (Connection connection = DatabaseConfig.getConnection()) {
-            connection.setAutoCommit(false);
-            try {
-                boolean deleted = customerDAO.deleteIfUnused(connection, customerId);
-                if (deleted) {
-                    try (PreparedStatement st = connection.prepareStatement("DELETE FROM customer_merges WHERE kept_id = ?")) {
-                        st.setInt(1, customerId);
-                        st.executeUpdate();
-                    }
-                }
-                connection.commit();
-                if (deleted) {
-                    SecurityLog.event(SecurityLog.actor() + " deleted customer " + customerId);
-                }
-                return deleted;
-            } catch (SQLException | RuntimeException e) {
-                connection.rollback();
-                throw e;
-            }
-        } catch (SQLException e) {
-            // the orders' foreign key stops a customer that got an order between the check and the delete
-            throw new DataAccessException(I18n.t("customers.delete.fail"), e);
-        }
-    }
-
-    /** The merges into this customer, oldest first. */
-    public List<MergeNote> notesFor(int keptId) {
-        Permissions.requireAdmin("read the customer merge notes");
-        String sql = "SELECT removed_id, removed_name, orders_moved, points_moved, merged_at FROM customer_merges "
-                + "WHERE kept_id = ? ORDER BY id";
-        List<MergeNote> notes = new ArrayList<>();
-        try (Connection connection = DatabaseConfig.getConnection();
-             PreparedStatement st = connection.prepareStatement(sql)) {
-            st.setInt(1, keptId);
-            try (ResultSet rs = st.executeQuery()) {
-                while (rs.next()) {
-                    notes.add(new MergeNote(rs.getInt(1), rs.getString(2), rs.getInt(3), rs.getInt(4), DbTime.parse(rs.getString(5))));
-                }
-            }
-        } catch (SQLException e) {
-            throw new DataAccessException("Failed to load the customer merge notes", e);
-        }
-        return notes;
-    }
-
-    /** Every customer-role login of the customer: locked, a login name that says nothing, a password nobody knows. */
     private static void lockLogins(Connection connection, int customerId) throws SQLException {
         List<Integer> userIds = new ArrayList<>();
         try (PreparedStatement st = connection.prepareStatement(
@@ -330,15 +284,15 @@ public class CustomerMergeService {
         }
     }
 
-    private record Row(String name, String phone, String email, int points, boolean anonymous) {
+    private record Row(String name, String phone, String email, int points, int lifetime, boolean anonymous) {
     }
 
     private static Row read(Connection connection, int id) throws SQLException {
         try (PreparedStatement st = connection.prepareStatement(
-                "SELECT full_name, phone, email, loyalty_points, anonymised_at FROM customers WHERE id = ?")) {
+                "SELECT full_name, phone, email, loyalty_points, lifetime_points, anonymised_at FROM customers WHERE id = ?")) {
             st.setInt(1, id);
             try (ResultSet rs = st.executeQuery()) {
-                return rs.next() ? new Row(rs.getString(1), rs.getString(2), rs.getString(3), rs.getInt(4), rs.getString(5) != null) : null;
+                return rs.next() ? new Row(rs.getString(1), rs.getString(2), rs.getString(3), rs.getInt(4), rs.getInt(5), rs.getString(6) != null) : null;
             }
         }
     }

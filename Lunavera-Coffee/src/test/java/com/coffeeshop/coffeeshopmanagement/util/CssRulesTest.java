@@ -34,7 +34,9 @@ public class CssRulesTest {
             "label", "list-cell", "list-view", "password-field", "placeholder", "scroll-bar", "table-cell", "table-row-cell",
             "table-view", "text-field", "thumb", "tooltip", "track", "viewport", "virtual-flow");
 
-    private static final Pattern STRING_LITERAL = Pattern.compile("\"((?:\\\\.|[^\"\\\\])*)\"");
+    // "unrolled" so it loops instead of recursing once per character: the plain form ("((?:\\.|[^"\\])*)") overflowed the stack on the
+    // 2,000-character literals of MariaDbSchema in some runs (TODO 2.86). It matches exactly the same text.
+    private static final Pattern STRING_LITERAL = Pattern.compile("\"([^\"\\\\]*(?:\\\\.[^\"\\\\]*)*)\"");
     private static final Pattern TOKEN = Pattern.compile("[A-Za-z_][\\w-]*");
 
     private static String read(Path p) throws IOException {

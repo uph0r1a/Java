@@ -28,10 +28,12 @@ public class LoyaltyRedemptionRulesTest {
     @Test
     public void atMostHalfTheBillInWholePointsAndNeverMoreThanTheBalance() {
         assertEquals("half of 40.000 is 20.000 = 20 points", 20, LoyaltyPolicy.maxRedeemable(1000, d("40000")));
-        assertEquals("the balance is the limit when it is smaller", 7, LoyaltyPolicy.maxRedeemable(7, d("40000")));
+        assertEquals("the balance is the limit when it is smaller", 25, LoyaltyPolicy.maxRedeemable(25, d("80000")));
+        assertEquals("a balance under the least (20 points = 20.000) spends nothing", 0, LoyaltyPolicy.maxRedeemable(7, d("40000")));
         assertEquals("half of 45.500 is 22.750, whole points: 22", 22, LoyaltyPolicy.maxRedeemable(1000, d("45500")));
         assertEquals("a bill under 2.000 cannot pay even one point", 0, LoyaltyPolicy.maxRedeemable(1000, d("1999")));
-        assertEquals(1, LoyaltyPolicy.maxRedeemable(1000, d("2000")));
+        assertEquals("half of 39.999 is under 20.000: the least cannot be spent", 0, LoyaltyPolicy.maxRedeemable(1000, d("39999")));
+        assertEquals(20, LoyaltyPolicy.maxRedeemable(1000, d("40000")));
         assertEquals(0, LoyaltyPolicy.maxRedeemable(0, d("40000")));
         assertEquals(0, LoyaltyPolicy.maxRedeemable(100, BigDecimal.ZERO));
         assertEquals(0, LoyaltyPolicy.maxRedeemable(100, null));
@@ -43,6 +45,8 @@ public class LoyaltyRedemptionRulesTest {
         BigDecimal bill = d("40000");
         assertNull("no points typed is fine, with or without a customer", LoyaltyPolicy.redemptionProblem(0, null, bill));
         assertNull(LoyaltyPolicy.redemptionProblem(20, 100, bill));
+        assertEquals("the owner's least: 20 points (20.000)", I18n.t("pos.points.min", 20, com.coffeeshop.coffeeshopmanagement.util.CurrencyUtil.format(new BigDecimal("20000"))), LoyaltyPolicy.redemptionProblem(19, 100, bill));
+        assertEquals(I18n.t("pos.points.min", 20, com.coffeeshop.coffeeshopmanagement.util.CurrencyUtil.format(new BigDecimal("20000"))), LoyaltyPolicy.redemptionProblem(1, 100, bill));
         assertEquals(I18n.t("pos.points.invalid"), LoyaltyPolicy.redemptionProblem(-1, 100, bill));
         assertEquals(I18n.t("pos.points.nocustomer"), LoyaltyPolicy.redemptionProblem(5, null, bill));
         assertEquals(I18n.t("pos.points.notenough", 4), LoyaltyPolicy.redemptionProblem(5, 4, bill));

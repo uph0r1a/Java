@@ -37,7 +37,8 @@ public class DashboardStatsService {
             List<Order> todayOrdersList,
             List<Order> staleOpenOrders,
             List<Integer> heldTablesWithoutOrder,
-            int sharedCustomerPhones
+            int sharedCustomerPhones,
+            List<com.coffeeshop.coffeeshopmanagement.dao.ReportDAO.PaymentSplit> todayByMethod
     ) {
     }
 
@@ -79,8 +80,28 @@ public class DashboardStatsService {
                 orderDAO.findTodayOrders(),
                 orderDAO.findStaleOpenOrders(STALE_OPEN_AFTER),
                 new com.coffeeshop.coffeeshopmanagement.dao.TableDAO().holdsWithoutOrder(),
-                customerDAO.countSharedPhones()
+                customerDAO.countSharedPhones(),
+                todayByMethod()
         );
+    }
+
+    /** Today's revenue and order count per payment method (TODO 4.30), from the same ledger as the report, so the lines add up to the revenue figure. */
+    private static List<com.coffeeshop.coffeeshopmanagement.dao.ReportDAO.PaymentSplit> todayByMethod() {
+        LocalDate today = com.coffeeshop.coffeeshopmanagement.util.AppClock.today();
+        return new com.coffeeshop.coffeeshopmanagement.dao.ReportDAO().paymentSplit(today, today);
+    }
+
+    /** One line per method for the revenue card: "Cash: 1.200.000 đ (8 orders)"; empty when nothing was sold today. */
+    public static String methodsText(List<com.coffeeshop.coffeeshopmanagement.dao.ReportDAO.PaymentSplit> split) {
+        if (split == null || split.isEmpty()) return "";
+        StringBuilder text = new StringBuilder();
+        for (var part : split) {
+            if (text.length() > 0) text.append('\n');
+            text.append(part.method() == null ? I18n.t("report.payment.unknown") : part.method().label()).append(": ")
+                    .append(com.coffeeshop.coffeeshopmanagement.util.CurrencyUtil.format(part.revenue()))
+                    .append(" (").append(I18n.t("report.orders.count", part.orders())).append(")");
+        }
+        return text.toString();
     }
 
     /** Tables marked "in use" by hand with no order (TODO 2.53), or null when there are none. */

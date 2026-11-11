@@ -29,7 +29,7 @@ public final class CrashHandler {
     }
 
     static void report(String threadName, Throwable error) {
-        LOGGER.log(Level.SEVERE, "Unhandled error on thread " + threadName, error);
+        LOGGER.log(Level.SEVERE, "Unhandled error on thread " + threadName + " in " + AppVersion.logLine(), error);
         if (!shouldShowDialog(MonotonicClock.millis())) return;
         try {
             Platform.runLater(() -> AlertUtil.error(I18n.t("crash.title"),

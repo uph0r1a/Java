@@ -36,7 +36,7 @@ public class LaterColumnsExistTest {
         for (String wanted : new String[]{"categories.sort_order", "products.sort_order", "products.reorder_level",
                 "orders.points_earned", "orders.cash_received", "orders.change_given", "orders.transfer_ref",
                 "products.code", "order_items.note", "employees.anonymised_at", "orders.points_redeemed", "orders.points_value",
-                "customers.anonymised_at", "shift_closes.cash_out", "orders.cancelled_at", "users.pin_hash", "users.pin_failures"}) {
+                "customers.anonymised_at", "customers.birthday", "shift_closes.cash_out", "orders.cancelled_by", "orders.cancelled_at", "orders.cancel_reason", "orders.queue_no", "orders.rev", "customers.lifetime_points", "users.pin_hash", "users.pin_failures", "orders.voucher_code", "orders.voucher_value"}) {
             assertEquals(wanted, true, names.contains(wanted));
         }
     }

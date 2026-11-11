@@ -49,14 +49,17 @@ public class PasswordChangeService {
             }
             THROTTLE.recordSuccess(throttleKey);
         }
+        // the default password is named first: it is also "easy" since TODO 2A.47, but the person should be told why it is refused
+        if (DatabaseConfig.DEFAULT_ADMIN_PASSWORD.equals(newPassword)) return Result.IS_DEFAULT;
         if (!ValidationUtil.isValidPassword(newPassword)
                 || ValidationUtil.containsUsername(newPassword, user.getUsername())) return Result.WEAK;
-        if (DatabaseConfig.DEFAULT_ADMIN_PASSWORD.equals(newPassword)) return Result.IS_DEFAULT;
         if (PasswordUtil.matches(newPassword, user.getPasswordHash())) return Result.SAME_AS_CURRENT;
 
         String newHash = PasswordUtil.hash(newPassword);
         userDAO.updatePasswordHash(userId, newHash);
         com.coffeeshop.coffeeshopmanagement.util.Session.passwordChangedBySelf(userId, newHash);
+        com.coffeeshop.coffeeshopmanagement.dao.AuditDAO.recordQuietly(com.coffeeshop.coffeeshopmanagement.model.AuditAction.PASSWORD_CHANGED,
+                com.coffeeshop.coffeeshopmanagement.model.AuditTarget.ACCOUNT, userId, user.getUsername(), null, null, null); // TODO 4.2: no password, no hash
         com.coffeeshop.coffeeshopmanagement.util.SecurityLog.event("password changed by the account owner: '"
                 + user.getUsername() + "' (id " + userId + ")");
         return Result.OK;

@@ -1,5 +1,8 @@
 package com.coffeeshop.coffeeshopmanagement.service;
 
+import com.coffeeshop.coffeeshopmanagement.dao.AuditDAO;
+import com.coffeeshop.coffeeshopmanagement.model.AuditAction;
+import com.coffeeshop.coffeeshopmanagement.model.AuditTarget;
 import com.coffeeshop.coffeeshopmanagement.util.I18n;
 import com.coffeeshop.coffeeshopmanagement.config.SqlStatus;
 import com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig;
@@ -20,6 +23,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.List;
 import java.time.LocalDateTime;
 
 /**
@@ -104,6 +108,8 @@ public class AccountService {
                 // making their own first account is the exception.
                 user.setMustChangePassword(!onlyWhenNoAccountExists);
                 insertUser(connection, user);
+                AuditDAO.write(connection, AuditAction.ACCOUNT_CREATED, AuditTarget.ACCOUNT, user.getId(), user.getUsername(), null,
+                        user.getRole().name(), user.getStatus().name()); // TODO 4.2
                 connection.commit();
                 SecurityLog.event(SecurityLog.actor() + " created account '" + user.getUsername() + "' (id " + user.getId()
                         + ", " + user.getRole() + ", " + user.getStatus() + ")");
@@ -132,6 +138,7 @@ public class AccountService {
         try (Connection connection = DatabaseConfig.getConnection()) {
             connection.setAutoCommit(false);
             try {
+                String[] before = readRoleAndStatus(connection, existing.getId()); // what the database holds now, for the audit (TODO 4.2)
                 if (existingEmployee != null) {
                     if (phoneTaken(connection, form.employee().getPhone(), existingEmployee.getId())) {
                         throw new DataAccessException(I18n.t("employee.phone.taken"));
@@ -163,6 +170,7 @@ public class AccountService {
                 }
                 changeRoleAndStatus(connection, existing.getId(), form.role(),
                         form.active() ? AccountStatus.ACTIVE : AccountStatus.LOCKED);
+                auditAccountChange(connection, existing, before, form.role(), form.active() ? AccountStatus.ACTIVE : AccountStatus.LOCKED, newHash != null);
                 connection.commit();
                 if (newHash != null) Session.passwordChangedBySelf(existing.getId(), newHash); // no-op for someone else's account
                 boolean newPassword = form.password() != null && !form.password().isBlank();
@@ -187,8 +195,10 @@ public class AccountService {
                 if (!lock && target.getEmployeeId() != null && isAnonymised(connection, target.getEmployeeId())) {
                     throw new DataAccessException(I18n.t("staff.anon.nounlock")); // TODO 4.29: their details are gone for good
                 }
+                String[] before = readRoleAndStatus(connection, target.getId());
                 changeRoleAndStatus(connection, target.getId(), target.getRole(),
                         lock ? AccountStatus.LOCKED : AccountStatus.ACTIVE);
+                auditAccountChange(connection, target, before, target.getRole(), lock ? AccountStatus.LOCKED : AccountStatus.ACTIVE, false);
                 if (target.getEmployeeId() != null) {
                     try (PreparedStatement st = connection.prepareStatement("UPDATE employees SET active = ? WHERE id = ?")) {
                         st.setBoolean(1, !lock);
@@ -205,6 +215,37 @@ public class AccountService {
             }
         } catch (SQLException e) {
             throw translate(I18n.t("account.status.change.fail"), e);
+        }
+    }
+
+    /** The role and the status stored for this account right now ({"ADMIN", "ACTIVE"}), or {null, null} when it is gone. */
+    private static String[] readRoleAndStatus(Connection connection, int userId) throws SQLException {
+        try (PreparedStatement st = connection.prepareStatement("SELECT role, status FROM users WHERE id = ?")) {
+            st.setInt(1, userId);
+            try (ResultSet rs = st.executeQuery()) {
+                return rs.next() ? new String[]{rs.getString(1), rs.getString(2)} : new String[]{null, null};
+            }
+        }
+    }
+
+    /**
+     * Writes what an account edit really changed to the audit log (TODO 4.2), on the edit's transaction: a new role, a lock or an
+     * unlock, a password the administrator set. A save that changes none of these writes nothing, and no password or hash is ever
+     * written, only the fact that it was reset.
+     */
+    private static void auditAccountChange(Connection connection, User account, String[] before, Role newRole, AccountStatus newStatus,
+                                           boolean passwordReset) throws SQLException {
+        Integer id = account.getId();
+        String name = account.getUsername();
+        if (before[0] != null && !before[0].equals(newRole.name())) {
+            AuditDAO.write(connection, AuditAction.ACCOUNT_ROLE_CHANGED, AuditTarget.ACCOUNT, id, name, before[0], newRole.name(), null);
+        }
+        if (before[1] != null && !before[1].equals(newStatus.name())) {
+            AuditDAO.write(connection, newStatus == AccountStatus.LOCKED ? AuditAction.ACCOUNT_LOCKED : AuditAction.ACCOUNT_UNLOCKED,
+                    AuditTarget.ACCOUNT, id, name, before[1], newStatus.name(), null);
+        }
+        if (passwordReset) {
+            AuditDAO.write(connection, AuditAction.PASSWORD_RESET, AuditTarget.ACCOUNT, id, name, null, null, null);
         }
     }
 
@@ -245,6 +286,8 @@ public class AccountService {
                     st.setInt(1, employeeId);
                     st.executeUpdate();
                 }
+                AuditDAO.write(connection, AuditAction.STAFF_REMOVED, AuditTarget.STAFF, employeeId, row.employee().getFullName(), null, null,
+                        row.hasAccount() ? row.username() : null); // TODO 4.2: the login name, when there was a login
                 connection.commit();
                 SecurityLog.event(SecurityLog.actor() + " removed staff record " + employeeId
                         + (row.hasAccount() ? " and its account (id " + row.userId() + ")" : ""));
@@ -261,7 +304,7 @@ public class AccountService {
     /**
      * Removes the personal details of a person who has left and appears in the shop's records (TODO 4.29): the name becomes
      * "Former staff #12", the phone, email, address and salary are cleared, the login name is replaced and the password made
-     * unusable, and the names copied into the stock log and the closed shifts are rewritten too, so nothing of them is left. The
+     * unusable, and the names copied into the stock log, the closed shifts, refunds, expenses, the time clock, gift cards and bookings are rewritten too (TODO 2.87), so nothing of them is left. The
      * orders keep pointing at the same record, so the sales stay in the reports. Only for someone who is no longer working, and
      * only once: it cannot be undone.
      */
@@ -278,9 +321,11 @@ public class AccountService {
         }
         int employeeId = row.employee().getId();
         String newName = I18n.t("staff.former.name", employeeId);
+        final String[] loginNameAfter = new String[1]; // the login name the account gets, for the audit rewrite below
         try (Connection connection = DatabaseConfig.getConnection()) {
             connection.setAutoCommit(false);
             try {
+                List<String> oldNames = namesToMatch(connection, row); // read before the record is renamed
                 try (PreparedStatement st = connection.prepareStatement(
                         "UPDATE employees SET full_name = ?, phone = NULL, email = NULL, address = NULL, salary = NULL, active = ?, "
                                 + "anonymised_at = ? WHERE id = ? AND anonymised_at IS NULL")) {
@@ -297,6 +342,7 @@ public class AccountService {
                     if (usernameTaken(connection, loginName)) {
                         loginName = loginName + "-" + row.userId();
                     }
+                    loginNameAfter[0] = loginName;
                     // only a locked account: a person who can still sign in is not a former member of staff
                     try (PreparedStatement st = connection.prepareStatement(
                             "UPDATE users SET username = ?, password_hash = ?, must_change_password = 0, pin_hash = NULL, pin_failures = 0 WHERE id = ? AND status = " + SqlStatus.LOCKED)) {
@@ -318,6 +364,15 @@ public class AccountService {
                     st.setInt(2, employeeId);
                     st.executeUpdate();
                 }
+                scrubStaffNames(connection, employeeId, row.hasAccount() ? row.userId() : null, oldNames, newName);
+                // The audit log keeps no name either (TODO 4.2): this line is about the anonymous name, and every older line that
+                // names the person, their login or what they did under their own name is rewritten in the same transaction.
+                AuditDAO.write(connection, AuditAction.STAFF_ANONYMISED, AuditTarget.STAFF, employeeId, newName, null, null, null);
+                AuditDAO.scrubActor(connection, employeeId, newName);
+                AuditDAO.scrubTarget(connection, AuditTarget.STAFF, employeeId, newName, true);
+                if (row.hasAccount()) {
+                    AuditDAO.scrubTarget(connection, AuditTarget.ACCOUNT, row.userId(), loginNameAfter[0], false);
+                }
                 connection.commit();
                 SecurityLog.event(SecurityLog.actor() + " made staff record " + employeeId + " anonymous");
             } catch (SQLException | RuntimeException e) {
@@ -327,6 +382,62 @@ public class AccountService {
         } catch (SQLException e) {
             throw translate(I18n.t("staff.anon.fail"), e);
         }
+    }
+
+    /**
+     * The name copied into every other table that records who did something (TODO 2.87), in the same transaction: refunds,
+     * expenses, the time clock, gift cards and bookings. The first three have an id next to the name (the staff record for refunds
+     * and expenses, the account for the time clock); gift cards and bookings got one with this change, and a row from before that has
+     * only the text, so it is matched on the old name, but only a name nobody else carries ({@link #namesToMatch}).
+     */
+    private static void scrubStaffNames(Connection connection, int employeeId, Integer userId, List<String> oldNames, String newName)
+            throws SQLException {
+        updateText(connection, "UPDATE refunds SET refunded_by_name = ? WHERE refunded_by = ?", newName, employeeId);
+        updateText(connection, "UPDATE expenses SET recorded_by_name = ? WHERE recorded_by = ?", newName, employeeId);
+        if (userId != null) {
+            updateText(connection, "UPDATE time_clock SET user_name = ? WHERE user_id = ?", newName, userId);
+        }
+        updateText(connection, "UPDATE gift_cards SET sold_by = ? WHERE sold_by_id = ?", newName, employeeId);
+        updateText(connection, "UPDATE reservations SET created_by = ? WHERE created_by_id = ?", newName, employeeId);
+        for (String old : oldNames) {
+            updateText(connection, "UPDATE gift_cards SET sold_by = ? WHERE sold_by_id IS NULL AND sold_by = ?", newName, old);
+            updateText(connection, "UPDATE reservations SET created_by = ? WHERE created_by_id IS NULL AND created_by = ?", newName, old);
+        }
+    }
+
+    private static void updateText(Connection connection, String sql, String text, Object key) throws SQLException {
+        try (PreparedStatement st = connection.prepareStatement(sql)) {
+            st.setString(1, text);
+            if (key instanceof Integer id) st.setInt(2, id);
+            else st.setString(2, (String) key);
+            st.executeUpdate();
+        }
+    }
+
+    /**
+     * The texts this person's name was copied under into rows that have no id: the staff record's full name and the login name (what
+     * the display name falls back to). A text that any other staff record or login also carries is left out, so that making one person
+     * anonymous never rewrites the rows of someone who only has the same name.
+     */
+    private static List<String> namesToMatch(Connection connection, com.coffeeshop.coffeeshopmanagement.model.StaffRow row) throws SQLException {
+        List<String> names = new java.util.ArrayList<>();
+        int ownUser = row.userId() == null ? -1 : row.userId();
+        for (String text : new String[]{row.employee().getFullName(), row.username()}) {
+            if (text == null || text.isBlank() || names.contains(text)) continue;
+            boolean shared = false;
+            try (PreparedStatement st = connection.prepareStatement(
+                    "SELECT 1 FROM employees WHERE full_name = ? AND id <> ? UNION ALL SELECT 1 FROM users WHERE username = ? AND id <> ?")) {
+                st.setString(1, text);
+                st.setInt(2, row.employee().getId());
+                st.setString(3, text);
+                st.setInt(4, ownUser);
+                try (ResultSet rs = st.executeQuery()) {
+                    shared = rs.next();
+                }
+            }
+            if (!shared) names.add(text);
+        }
+        return names;
     }
 
     /**
@@ -420,5 +531,21 @@ public class AccountService {
             return new DataAccessException(I18n.t("account.exists"), e);
         }
         return new DataAccessException(what + ": " + m, e);
+    }
+
+    public java.util.List<User> findAllUsers() {
+        return new com.coffeeshop.coffeeshopmanagement.dao.UserDAO().findAll();
+    }
+
+    public java.util.List<Employee> findAllEmployees() {
+        return employeeDAO.findAll();
+    }
+
+    public java.util.Optional<Employee> findEmployee(int id) {
+        return employeeDAO.findById(id);
+    }
+
+    public int countActiveAdmins() {
+        return new com.coffeeshop.coffeeshopmanagement.dao.UserDAO().countActiveAdmins();
     }
 }

@@ -1,0 +1,26 @@
+/*
+ * GENERATED FILE - do not edit by hand (TODO 5.44, the large text).
+ * The large sizes of common-tables.css, rule by rule.
+ * Added by AppStyle to a window while the large text is chosen. Regenerate with service/LargeTextSheet.main after a
+ * change to any style sheet; LargeTextSheetTest fails when a file here is out of date.
+ */
+
+.status-dot-occupied {
+    -fx-font-size: 15px !important;
+}
+
+.status-dot-empty {
+    -fx-font-size: 15px !important;
+}
+
+.status-legend-text {
+    -fx-font-size: 14px !important;
+}
+
+.table-button-occupied {
+    -fx-font-size: 15px !important;
+}
+
+.table-button-empty {
+    -fx-font-size: 15px !important;
+}

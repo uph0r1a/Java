@@ -42,14 +42,17 @@ public class GroupByRulesTest {
      *     two texts that only SHOW such a query to the owner.</li>
      * </ul>
      */
-    private static final Map<String, Integer> REVIEWED = Map.of(
-            "dao/ReportDAO.java", 7,
-            "dao/ShiftDAO.java", 1,
-            "dao/OrderDAO.java", 1,
-            "dao/CategoryDAO.java", 1,
-            "dao/CustomerDAO.java", 1,
-            "dao/TableDAO.java", 1,
-            "config/SchemaMigrations.java", 13);
+    private static final Map<String, Integer> REVIEWED = Map.ofEntries(
+            Map.entry("dao/ReportDAO.java", 12),   // read 2026-11-05 (TODO 6.73): channelSales, discountsByCashier, byCashier, expenses, optionSales, unitsSold: every selected column is grouped or inside MAX / SUM / COUNT
+            Map.entry("dao/ShiftDAO.java", 2),   // TODO 4.53: + discountsByPerson: only MAX / SUM are selected, ORDER BY uses the grouped expression; read, not run on MariaDB
+            Map.entry("dao/OrderDAO.java", 2),   // read 2026-11-05: the refunds-per-line subquery selects only the grouped id and SUM
+            Map.entry("dao/CategoryDAO.java", 1),
+            Map.entry("dao/CustomerDAO.java", 3),   // read 2026-11-05: figuresSql groups by customer_id with aggregates only; the shared-phone count selects the grouped phone
+            Map.entry("dao/GiftCardDAO.java", 2),   // read 2026-11-05: card_id grouped, SUM(amount); 2026-11-06 (TODO 5.51): usesForOrder selects the grouped code, initial_amount and card_id plus SUM and MAX
+            Map.entry("dao/TableDAO.java", 1),
+            Map.entry("dao/StockHistoryDAO.java", 1),   // TODO 4.59: o.id is the grouped column, the rest is inside MAX / SUM
+            Map.entry("dao/ComplimentaryDAO.java", 2),   // TODO 4.61: both select only the grouped kind and person plus MAX / SUM; read, not run on MariaDB
+            Map.entry("config/SchemaMigrations.java", 18));   // read 2026-11-05: every one selects only the grouped columns (and COUNT)
 
     private static boolean isComment(String line) {
         String t = line.stripLeading();

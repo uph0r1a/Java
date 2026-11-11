@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.util.Comparator;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -76,12 +77,14 @@ public class DataPathsTest {
     }
 
     @Test
-    public void withoutASettingTheDefaultIsDataInsideTheStartUpFolder() {
+    public void withoutASettingTheDefaultIsTheOneDefaultDirChose() {
         System.clearProperty("lunavera.dataDir");
         if (System.getenv(DataPaths.DATA_DIR_ENV) != null && !System.getenv(DataPaths.DATA_DIR_ENV).isBlank()) {
             return; // this machine sets the environment variable; the default is not what applies here
         }
-        assertEquals(Path.of(System.getProperty("user.dir"), "data").toAbsolutePath().normalize(), DataPaths.dataDir());
+        DataPaths.forgetDefaultForTests();
+        assertEquals(DataPaths.defaultDir(), DataPaths.dataDir());
+        DataPaths.forgetDefaultForTests();
     }
 
     @Test
@@ -90,7 +93,107 @@ public class DataPathsTest {
         if (System.getenv(DataPaths.DATA_DIR_ENV) != null && !System.getenv(DataPaths.DATA_DIR_ENV).isBlank()) {
             return;
         }
-        assertEquals(Path.of(System.getProperty("user.dir"), "data").toAbsolutePath().normalize(), DataPaths.dataDir());
+        DataPaths.forgetDefaultForTests();
+        assertEquals(DataPaths.defaultDir(), DataPaths.dataDir());
+        DataPaths.forgetDefaultForTests();
+    }
+
+    // ---------------------------------------------------------------------- TODO 3.69: the default does not follow the start-up folder
+
+    private Path folderWithShop(String name) throws IOException {
+        Path dir = Files.createDirectories(sandbox.resolve(name));
+        Files.writeString(dir.resolve("lunavera.db"), "database bytes");
+        return dir;
+    }
+
+    @Test
+    public void aStartUpFolderWithoutAShopNeverChangesTheDefault() throws IOException {
+        Path perUser = sandbox.resolve("per-user");
+        Path remembered = folderWithShop("remembered");
+        Path emptyOne = Files.createDirectories(sandbox.resolve("shortcut-a").resolve("data"));
+        Path emptyTwo = sandbox.resolve("shortcut-b").resolve("data"); // does not even exist
+        assertEquals(remembered, DataPaths.chooseDefault(emptyOne, remembered, perUser));
+        assertEquals("a second shortcut finds the same shop", DataPaths.chooseDefault(emptyOne, remembered, perUser),
+                DataPaths.chooseDefault(emptyTwo, remembered, perUser));
+        assertEquals("with nothing remembered it is the fixed folder, from any start-up folder", perUser.toAbsolutePath().normalize(),
+                DataPaths.chooseDefault(emptyOne, null, perUser));
+        assertEquals(DataPaths.chooseDefault(emptyOne, null, perUser), DataPaths.chooseDefault(emptyTwo, null, perUser));
+    }
+
+    @Test
+    public void aStartUpFolderThatHoldsAShopKeepsBeingUsed() throws IOException {
+        Path startUp = folderWithShop("project-data");
+        Path remembered = folderWithShop("remembered");
+        assertEquals("an install from before this rule, or the project folder, keeps its data", startUp,
+                DataPaths.chooseDefault(startUp, remembered, sandbox.resolve("per-user")));
+    }
+
+    @Test
+    public void aMariaDbShopHasNoDatabaseFileButItsSettingsCountAsAShop() throws IOException {
+        Path dir = Files.createDirectories(sandbox.resolve("server-shop"));
+        assertFalse(DataPaths.holdsShop(dir));
+        Files.writeString(dir.resolve("database.properties"), "db.type=mariadb\n");
+        assertTrue(DataPaths.holdsShop(dir));
+        assertFalse(DataPaths.holdsShop(null));
+    }
+
+    @Test
+    public void aRememberedFolderThatNoLongerHoldsAShopIsIgnored() throws IOException {
+        Path gone = Files.createDirectories(sandbox.resolve("gone"));
+        Path perUser = sandbox.resolve("per-user");
+        assertEquals(perUser.toAbsolutePath().normalize(), DataPaths.chooseDefault(sandbox.resolve("nothing"), gone, perUser));
+    }
+
+    @Test
+    public void theFixedFolderIsThePlaceEachSystemKeepsUserData() {
+        assertEquals(Path.of("C:\\Users\\Mai\\AppData\\Local", "Lunavera"),
+                DataPaths.perUserDir("Windows 11", "C:\\Users\\Mai", "C:\\Users\\Mai\\AppData\\Local", null));
+        assertEquals("no LOCALAPPDATA: the usual place under the home folder", Path.of("C:\\Users\\Mai", "AppData", "Local", "Lunavera"),
+                DataPaths.perUserDir("Windows 10", "C:\\Users\\Mai", "", null));
+        assertEquals(Path.of("/Users/mai", "Library", "Application Support", "Lunavera"), DataPaths.perUserDir("Mac OS X", "/Users/mai", null, null));
+        assertEquals(Path.of("/home/mai", ".local", "share", "lunavera"), DataPaths.perUserDir("Linux", "/home/mai", null, null));
+        assertEquals(Path.of("/data/xdg", "lunavera"), DataPaths.perUserDir("Linux", "/home/mai", null, "/data/xdg"));
+    }
+
+    @Test
+    public void theFolderInUseIsRememberedOnceItHoldsAShop() throws IOException {
+        assertFalse("nothing to remember in an empty folder", DataPaths.rememberCurrent());
+        assertNull(DataPaths.rememberedDir());
+        Files.createDirectories(data);
+        Files.writeString(data.resolve("lunavera.db"), "database bytes");
+        assertTrue(DataPaths.rememberCurrent());
+        assertEquals(data, DataPaths.rememberedDir());
+        assertTrue("the file is in the user's home", Files.isRegularFile(home.resolve(DataPaths.LOCATION_FILE)));
+        assertTrue("saying it again changes nothing", DataPaths.rememberCurrent());
+        assertEquals(data, DataPaths.rememberedDir());
+    }
+
+    @Test
+    public void aDamagedLocationFileIsNoLocation() throws IOException {
+        Path file = home.resolve(DataPaths.LOCATION_FILE);
+        Files.writeString(file, "not/absolute\n");
+        assertNull(DataPaths.rememberedDir());
+        Files.writeString(file, "");
+        assertNull(DataPaths.rememberedDir());
+        Files.writeString(file, folderWithShop("a") + "\n" + folderWithShop("b"));
+        assertNull("two lines is not one folder", DataPaths.rememberedDir());
+    }
+
+    @Test
+    public void anEmptyFolderWhileAShopExistsElsewhereIsReportedBeforeAnythingIsWritten() throws IOException {
+        Path old = folderWithShop("old-shop");
+        Files.writeString(home.resolve(DataPaths.LOCATION_FILE), old + "\n");
+        assertEquals("the program was pointed at the empty folder 'data'", old, DataPaths.existingShopElsewhere());
+        Files.createDirectories(data);
+        Files.writeString(data.resolve("lunavera.db"), "database bytes");
+        assertNull("this folder holds a shop: nothing to ask", DataPaths.existingShopElsewhere());
+    }
+
+    @Test
+    public void noQuestionWhenNothingIsRememberedOrTheRememberedFolderIsTheOneInUse() throws IOException {
+        assertNull(DataPaths.existingShopElsewhere());
+        Files.writeString(home.resolve(DataPaths.LOCATION_FILE), data + "\n");
+        assertNull("the remembered folder is this one", DataPaths.existingShopElsewhere());
     }
 
     @Test

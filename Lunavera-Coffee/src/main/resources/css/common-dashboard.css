@@ -1,96 +1,12 @@
-/* =========================================================
-   LUNAVERA COFFEE - ADMIN TRANG CHU
-   Theme: Xanh Lá Mạ Non Đậm Đà & Sang Trọng (Rich Fresh Leaf Green)
-   ========================================================= */
-
-.root {
-    -fx-background-color: #f3f6ee;
-}
+/* Shared by the administrator and employee home screens (and the customer screen): cards, charts, inventory rows, filters.
+   Loaded BEFORE the screen's own sheet (the stylesheets attribute of each FXML file), so a screen can still override a rule here.
+   Used by: admin-trangchu.css. */
 
 .dashboard, #dashboardRoot {
     -fx-background-color: #f3f6ee;
 }
 
-/* ==================== SIDEBAR ==================== */
-
-.sidebar {
-    -fx-background-color: #e4eed6;
-    -fx-border-color: #cbdbba;
-    -fx-border-width: 0 1px 0 0;
-}
-
-.sidebar-separator {
-    -fx-background-color: #d1dfc1;
-    -fx-padding: 0 15px;
-}
-
-.sidebar-separator .line {
-    -fx-border-color: #d1dfc1;
-    -fx-border-width: 0.5px;
-}
-
-/* Menu Button */
-.menu-button {
-    -fx-background-color: transparent;
-    -fx-background-radius: 9px;
-    -fx-border-radius: 9px;
-    -fx-text-fill: #345823;
-    -fx-font-size: 14px;
-    -fx-font-weight: bold;
-    -fx-alignment: CENTER_LEFT;
-    -fx-padding: 10px 18px;
-    -fx-cursor: hand;
-}
-
-.menu-button:hover {
-    -fx-background-color: #d5e6bf;
-    -fx-text-fill: #1c380f;
-}
-
-/* Menu Active: Xanh lá mạ non đậm, tương phản cao */
-.menu-button-active {
-    -fx-background-color: #3e7728;
-    -fx-background-radius: 9px;
-    -fx-text-fill: #ffffff;
-    -fx-font-weight: bold;
-    -fx-effect: dropshadow(gaussian, rgba(45, 85, 25, 0.28), 8, 0, 0, 2);
-}
-
-.menu-button-active:hover {
-    -fx-background-color: #356722;
-    -fx-text-fill: #ffffff;
-}
-
-.logout-button {
-    -fx-background-color: #d9e8c6;
-    -fx-background-radius: 8px;
-    -fx-border-color: #c4d9ab;
-    -fx-border-radius: 8px;
-    -fx-border-width: 1px;
-    -fx-text-fill: #395f26;
-    -fx-font-size: 13px;
-    -fx-font-weight: bold;
-    -fx-alignment: CENTER_LEFT;
-    -fx-padding: 9px 14px;
-    -fx-cursor: hand;
-}
-
-.logout-button:hover {
-    -fx-background-color: #cce0b5;
-    -fx-text-fill: #1d3a10;
-    -fx-border-color: #b0cb93;
-}
-
-.sidebar-footer {
-    -fx-text-fill: #5b7e45;
-    -fx-font-size: 12px;
-    -fx-font-style: italic;
-    -fx-line-spacing: 4px;
-    -fx-padding: 6px 0 0 0;
-}
-
 /* ==================== CONTENT ==================== */
-
 .content {
     -fx-background-color: #f3f6ee;
     -fx-padding: 22px 30px 25px 30px;
@@ -121,7 +37,6 @@
 }
 
 /* ==================== THẺ THỐNG KÊ (STAT CARDS) ==================== */
-
 .stat-card {
     -fx-background-color: #ffffff;
     -fx-background-radius: 12px;
@@ -152,7 +67,7 @@
 }
 
 .stat-description {
-    -fx-text-fill: #6c8a58;
+    -fx-text-fill: #617c4f;
     -fx-font-size: 11px;
 }
 
@@ -163,7 +78,6 @@
 }
 
 /* ==================== CONTENT CARDS ==================== */
-
 .content-card {
     -fx-background-color: #ffffff;
     -fx-background-radius: 12px;
@@ -197,7 +111,6 @@
 }
 
 /* ==================== BIỂU ĐỒ (LINE CHART) ==================== */
-
 .chart {
     -fx-background-color: transparent;
     -fx-padding: 6px;
@@ -240,7 +153,6 @@
 }
 
 /* ==================== THỐNG KÊ ĐƠN HÀNG ==================== */
-
 .order-status-label {
     -fx-text-fill: #476635;
     -fx-font-size: 13px;
@@ -272,7 +184,6 @@
 }
 
 /* ==================== TRẠNG THÁI BÀN (TABLES) ==================== */
-
 .table-card {
     -fx-background-radius: 9px;
     -fx-border-radius: 9px;
@@ -282,7 +193,6 @@
 }
 
 /* ==================== CẢNH BÁO TỒN KHO ==================== */
-
 .inventory-row {
     -fx-background-color: #f8faf4;
     -fx-background-radius: 8px;
@@ -299,7 +209,7 @@
 }
 
 .inventory-description {
-    -fx-text-fill: #6d8959;
+    -fx-text-fill: #637d51;
     -fx-font-size: 11px;
 }
 
@@ -315,7 +225,7 @@
 .inventory-warning {
     -fx-background-color: #fef4dc;
     -fx-background-radius: 6px;
-    -fx-text-fill: #ad6d14;
+    -fx-text-fill: #9c6212;
     -fx-font-size: 11px;
     -fx-font-weight: bold;
     -fx-padding: 4px 8px;
@@ -326,63 +236,4 @@
 .table-view:focused {
     -fx-focus-color: transparent;
     -fx-faint-focus-color: transparent;
-}
-
-/* ==================== SƠ ĐỒ BÀN PHỤC VỤ (12 BÀN) ==================== */
-
-.status-dot-occupied {
-    -fx-text-fill: #2e7d32;
-    -fx-font-size: 13px;
-}
-
-.status-dot-empty {
-    -fx-text-fill: #adb5bd;
-    -fx-font-size: 13px;
-}
-
-.status-legend-text {
-    -fx-text-fill: #586949;
-    -fx-font-size: 12px;
-    -fx-font-weight: normal;
-}
-
-.table-button-occupied {
-    -fx-background-color: #e8f5e9;
-    -fx-text-fill: #1b5e20;
-    -fx-font-size: 13px;
-    -fx-font-weight: bold;
-    -fx-background-radius: 10px;
-    -fx-border-color: #4caf50;
-    -fx-border-radius: 10px;
-    -fx-border-width: 1.5px;
-    -fx-alignment: CENTER;
-    -fx-cursor: hand;
-    -fx-line-spacing: 3px;
-    -fx-effect: dropshadow(gaussian, rgba(46, 125, 50, 0.15), 5, 0, 0, 1);
-}
-
-.table-button-occupied:hover {
-    -fx-background-color: #c8e6c9;
-    -fx-border-color: #2e7d32;
-    -fx-effect: dropshadow(gaussian, rgba(46, 125, 50, 0.25), 6, 0, 0, 2);
-}
-
-.table-button-empty {
-    -fx-background-color: #f1f3f5;
-    -fx-text-fill: #6c757d;
-    -fx-font-size: 13px;
-    -fx-font-weight: bold;
-    -fx-background-radius: 10px;
-    -fx-border-color: #ced4da;
-    -fx-border-radius: 10px;
-    -fx-border-width: 1px;
-    -fx-alignment: CENTER;
-    -fx-cursor: hand;
-    -fx-line-spacing: 3px;
-}
-
-.table-button-empty:hover {
-    -fx-background-color: #e9ecef;
-    -fx-border-color: #adb5bd;
-    -fx-text-fill: #495057;
 }

@@ -25,6 +25,17 @@ public final class AppLogging {
     private AppLogging() {
     }
 
+    /**
+     * The usual log format with one extra first line, {@link AppVersion#logLine()}, in EVERY file: the handler asks for the head each
+     * time it opens a file, so a file that starts after the 1 MB rotation also says which program wrote it (TODO 5.41).
+     */
+    static final class VersionHeadFormatter extends SimpleFormatter {
+        @Override
+        public String getHead(java.util.logging.Handler handler) {
+            return AppVersion.logLine() + System.lineSeparator();
+        }
+    }
+
     public static synchronized void install() {
         if (installed) {
             return;
@@ -37,7 +48,7 @@ public final class AppLogging {
             // app's log and bounded enough to never quietly fill a shop's disk.
             FileHandler fileHandler = new FileHandler(
                     logDir.resolve("app-%u-%g.log").toString(), 1_000_000, 3, true);
-            fileHandler.setFormatter(new SimpleFormatter());
+            fileHandler.setFormatter(new VersionHeadFormatter());
             fileHandler.setLevel(Level.ALL);
             Logger.getLogger("").addHandler(fileHandler);
             installed = true;

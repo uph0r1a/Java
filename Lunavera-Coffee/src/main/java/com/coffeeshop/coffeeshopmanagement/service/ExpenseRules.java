@@ -50,7 +50,9 @@ public final class ExpenseRules {
 
     /** The category in words, in the language in use; an unknown code is shown as it is. */
     public static String categoryName(String code) {
-        return isKnownCategory(code) ? I18n.t("expense.cat." + code) : String.valueOf(code);
+        if (!isKnownCategory(code)) return String.valueOf(code);
+        String key = "expense.cat." + code; // built here, not inside I18n.t(...): I18nTest reads a literal there as a whole key
+        return I18n.t(key);
     }
 
     /**

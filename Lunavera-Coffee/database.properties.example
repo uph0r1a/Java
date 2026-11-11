@@ -3,7 +3,7 @@
 # Copy this file to  data/database.properties  (next to data/lunavera.db) and edit it.
 # That file holds the database PASSWORD: it is outside git on purpose (data/ is in .gitignore). Never commit or share it.
 # Without the file the app looks for a MariaDB/MySQL server on this computer (127.0.0.1:3306, database "lunavera") and
-# stops at start-up if there is none. For the old SQLite file instead, write db.type=sqlite here.
+# offers (at start-up, when there is no file) to use the local SQLite file instead. By hand: write db.type=sqlite here.
 # Full guide: docs/DATABASE.md
 
 # mariadb (default) | mysql | sqlite

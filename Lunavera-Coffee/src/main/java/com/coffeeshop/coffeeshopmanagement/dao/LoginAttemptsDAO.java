@@ -45,7 +45,7 @@ public final class LoginAttemptsDAO implements LoginAttemptStore {
      */
     static String cut(String key) {
         String k = key == null ? "" : key.replace('\0', '\u0001');
-        return k.length() > MAX_KEY_LENGTH ? k.substring(0, MAX_KEY_LENGTH) : k;
+        return com.coffeeshop.coffeeshopmanagement.util.TextClip.clip(k, MAX_KEY_LENGTH);
     }
 
     @Override

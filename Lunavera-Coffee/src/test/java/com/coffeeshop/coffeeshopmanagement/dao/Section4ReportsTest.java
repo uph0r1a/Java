@@ -32,6 +32,16 @@ public class Section4ReportsTest {
         TestSession.clear();
     }
 
+    /**
+     * A day of its own for each test (TODO 2.90): every test class of a run shares one database, so two tests that use the same day
+     * count each other's orders. Far in the past, ten days apart, so a test may also use the day after.
+     */
+    private static final java.util.concurrent.atomic.AtomicInteger NEXT_DAY = new java.util.concurrent.atomic.AtomicInteger();
+
+    private static LocalDate freshDay() {
+        return LocalDate.of(2003, 1, 1).plusDays(10L * NEXT_DAY.incrementAndGet());
+    }
+
     private Product product(String cost) {
         Product p = new Product();
         p.setName("S4 " + System.nanoTime());
@@ -45,7 +55,7 @@ public class Section4ReportsTest {
     @Test
     public void paymentSplitCountsPaidOrdersPerMethod() {
         Product p = product("10000");
-        LocalDate day = LocalDate.of(2003, 4, 4);
+        LocalDate day = freshDay();
         Order a = sellOn(day, p, 1, PaymentMethod.CASH, null);
         Order b = sellOn(day, p, 2, PaymentMethod.CASH, null);
         Order c = sellOn(day, p, 1, PaymentMethod.TRANSFER, null);
@@ -80,7 +90,7 @@ public class Section4ReportsTest {
 
     @Test
     public void profitUsesTheProductCostAndSaysWhenACostIsMissing() {
-        LocalDate day = LocalDate.of(2003, 5, 5);
+        LocalDate day = freshDay();
         Product withCost = product("12000");
         Product noCost = product(null);
         sellOn(day, withCost, 3, PaymentMethod.CASH, null); // 90,000 - 3 x 12,000 = 54,000
@@ -102,7 +112,7 @@ public class Section4ReportsTest {
     @Test
     public void theStreamingOrderExportGivesTheSameRowsAsThePagedQuery() {
         Product p = product("1000");
-        LocalDate day = LocalDate.of(2003, 8, 8);
+        LocalDate day = freshDay();
         for (int i = 0; i < 4; i++) sellOn(day, p, 1, PaymentMethod.CASH, null);
         OrderDAO.HistoryFilter filter = new OrderDAO.HistoryFilter(null, null, day, day);
         List<Integer> streamed = new java.util.ArrayList<>();
@@ -124,7 +134,7 @@ public class Section4ReportsTest {
     /** TODO 5.34: the report's CSV lists every product that sold, not only the 20 best sellers shown on screen. */
     @Test
     public void allProductsListsMoreThanTheTopTwenty() {
-        LocalDate day = LocalDate.of(2003, 9, 9);
+        LocalDate day = freshDay();
         for (int i = 0; i < 23; i++) sellOn(day, product("1000"), 1, PaymentMethod.CASH, null);
         assertEquals(20, reports.topProducts(day, day, 20).size());
         List<ReportDAO.ProductSales> all = reports.allProducts(day, day);
@@ -140,7 +150,7 @@ public class Section4ReportsTest {
         other.setFullName("S4 khac " + System.nanoTime());
         other = customerDAO.insert(other);
         Product p = product("1000");
-        LocalDate day = LocalDate.of(2003, 6, 6);
+        LocalDate day = freshDay();
         sellOn(day, p, 1, PaymentMethod.CASH, mine.getId());
         sellOn(day, p, 1, PaymentMethod.CARD, mine.getId());
         sellOn(day, p, 1, PaymentMethod.CASH, other.getId());
@@ -153,7 +163,7 @@ public class Section4ReportsTest {
     @Test
     public void theOrderExportCoversEveryMatchingOrderAndNeedsAnAdmin() {
         Product p = product("1000");
-        LocalDate day = LocalDate.of(2003, 7, 7);
+        LocalDate day = freshDay();
         for (int i = 0; i < 3; i++) sellOn(day, p, 1, PaymentMethod.CASH, null);
         OrderDAO.HistoryFilter filter = new OrderDAO.HistoryFilter(null, null, day, day);
         List<OrderDAO.OrderSummary> rows = orderDAO.findAllForExport(filter, null);
@@ -191,14 +201,75 @@ public class Section4ReportsTest {
         c.setFullName("S4 stats " + System.nanoTime());
         c = customerDAO.insert(c);
         Product p = product("1000");
-        sellOn(LocalDate.of(2003, 9, 9), p, 2, PaymentMethod.CASH, c.getId());
-        sellOn(LocalDate.of(2003, 9, 10), p, 1, PaymentMethod.CASH, c.getId());
+        LocalDate day = freshDay();
+        sellOn(day, p, 2, PaymentMethod.CASH, c.getId());
+        sellOn(day.plusDays(1), p, 1, PaymentMethod.CASH, c.getId());
         final int id = c.getId();
-        var figures = com.coffeeshop.coffeeshopmanagement.service.CustomerStats.aggregate(customerDAO.paidOrderRows());
+        var figures = customerDAO.figures();
         var mine = com.coffeeshop.coffeeshopmanagement.service.CustomerStats.of(figures, id);
         assertEquals(2, mine.visits());
-        assertEquals(0, new java.math.BigDecimal(3000).compareTo(mine.spent()));
-        assertEquals(LocalDate.of(2003, 9, 10), mine.lastVisit().toLocalDate());
+        assertEquals("three cups at 30,000", 0, new java.math.BigDecimal(90_000).compareTo(mine.spent()));
+        assertEquals(day.plusDays(1), mine.lastVisit().toLocalDate());
+    }
+
+    @Test
+    public void customerTotalSpentTakesLineRefundsOffAndKeepsTheVisit() {
+        Customer c = new Customer();
+        c.setFullName("S6 refunds " + System.nanoTime());
+        c = customerDAO.insert(c);
+        Product p = product("1000");
+        Order paid = sellOn(LocalDate.of(2003, 9, 11), p, 3, PaymentMethod.CASH, c.getId()); // 90.000
+        int itemId = orderDAO.findItemsByOrderId(paid.getId()).get(0).getId();
+        new RefundDAO().refund(paid.getId(), java.util.Map.of(itemId, 1), true, PaymentMethod.CASH, "test");
+        var mine = customerDAO.figures().get(c.getId());
+        assertEquals("the order still stands, so it is still a visit", 1, mine.visits());
+        assertEquals("one of three cups given back: 90.000 less 30.000", 0, new java.math.BigDecimal(60000).compareTo(mine.spent()));
+        new RefundDAO().refund(paid.getId(), java.util.Map.of(itemId, 2), true, PaymentMethod.CASH, "test");
+        var after = customerDAO.figures().get(c.getId());
+        assertEquals(1, after.visits());
+        assertEquals("everything given back", 0, java.math.BigDecimal.ZERO.compareTo(after.spent()));
+    }
+
+    @Test
+    public void figuresComeOneRowPerCustomerNotOnePerOrder() {
+        Customer c = new Customer();
+        c.setFullName("S6 grouped " + System.nanoTime());
+        c = customerDAO.insert(c);
+        Product p = product("1000");
+        for (int day = 1; day <= 4; day++) sellOn(LocalDate.of(2003, 10, day), p, 1, PaymentMethod.CASH, c.getId());
+        var mine = customerDAO.figures().get(c.getId());
+        assertEquals(4, mine.visits());
+        assertEquals(0, new java.math.BigDecimal(120000).compareTo(mine.spent()));
+        assertEquals(LocalDate.of(2003, 10, 4), mine.lastVisit().toLocalDate());
+    }
+
+    @Test
+    public void theLastPaidOrderOfACustomerIsTheNewestOneWithRefundedPiecesTakenOff() {
+        Customer c = new Customer();
+        c.setFullName("S6 repeat " + System.nanoTime());
+        c = customerDAO.insert(c);
+        Product latte = product("1000");
+        Product tea = product("1000");
+        sellOn(LocalDate.of(2003, 8, 1), tea, 1, PaymentMethod.CASH, c.getId());               // an older order
+        Order newest = sellOn(LocalDate.of(2003, 8, 9), latte, 3, PaymentMethod.CASH, c.getId()); // the one to repeat
+        assertEquals(newest.getId(), orderDAO.lastPaidOrder(c.getId()).orElseThrow().orderId());
+        var lines = orderDAO.lastPaidOrder(c.getId()).orElseThrow().items();
+        assertEquals(1, lines.size());
+        assertEquals(3, lines.get(0).getQuantity());
+        assertEquals(Integer.valueOf(latte.getId()), lines.get(0).getProductId());
+        int itemId = orderDAO.findItemsByOrderId(newest.getId()).get(0).getId();
+        new RefundDAO().refund(newest.getId(), java.util.Map.of(itemId, 1), true, PaymentMethod.CASH, "test");
+        assertEquals("one cup given back, two are repeated", 2, orderDAO.lastPaidOrder(c.getId()).orElseThrow().items().get(0).getQuantity());
+        new RefundDAO().refund(newest.getId(), java.util.Map.of(itemId, 2), true, PaymentMethod.CASH, "test");
+        assertTrue("a line given back whole is not repeated", orderDAO.lastPaidOrder(c.getId()).orElseThrow().items().isEmpty());
+    }
+
+    @Test
+    public void aCustomerWithNoPaidOrderHasNothingToRepeat() {
+        Customer c = new Customer();
+        c.setFullName("S6 no repeat " + System.nanoTime());
+        c = customerDAO.insert(c);
+        assertTrue(orderDAO.lastPaidOrder(c.getId()).isEmpty());
     }
 
     @Test
@@ -208,7 +279,7 @@ public class Section4ReportsTest {
         c.setPhone("09" + String.format(java.util.Locale.ROOT, "%08d", System.nanoTime() % 100_000_000L));
         c = customerDAO.insert(c);
         Product p = product("1000");
-        sellOn(LocalDate.of(2003, 8, 8), p, 1, PaymentMethod.CASH, c.getId());
+        sellOn(freshDay(), p, 1, PaymentMethod.CASH, c.getId());
         String phone = c.getPhone();
         String spaced = phone.substring(0, 4) + " " + phone.substring(4);
         String international = "+84 " + phone.substring(1);
@@ -247,7 +318,7 @@ public class Section4ReportsTest {
 
     @Test
     public void aDiscountedOrdersProfitIsItsRevenueMinusItsCosts() {
-        LocalDate day = LocalDate.of(2003, 7, 7);
+        LocalDate day = freshDay();
         Product p = product("12000");
         OrderItem item = lineOf(p, 3); // 90,000 at cost 3 x 12,000 = 36,000
         Order o = new Order();
@@ -269,7 +340,7 @@ public class Section4ReportsTest {
 
     @Test
     public void theDiscountIsSpreadOverTheLinesInProportionToTheirValue() {
-        LocalDate day = LocalDate.of(2003, 7, 8);
+        LocalDate day = freshDay();
         Product costed = product("12000");
         Product uncosted = product(null);
         sellTwoLines(day, costed, uncosted, 6_000); // each line carries 3,000 of the discount
@@ -281,7 +352,7 @@ public class Section4ReportsTest {
 
     @Test
     public void aCostEditedLaterDoesNotMoveAnEarlierDay() {
-        LocalDate day = LocalDate.of(2003, 7, 9);
+        LocalDate day = freshDay();
         Product p = product("12000");
         sellOn(day, p, 3, PaymentMethod.CASH, null); // 90,000 - 36,000 = 54,000
         assertEquals(0, BigDecimal.valueOf(54_000).compareTo(reports.profit(day, day).grossProfit()));
@@ -297,7 +368,7 @@ public class Section4ReportsTest {
 
     @Test
     public void aLineSoldWithoutACostStaysUnknownEvenIfACostIsEnteredLater() {
-        LocalDate day = LocalDate.of(2003, 7, 10);
+        LocalDate day = freshDay();
         Product p = product(null);
         sellOn(day, p, 1, PaymentMethod.CASH, null);
         assertEquals(1, reports.profit(day, day).linesWithoutCost());
@@ -313,7 +384,7 @@ public class Section4ReportsTest {
     @Test
     public void walletsAreSeparateLinesFromTheBankTransferInThePaymentSplit() { // TODO 4.34
         Product p = product("10000");
-        LocalDate day = LocalDate.of(2003, 4, 5);
+        LocalDate day = freshDay();
         sellOn(day, p, 1, PaymentMethod.TRANSFER, null);
         sellOn(day, p, 2, PaymentMethod.MOMO, null);
         sellOn(day, p, 3, PaymentMethod.MOMO, null);

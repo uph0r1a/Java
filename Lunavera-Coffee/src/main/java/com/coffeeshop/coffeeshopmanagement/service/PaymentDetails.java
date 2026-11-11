@@ -33,10 +33,10 @@ public final class PaymentDetails {
         if (typed == null) {
             return null;
         }
-        String cleaned = typed.replaceAll("\\p{Cntrl}", " ").replaceAll("\\s+", " ").trim();
+        String cleaned = com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.clean(typed).replaceAll("\\p{Cntrl}", " ").replaceAll("\\s+", " ").trim();
         if (cleaned.isEmpty()) {
             return null;
         }
-        return cleaned.length() > REFERENCE_MAX ? cleaned.substring(0, REFERENCE_MAX).trim() : cleaned;
+        return cleaned.length() > REFERENCE_MAX ? com.coffeeshop.coffeeshopmanagement.util.TextClip.clip(cleaned, REFERENCE_MAX).trim() : cleaned;
     }
 }

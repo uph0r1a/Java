@@ -74,9 +74,13 @@ public class AdminScreensTest {
     @Test
     public void theBaseHoldsTheNavigationAsPublicFxmlHandlers() throws IOException {
         String base = read(CONTROLLERS.resolve("AdminScreen.java"));
-        assertTrue(base.contains("public abstract class AdminScreen"));
+        assertTrue(base.contains("public abstract class AdminScreen extends ScreenNavigation"));
+        // TODO 6.54: the navigation itself is written once, in ScreenNavigation, which the admin base extends
+        String navigation = read(CONTROLLERS.resolve("ScreenNavigation.java"));
+        assertTrue(navigation.contains("public abstract class ScreenNavigation"));
         for (String handler : NAVIGATION) {
-            assertTrue(handler, Pattern.compile("@FXML\\s+public void " + handler + "\\s*\\(").matcher(base).find());
+            assertTrue(handler, Pattern.compile("@FXML\\s+public void " + handler + "\\s*\\(").matcher(navigation).find());
+            assertFalse(handler + " is declared again in AdminScreen", Pattern.compile("\\bvoid\\s+" + handler + "\\s*\\(").matcher(base).find());
         }
         assertTrue(base.contains("protected boolean requireAdmin()"));
         assertTrue(base.contains("protected static boolean blockNonAdmin("));

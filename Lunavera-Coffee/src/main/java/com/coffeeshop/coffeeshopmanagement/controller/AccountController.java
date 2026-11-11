@@ -3,8 +3,6 @@ package com.coffeeshop.coffeeshopmanagement.controller;
 import java.util.Locale;
 import com.coffeeshop.coffeeshopmanagement.util.I18n;
 import com.coffeeshop.coffeeshopmanagement.dao.DataAccessException;
-import com.coffeeshop.coffeeshopmanagement.dao.EmployeeDAO;
-import com.coffeeshop.coffeeshopmanagement.dao.UserDAO;
 import com.coffeeshop.coffeeshopmanagement.model.AccountStatus;
 import com.coffeeshop.coffeeshopmanagement.model.Employee;
 import com.coffeeshop.coffeeshopmanagement.model.Role;
@@ -50,9 +48,7 @@ import java.util.stream.Collectors;
 public class AccountController extends AdminScreen {
 
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
-    private final UserDAO userDAO = new UserDAO();
     private final AccountService accountService = new AccountService();
-    private final EmployeeDAO employeeDAO = new EmployeeDAO();
 
     // ---------------------------------------------------------------- Account management
     @FXML private Label totalAccountLabel;
@@ -93,7 +89,7 @@ public class AccountController extends AdminScreen {
 
     private PagedTable<User> accountPaged;
     private List<User> allAccounts = List.of();
-    // Loaded once per reload instead of calling employeeDAO.findById(id) per row/per
+    // Loaded once per reload instead of calling accountService.findEmployee(id) per row/per
     // keystroke in employeeNameFor()/employeePhoneFor() - see progress.md performance notes.
     private Map<Integer, Employee> employeesById = Map.of();
     private User selectedAccount;
@@ -148,7 +144,7 @@ public class AccountController extends AdminScreen {
 
     private void reloadAccounts() {
         Async.run(
-                () -> new Object[]{userDAO.findAll(), employeeDAO.findAll()},
+                () -> new Object[]{accountService.findAllUsers(), accountService.findAllEmployees()},
                 result -> {
                     allAccounts = castList(result[0]);
                     List<Employee> employees = castList(result[1]);
@@ -238,6 +234,15 @@ public class AccountController extends AdminScreen {
     }
 
     private void openAccountDialog(User existing) {
+        if (existing == null || existing.getEmployeeId() == null) { showAccountDialog(existing, null); return; }
+        // The person's record is read again in the background before the box opens (TODO 6.14); the table waits meanwhile.
+        Async.run(() -> accountService.findEmployee(existing.getEmployeeId()).orElse(null),
+                employee -> showAccountDialog(existing, employee),
+                failure -> AlertUtil.error(I18n.t("common.error.title"), failure.getMessage()),
+                accountTable);
+    }
+
+    private void showAccountDialog(User existing, Employee existingEmployee) {
         Dialog<Void> dialog = new Dialog<>();
         dialog.setTitle(existing == null ? I18n.t("accounts.dialog.add") : I18n.t("accounts.dialog.edit"));
         AlertUtil.configure(dialog);
@@ -245,9 +250,6 @@ public class AccountController extends AdminScreen {
         dialog.getDialogPane().getButtonTypes().addAll(saveButtonType, ButtonType.CANCEL);
         AlertUtil.setDefaultButton(dialog, saveButtonType);
         AlertUtil.setCancelButton(dialog, ButtonType.CANCEL);
-
-        Employee existingEmployee = existing != null && existing.getEmployeeId() != null
-                ? employeeDAO.findById(existing.getEmployeeId()).orElse(null) : null;
 
         TextField fullNameField = new TextField(existingEmployee != null ? existingEmployee.getFullName() : "");
         TextLengthLimiter.limit(fullNameField, TextLengthLimiter.NAME_MAX);
@@ -286,7 +288,7 @@ public class AccountController extends AdminScreen {
                 ? existingEmployee.getSalary().toPlainString() : "");
         TextLengthLimiter.limit(salaryField, TextLengthLimiter.NUMBER_MAX);
         salaryField.setPromptText(I18n.t("accounts.salary.prompt"));
-        DatePicker hireDatePicker = new DatePicker(existingEmployee != null ? existingEmployee.getHireDate() : null);
+        DatePicker hireDatePicker = com.coffeeshop.coffeeshopmanagement.util.DateBoxes.picker(existingEmployee != null ? existingEmployee.getHireDate() : null);
         if (existing != null && Session.getCurrentUser() != null && existing.getId() == Session.getCurrentUser().getId()) {
             // Own account (TODO 2.48): the Khóa button refuses it, so the dialog must too.
             roleBox.setDisable(true);
@@ -348,11 +350,8 @@ public class AccountController extends AdminScreen {
                 event.consume();
                 return;
             }
-            if (hireDatePicker.getValue() != null && hireDatePicker.getValue().isAfter(com.coffeeshop.coffeeshopmanagement.util.AppClock.today())) {
-                AlertUtil.warning(I18n.t("accounts.val.date.title"), I18n.t("accounts.val.date.message"));
-                event.consume();
-                return;
-            }
+            String hireProblem = com.coffeeshop.coffeeshopmanagement.service.StaffRules.hireDateProblem(hireDatePicker.getValue(), com.coffeeshop.coffeeshopmanagement.util.AppClock.today());
+            if (hireProblem != null) { AlertUtil.warning(I18n.t("accounts.val.date.title"), hireProblem); event.consume(); return; } // future or year 26 (TODO 3.78)
             try {
                 Employee typed = new Employee();
                 typed.setFullName(fullNameField.getText().trim());
@@ -419,7 +418,7 @@ public class AccountController extends AdminScreen {
             // Counting the active administrators reads the database: off the UI thread (TODO 6.14). The rule itself is
             // enforced again, in one transaction, by AccountService.setLocked.
             Async.run(
-                    userDAO::countActiveAdmins,
+                    accountService::countActiveAdmins,
                     activeAdmins -> {
                         if (activeAdmins <= 1) {
                             AlertUtil.warning(I18n.t("accounts.lock.fail.title"),

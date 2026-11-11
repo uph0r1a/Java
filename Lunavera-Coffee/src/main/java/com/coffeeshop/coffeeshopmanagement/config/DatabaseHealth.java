@@ -17,7 +17,11 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -26,6 +30,9 @@ import java.util.logging.Logger;
  * The "database health" line of the admin dashboard (TODO 4.24): how big the data is, when the last backup was made, which
  * table layout (schema version) the database has and how much room the backups take, with a warning when the last backup is
  * older than {@value #WARN_AFTER_DAYS} days or there is none. It makes the backup habit visible.
+ *
+ * <p>TODO 6.75: a second line counts the rows of the tables that only ever grow ({@link #COUNTED_TABLES}), so the owner can see
+ * how much the shop keeps; what is kept and for how long is in {@code docs/DATABASE.md}, section 11.
  */
 public final class DatabaseHealth {
 
@@ -36,16 +43,37 @@ public final class DatabaseHealth {
     private static final DateTimeFormatter WHEN = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
     /**
+     * The tables whose rows are counted on the dashboard (TODO 6.75), in the order shown: the ones nothing ever trims ({@code orders},
+     * the audit and stock logs, clock-ins, shift closes, bookings) and the two the owner may delete from by hand ({@code expenses},
+     * {@code customers}). The names are fixed here and never come from a user, so they go into the SQL as they are.
+     * {@code DatabaseHealthRowsTest} fails when one of them is not a table of both schemas.
+     */
+    static final List<String> COUNTED_TABLES = List.of("orders", "audit_log", "stock_log", "time_clock", "shift_closes",
+            "expenses", "reservations", "customers");
+
+    /**
      * @param databaseBytes size of the database, or {@code null} when it could not be found out
      * @param lastBackup    time of the newest backup in the backups folder, or {@code null} when there is none
      * @param schemaVersion the table layout version, or 0 when it could not be read
      * @param backupsBytes  total size of the backups folder
+     * @param lastManual    time the app noted for the last copy saved by hand, or {@code null}
+     * @param rows          row count per table of {@link #COUNTED_TABLES} (a table that could not be counted is missing); never null
      */
-    public record Health(Long databaseBytes, Instant lastBackup, int schemaVersion, long backupsBytes, Instant lastManual) {
+    public record Health(Long databaseBytes, Instant lastBackup, int schemaVersion, long backupsBytes, Instant lastManual,
+                         Map<String, Long> rows) {
+
+        public Health {
+            rows = rows == null ? Map.of() : Collections.unmodifiableMap(new LinkedHashMap<>(rows));
+        }
+
+        /** A reading without the row counts (the line then shows none). */
+        public Health(Long databaseBytes, Instant lastBackup, int schemaVersion, long backupsBytes, Instant lastManual) {
+            this(databaseBytes, lastBackup, schemaVersion, backupsBytes, lastManual, null);
+        }
 
         /** A reading without the time of the last hand-made copy (the line then says "none yet" for it). */
         public Health(Long databaseBytes, Instant lastBackup, int schemaVersion, long backupsBytes) {
-            this(databaseBytes, lastBackup, schemaVersion, backupsBytes, null);
+            this(databaseBytes, lastBackup, schemaVersion, backupsBytes, null, null);
         }
     }
 
@@ -57,7 +85,31 @@ public final class DatabaseHealth {
         Path backups = DataPaths.backupsDir();
         Instant now = Instant.now();
         return new Health(databaseSize(), newestBackup(backups, now).orElse(null), schemaVersion(), folderBytes(backups),
-                com.coffeeshop.coffeeshopmanagement.util.BackupReminder.lastManual());
+                com.coffeeshop.coffeeshopmanagement.util.BackupReminder.lastManual(), rowCounts());
+    }
+
+    /** Counts the rows of {@link #COUNTED_TABLES}; empty when the database cannot be reached. */
+    private static Map<String, Long> rowCounts() {
+        try (Connection connection = DatabaseConfig.getConnection()) {
+            return rowCounts(connection);
+        } catch (SQLException | RuntimeException e) {
+            LOGGER.log(Level.INFO, "Could not count the rows of the tables", e);
+            return Map.of();
+        }
+    }
+
+    /** One {@code COUNT(*)} per table; a table that cannot be counted is left out and the others are still counted. */
+    static Map<String, Long> rowCounts(Connection connection) {
+        Map<String, Long> counts = new LinkedHashMap<>();
+        for (String table : COUNTED_TABLES) {
+            try (Statement statement = connection.createStatement();
+                 ResultSet rs = statement.executeQuery("SELECT COUNT(*) FROM " + table)) {
+                if (rs.next()) counts.put(table, rs.getLong(1));
+            } catch (SQLException | RuntimeException e) {
+                LOGGER.log(Level.INFO, "Could not count the rows of " + table, e);
+            }
+        }
+        return counts;
     }
 
     private static Long databaseSize() {
@@ -151,8 +203,37 @@ public final class DatabaseHealth {
         String manual = health.lastManual() == null
                 ? I18n.t("admin.health.none")
                 : LocalDateTime.ofInstant(health.lastManual(), zone).format(WHEN);
-        return I18n.t("admin.health.line", size, last, version, FileSizeText.format(health.backupsBytes()))
+        String line = I18n.t("admin.health.line", size, last, version, FileSizeText.format(health.backupsBytes()))
                 + " · " + I18n.t("admin.health.manual", manual);
+        String rows = rowsText(health.rows());
+        return rows.isEmpty() ? line : line + "\n" + I18n.t("admin.health.rows", rows);
+    }
+
+    /** "Orders 1234 · Audit log 5678 ..." for the tables that were counted, in the order of {@link #COUNTED_TABLES}; empty when none. */
+    static String rowsText(Map<String, Long> rows) {
+        StringBuilder text = new StringBuilder();
+        for (String table : COUNTED_TABLES) {
+            Long count = rows.get(table);
+            if (count == null) continue;
+            if (text.length() > 0) text.append(" · ");
+            text.append(rowLabel(table)).append(' ').append(count);
+        }
+        return text.toString();
+    }
+
+    /** Literal keys, so the key checks of {@code I18nTest} see every one of them. */
+    private static String rowLabel(String table) {
+        return switch (table) {
+            case "orders" -> I18n.t("admin.health.rows.orders");
+            case "audit_log" -> I18n.t("admin.health.rows.audit");
+            case "stock_log" -> I18n.t("admin.health.rows.stock");
+            case "time_clock" -> I18n.t("admin.health.rows.clock");
+            case "shift_closes" -> I18n.t("admin.health.rows.shifts");
+            case "expenses" -> I18n.t("admin.health.rows.expenses");
+            case "reservations" -> I18n.t("admin.health.rows.bookings");
+            case "customers" -> I18n.t("admin.health.rows.customers");
+            default -> table;
+        };
     }
 
     /** The yellow warning under the line, or {@code null} when the last backup is recent enough. */

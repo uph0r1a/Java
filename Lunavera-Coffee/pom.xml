@@ -8,6 +8,13 @@
     <artifactId>coffee-shop-management</artifactId>
     <version>1.0-SNAPSHOT</version>
     <name>Lunavera Coffee</name>
+    <licenses>
+        <license>
+            <name>MIT License</name>
+            <url>https://opensource.org/licenses/MIT</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -19,6 +26,21 @@
         <!-- TODO 6.59: JaCoCo puts its agent in this property (prepare-agent); surefire's argLine below starts with @{argLine} so the
              agent reaches the test JVM. Empty by default, so a build that skips JaCoCo still starts. -->
         <argLine></argLine>
+    
+        <!-- TODO 6.79: the moment every file inside the jar is stamped with, so two builds of the same source make a jar with the same
+             bytes (maven-jar-plugin 3.4.2 reads this). Raise it by hand when a release is cut (docs/RELEASE.md); the release workflow
+             overrides it with the time of the commit it builds. Only the jar is made reproducible: the jlink image and the zip of it are not. -->
+        <!-- TODO 6.81: the floor of line coverage per package (0 to 1), checked by the jacoco "check" goal at verify. PROVISIONAL: no JaCoCo
+             report existed when they were written, so they are low on purpose (they catch "the tests were deleted", not a slow slide).
+             After the first CI run, read the "Line coverage per package" table in its summary and raise each to the measured value minus
+             two points. A floor is raised by hand here AND in src/test/resources/coverage/floors-baseline.properties; it is lowered only
+             with a line in TODO.md saying why (CoverageFloorTest). The JavaFX controllers are not checked: their screens need JavaFX. -->
+        <coverage.min.service>0.30</coverage.min.service>
+        <coverage.min.dao>0.30</coverage.min.dao>
+        <coverage.min.util>0.30</coverage.min.util>
+        <coverage.min.config>0.30</coverage.min.config>
+        <coverage.min.model>0.30</coverage.min.model>
+        <project.build.outputTimestamp>2026-11-06T00:00:00Z</project.build.outputTimestamp>
     </properties>
 
     <dependencies>
@@ -30,6 +52,12 @@
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-fxml</artifactId>
+            <version>21.0.6</version>
+        </dependency>
+        <!-- TODO 5.47: AudioClip for the optional alert sounds (a code not found, a payment refused, a booking due). -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-media</artifactId>
             <version>21.0.6</version>
         </dependency>
         <!-- Added: lightweight embedded database for persistent app data (users, employees,
@@ -69,6 +97,24 @@
     </dependencies>
 
     <build>
+        <!-- TODO 5.41: Maven fills the version and the build time into app-version.properties (read by util/AppVersion) and nothing
+             else is filtered: the other resources hold ${...} and % that must stay as they are. -->
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+                <includes>
+                    <include>app-version.properties</include>
+                </includes>
+            </resource>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>false</filtering>
+                <excludes>
+                    <exclude>app-version.properties</exclude>
+                </excludes>
+            </resource>
+        </resources>
         <!-- TODO 6.33: every plugin the lifecycle uses has an explicit version, so a build does not depend on which defaults the
              Maven that happens to run it binds (the wrapper's 3.9.16 and an older one differ). The compiler, surefire and
              javafx plugins are pinned where they are configured below. Update these by hand (Dependabot proposes them). -->
@@ -88,6 +134,14 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-jar-plugin</artifactId>
                     <version>3.4.2</version>
+                    <configuration>
+                        <archive>
+                            <manifest>
+                                <!-- Implementation-Title and Implementation-Version in the jar's manifest (TODO 5.41) -->
+                                <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
+                            </manifest>
+                        </archive>
+                    </configuration>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -98,6 +152,13 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-deploy-plugin</artifactId>
                     <version>3.1.3</version>
+                </plugin>
+                <!-- TODO 6.79: the bill of materials (every library and its version) that goes next to the release zip; run by the release
+                     workflow: ./mvnw org.cyclonedx:cyclonedx-maven-plugin:makeBom -DoutputFormat=json (target/bom.json). -->
+                <plugin>
+                    <groupId>org.cyclonedx</groupId>
+                    <artifactId>cyclonedx-maven-plugin</artifactId>
+                    <version>2.9.1</version>
                 </plugin>
             </plugins>
         </pluginManagement>
@@ -174,9 +235,8 @@
             </plugin>
             <plugin>
                 <!-- TODO 6.59: a coverage report, so "which classes have no test" is read from a page instead of found by hand.
-                     ./mvnw verify writes target/site/jacoco/index.html (CI uploads it). There is deliberately no minimum that
-                     fails the build: the JavaFX controllers show as uncovered, so look at the report first and only then
-                     decide on a number. -->
+                     ./mvnw verify writes target/site/jacoco/index.html (CI uploads it). The "check" execution below (TODO 6.81) holds a
+                     floor per package; the JavaFX controllers are left out because their screens show as uncovered. -->
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
                 <version>0.8.12</version>
@@ -193,6 +253,83 @@
                         <goals>
                             <goal>report</goal>
                         </goals>
+                    </execution>
+                    <!-- TODO 6.81: fails the build when the line coverage of a package falls under its floor (properties above). -->
+                    <execution>
+                        <id>jacoco-check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                        <rule>
+                                            <element>PACKAGE</element>
+                                            <includes>
+                                                <include>com.coffeeshop.coffeeshopmanagement.service</include>
+                                            </includes>
+                                            <limits>
+                                                <limit>
+                                                    <counter>LINE</counter>
+                                                    <value>COVEREDRATIO</value>
+                                                    <minimum>${coverage.min.service}</minimum>
+                                                </limit>
+                                            </limits>
+                                        </rule>
+                                        <rule>
+                                            <element>PACKAGE</element>
+                                            <includes>
+                                                <include>com.coffeeshop.coffeeshopmanagement.dao</include>
+                                            </includes>
+                                            <limits>
+                                                <limit>
+                                                    <counter>LINE</counter>
+                                                    <value>COVEREDRATIO</value>
+                                                    <minimum>${coverage.min.dao}</minimum>
+                                                </limit>
+                                            </limits>
+                                        </rule>
+                                        <rule>
+                                            <element>PACKAGE</element>
+                                            <includes>
+                                                <include>com.coffeeshop.coffeeshopmanagement.util</include>
+                                            </includes>
+                                            <limits>
+                                                <limit>
+                                                    <counter>LINE</counter>
+                                                    <value>COVEREDRATIO</value>
+                                                    <minimum>${coverage.min.util}</minimum>
+                                                </limit>
+                                            </limits>
+                                        </rule>
+                                        <rule>
+                                            <element>PACKAGE</element>
+                                            <includes>
+                                                <include>com.coffeeshop.coffeeshopmanagement.config</include>
+                                            </includes>
+                                            <limits>
+                                                <limit>
+                                                    <counter>LINE</counter>
+                                                    <value>COVEREDRATIO</value>
+                                                    <minimum>${coverage.min.config}</minimum>
+                                                </limit>
+                                            </limits>
+                                        </rule>
+                                        <rule>
+                                            <element>PACKAGE</element>
+                                            <includes>
+                                                <include>com.coffeeshop.coffeeshopmanagement.model</include>
+                                            </includes>
+                                            <limits>
+                                                <limit>
+                                                    <counter>LINE</counter>
+                                                    <value>COVEREDRATIO</value>
+                                                    <minimum>${coverage.min.model}</minimum>
+                                                </limit>
+                                            </limits>
+                                        </rule>
+                            </rules>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>
@@ -236,4 +373,192 @@
             </plugin>
         </plugins>
     </build>
+    <profiles>
+        <!-- TODO 6.79: a bug finder, by hand and in the CI job "bugs", never in the normal build:
+             ./mvnw -B -Pbugs compile spotbugs:spotbugs     (report: target/spotbugsXml.xml; ./mvnw -Pbugs spotbugs:gui to read it)
+             SpotBugs with the findsecbugs rules (SQL built from text, weak hashes, hard-coded passwords). Report only for now; see
+             docs/STATIC-ANALYSIS.md for when to make it fail the build. Untested: the sandbox that wrote it had no Maven. -->
+        <profile>
+            <id>bugs</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>com.github.spotbugs</groupId>
+                        <artifactId>spotbugs-maven-plugin</artifactId>
+                        <version>4.8.6.6</version>
+                        <configuration>
+                            <effort>Max</effort>
+                            <threshold>Medium</threshold>
+                            <xmlOutput>true</xmlOutput>
+                            <failOnError>false</failOnError>
+                            <excludeFilterFile>spotbugs-exclude.xml</excludeFilterFile>
+                            <plugins>
+                                <plugin>
+                                    <groupId>com.h3xstream.findsecbugs</groupId>
+                                    <artifactId>findsecbugs-plugin</artifactId>
+                                    <version>1.13.0</version>
+                                </plugin>
+                            </plugins>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <!-- TODO 6.78: mutation testing with PIT, by hand and never in the normal build:
+             ./mvnw -B -Ppit test-compile org.pitest:pitest-maven:mutationCoverage
+             The report is in target/pit-reports/. Only the rule classes (service, util) are changed; read the SURVIVED lines, many are
+             harmless (see docs/TESTING-MUTATION.md). Where Maven cannot run, tools/mutation-sweep.py does a smaller version with the JDK only. -->
+        <profile>
+            <id>pit</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.pitest</groupId>
+                        <artifactId>pitest-maven</artifactId>
+                        <version>1.17.4</version>
+                        <configuration>
+                            <targetClasses>
+                                <param>com.coffeeshop.coffeeshopmanagement.service.*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.util.*</param>
+                            </targetClasses>
+                            <targetTests>
+                                <param>com.coffeeshop.coffeeshopmanagement.service.*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.util.*</param>
+                            </targetTests>
+                            <!-- tests that need the JavaFX toolkit or a database are left out: they cannot run in PIT's isolated JVMs -->
+                            <excludedTestClasses>
+                                <param>com.coffeeshop.coffeeshopmanagement.dao.*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.controller.*</param>
+                            </excludedTestClasses>
+                            <outputFormats>
+                                <param>HTML</param>
+                                <param>CSV</param>
+                            </outputFormats>
+                            <timestampedReports>false</timestampedReports>
+                            <threads>2</threads>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <!-- TODO 6.15: the program folder (a private Java runtime plus the launcher) made with moditect instead of javafx:jlink:
+             ./mvnw -B -DskipTests -Pmodular-image clean package        (the folder target/lunavera/ and the zip target/lunavera.zip)
+             Why: jlink only links real modules, and mariadb-java-client is expected to be an automatic module (it only names itself in
+             its manifest), so `javafx:jlink` is expected to stop on it. This profile gives that one jar a module descriptor first
+             (moditect add-module-info, written to target/modules/), copies the other dependencies there (the JavaFX jars of the
+             operating system the build runs on, sqlite-jdbc, slf4j-api), and links the image from that folder plus the program's jar.
+             Run tools/ModuleCheck.java before, and tools/ImageCheck.java after (docs/PACKAGING.md). Not switched on by default, so
+             `./mvnw test` never needs these plugins. UNTESTED: the sandbox that wrote it had no Maven and no network. The versions
+             below are the ones believed to exist: if Maven says one cannot be found, take the newest from Maven Central. -->
+        <profile>
+            <id>modular-image</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-dependency-plugin</artifactId>
+                        <version>3.8.1</version>
+                        <executions>
+                            <execution>
+                                <id>copy-modules</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>copy-dependencies</goal>
+                                </goals>
+                                <configuration>
+                                    <outputDirectory>${project.build.directory}/modules</outputDirectory>
+                                    <includeScope>runtime</includeScope>
+                                    <!-- the MariaDB driver comes from moditect below, with its descriptor; the plain jar must not be here too -->
+                                    <excludeArtifactIds>mariadb-java-client</excludeArtifactIds>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.moditect</groupId>
+                        <artifactId>moditect-maven-plugin</artifactId>
+                        <version>1.2.2.Final</version>
+                        <executions>
+                            <execution>
+                                <id>add-module-info-to-mariadb</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>add-module-info</goal>
+                                </goals>
+                                <configuration>
+                                    <outputDirectory>${project.build.directory}/modules</outputDirectory>
+                                    <overwriteExistingFiles>true</overwriteExistingFiles>
+                                    <modules>
+                                        <module>
+                                            <!-- the same version as the dependency at the top (ModularImageProfileTest keeps the two equal) -->
+                                            <artifact>
+                                                <groupId>org.mariadb.jdbc</groupId>
+                                                <artifactId>mariadb-java-client</artifactId>
+                                                <version>3.4.1</version>
+                                            </artifact>
+                                            <!-- the name module-info.java already requires; moditect works the requires out with jdeps and adds a
+                                                 uses line for every ServiceLoader the driver calls (its plugins). The "provides java.sql.Driver"
+                                                 line is what lets DriverManager find the driver: tools/ImageCheck.java looks for it. -->
+                                            <moduleInfo>
+                                                <name>org.mariadb.jdbc</name>
+                                                <exports>*;</exports>
+                                                <addServiceUses>true</addServiceUses>
+                                            </moduleInfo>
+                                        </module>
+                                    </modules>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>create-runtime-image</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>create-runtime-image</goal>
+                                </goals>
+                                <configuration>
+                                    <modulePath>
+                                        <path>${project.build.directory}/modules</path>
+                                    </modulePath>
+                                    <!-- only the program's own jar is added to that path: the other jars are already in target/modules -->
+                                    <jarInclusionPolicy>APP</jarInclusionPolicy>
+                                    <modules>
+                                        <module>com.coffeeshop.coffeeshopmanagement</module>
+                                    </modules>
+                                    <launcher>
+                                        <name>lunavera</name>
+                                        <!-- the module and its main class, written as the launcher option of jlink takes them (module/class) -->
+                                        <module>com.coffeeshop.coffeeshopmanagement/com.coffeeshop.coffeeshopmanagement.LunaveraApplication</module>
+                                    </launcher>
+                                    <stripDebug>true</stripDebug>
+                                    <noManPages>true</noManPages>
+                                    <noHeaderFiles>true</noHeaderFiles>
+                                    <outputDirectory>${project.build.directory}/lunavera</outputDirectory>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <!-- target/lunavera.zip, the same name javafx:jlink used (the release workflow makes it again with the licence files in) -->
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                        <version>3.1.0</version>
+                        <executions>
+                            <execution>
+                                <id>zip-image</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>run</goal>
+                                </goals>
+                                <configuration>
+                                    <target>
+                                        <delete file="${project.build.directory}/lunavera.zip"/>
+                                        <zip destfile="${project.build.directory}/lunavera.zip" basedir="${project.build.directory}" includes="lunavera/**"/>
+                                    </target>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

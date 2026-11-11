@@ -14,10 +14,10 @@ import java.util.logging.Logger;
  * recorded why. Now:
  * <ul>
  *   <li>an <b>admin</b> may discount any amount up to the subtotal;</li>
- *   <li>anyone else (employee) may discount at most {@link #STAFF_MAX_PERCENT}% of the subtotal;</li>
+ *   <li>anyone else (employee) may discount at most {@link #staffMaxPercent()}% of the subtotal;</li>
  *   <li>every discount above 0, from anyone, needs a written <b>reason</b>, which is saved with the order.</li>
  * </ul>
- * {@link #STAFF_MAX_PERCENT} is the owner's call; 10 is a starting guess (see TODO 2.3).
+ * The cashier's limit is the owner's call: {@link #staffMaxPercent()} is a setting (TODO 4.49), 10 until it is changed (see TODO 2.3).
  *
  * <p>The payment dialog asks {@link #check} so the cashier sees a message at once, and {@code CheckoutService.pay} asks
  * {@link #require} again before anything is written (TODO 6.45), so a screen that forgets the dialog's check cannot give a
@@ -27,8 +27,15 @@ public final class DiscountPolicy {
 
     private static final Logger LOGGER = Logger.getLogger(DiscountPolicy.class.getName());
 
-    public static final int STAFF_MAX_PERCENT = 10;
+    /** The cashier's limit in force now, in percent (a setting, {@link ShopRules}). */
+    public static int staffMaxPercent() {
+        return ShopRules.current().staffDiscountPercent();
+    }
+
     public static final int REASON_MAX_LENGTH = 200;
+
+    /** The width of {@code orders.discount_reason} (VARCHAR(255) on MariaDB): the reason with every note joined on must fit (TODO 3.86). */
+    public static final int COLUMN_MAX_LENGTH = 255;
 
     public enum Result { OK, NEGATIVE, ABOVE_SUBTOTAL, ABOVE_STAFF_LIMIT, REASON_REQUIRED, REASON_TOO_LONG }
 
@@ -39,7 +46,7 @@ public final class DiscountPolicy {
     public static BigDecimal maxDiscount(Role role, BigDecimal subtotal) {
         if (subtotal == null || subtotal.signum() <= 0) return BigDecimal.ZERO;
         if (role == Role.ADMIN) return subtotal;
-        return subtotal.multiply(BigDecimal.valueOf(STAFF_MAX_PERCENT)).divide(BigDecimal.valueOf(100), 0, java.math.RoundingMode.FLOOR);
+        return subtotal.multiply(BigDecimal.valueOf(staffMaxPercent())).divide(BigDecimal.valueOf(100), 0, java.math.RoundingMode.FLOOR);
     }
 
     public static Result check(Role role, BigDecimal subtotal, BigDecimal discount, String reason) {
@@ -62,7 +69,7 @@ public final class DiscountPolicy {
             case OK -> throw new IllegalArgumentException("OK has no problem to describe");
             case NEGATIVE -> I18n.t("pos.discount.invalid.number");
             case ABOVE_SUBTOTAL -> I18n.t("discount.problem.abovesubtotal");
-            case ABOVE_STAFF_LIMIT -> I18n.t("discount.problem.stafflimit", STAFF_MAX_PERCENT,
+            case ABOVE_STAFF_LIMIT -> I18n.t("discount.problem.stafflimit", staffMaxPercent(),
                     CurrencyUtil.format(maxDiscount(role, subtotal)));
             case REASON_REQUIRED -> I18n.t("discount.problem.reasonrequired");
             case REASON_TOO_LONG -> I18n.t("discount.problem.reasonlong", REASON_MAX_LENGTH);
@@ -87,7 +94,7 @@ public final class DiscountPolicy {
     /** The reason as it is saved: trimmed, and null when there is no discount. */
     public static String reasonToStore(BigDecimal discount, String reason) {
         if (discount == null || discount.signum() == 0 || reason == null) return null;
-        String trimmed = reason.trim();
+        String trimmed = com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.nfc(reason); // composed accents, trimmed (TODO 3.18)
         return trimmed.isEmpty() ? null : trimmed;
     }
 }

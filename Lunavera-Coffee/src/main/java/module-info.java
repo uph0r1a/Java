@@ -1,9 +1,13 @@
 module com.coffeeshop.coffeeshopmanagement {
     requires javafx.controls;
     requires javafx.fxml;
+    // AudioClip, for the optional alert sounds (TODO 5.47). The jlink image takes this module from here; see docs/PACKAGING.md.
+    requires javafx.media;
 
     // Added for the persistence layer.
     requires java.sql;
+    // ImageIO, to turn a phone photo the right way up and write it without its metadata (TODO 3.73)
+    requires java.desktop;
     // Automatic module name published by sqlite-jdbc's own manifest. If a future
     // version of the driver ever renames/removes that manifest entry, Maven's error
     // message will show the derived name it expects (typically "sqlite.jdbc") -

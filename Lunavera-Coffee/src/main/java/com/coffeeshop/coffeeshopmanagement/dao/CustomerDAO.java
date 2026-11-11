@@ -1,5 +1,6 @@
 package com.coffeeshop.coffeeshopmanagement.dao;
 
+import com.coffeeshop.coffeeshopmanagement.service.BirthdayRules;
 import com.coffeeshop.coffeeshopmanagement.util.I18n;
 import com.coffeeshop.coffeeshopmanagement.util.AppClock;
 import com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig;
@@ -21,14 +22,16 @@ public class CustomerDAO {
 
     public Customer insert(Customer customer) {
         customer.setPhone(blankToNull(ValidationUtil.normalizePhone(customer.getPhone())));
-        String sql = "INSERT INTO customers (full_name, phone, email, loyalty_points, created_at) VALUES (?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO customers (full_name, phone, email, loyalty_points, lifetime_points, created_at, birthday) VALUES (?, ?, ?, ?, ?, ?, ?)";
         try (Connection connection = DatabaseConfig.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             statement.setString(1, com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.nfc(customer.getFullName()));
             statement.setString(2, customer.getPhone());
-            statement.setString(3, customer.getEmail());
+            statement.setString(3, ValidationUtil.cleanEmail(customer.getEmail()));
             statement.setInt(4, customer.getLoyaltyPoints());
-            statement.setString(5, DbTime.write(AppClock.now()));
+            statement.setInt(5, Math.max(customer.getLifetimePoints(), customer.getLoyaltyPoints())); // points a customer starts with count as earned
+            statement.setString(6, DbTime.write(AppClock.now()));
+            statement.setString(7, customer.getBirthday() == null ? null : customer.getBirthday().toString());
             statement.executeUpdate();
             try (ResultSet keys = statement.getGeneratedKeys()) {
                 if (keys.next()) {
@@ -44,14 +47,38 @@ public class CustomerDAO {
     public void update(Customer customer) {
         customer.setPhone(blankToNull(ValidationUtil.normalizePhone(customer.getPhone())));
         // never on an anonymous customer (TODO 3.4): nothing personal may be written back into it
-        String sql = "UPDATE customers SET full_name = ?, phone = ?, email = ? WHERE id = ? AND anonymised_at IS NULL";
-        try (Connection connection = DatabaseConfig.getConnection();
-             PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setString(1, com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.nfc(customer.getFullName()));
-            statement.setString(2, customer.getPhone());
-            statement.setString(3, customer.getEmail());
-            statement.setInt(4, customer.getId());
-            statement.executeUpdate();
+        String sql = "UPDATE customers SET full_name = ?, phone = ?, email = ?, birthday = ? WHERE id = ? AND anonymised_at IS NULL";
+        try (Connection connection = DatabaseConfig.getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                String oldBirthday = null;
+                try (PreparedStatement read = connection.prepareStatement("SELECT birthday FROM customers WHERE id = ?")) {
+                    read.setInt(1, customer.getId());
+                    try (ResultSet rs = read.executeQuery()) {
+                        if (rs.next()) oldBirthday = rs.getString(1);
+                    }
+                }
+                try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                    statement.setString(1, com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.nfc(customer.getFullName()));
+                    statement.setString(2, customer.getPhone());
+                    statement.setString(3, ValidationUtil.cleanEmail(customer.getEmail()));
+                    statement.setString(4, customer.getBirthday() == null ? null : customer.getBirthday().toString());
+                    statement.setInt(5, customer.getId());
+                    int changed = statement.executeUpdate();
+                    // the date itself is personal data: the audit line says only that it was set, changed or removed (TODO 7, birthdays)
+                    java.time.LocalDate before = BirthdayRules.parse(oldBirthday);
+                    if (changed == 1 && !java.util.Objects.equals(before, customer.getBirthday())) {
+                        com.coffeeshop.coffeeshopmanagement.dao.AuditDAO.write(connection,
+                                com.coffeeshop.coffeeshopmanagement.model.AuditAction.BIRTHDAY_CHANGED,
+                                com.coffeeshop.coffeeshopmanagement.model.AuditTarget.CUSTOMER, customer.getId(), "#" + customer.getId(), null, null,
+                                before == null ? "set" : customer.getBirthday() == null ? "removed" : "changed");
+                    }
+                }
+                connection.commit();
+            } catch (SQLException | RuntimeException e) {
+                connection.rollback();
+                throw e;
+            }
         } catch (SQLException e) {
             throw duplicatePhoneOr(e, "Failed to update customer");
         }
@@ -143,26 +170,40 @@ public class CustomerDAO {
         return Optional.empty();
     }
 
+    /** The grouped statement of {@link #figures()}, on its own so that the tests can run it. */
+    static String figuresSql() {
+        String when = "COALESCE(o.paid_at, o.order_date)";
+        String sql = "SELECT o.customer_id, COUNT(*) AS visits, SUM(o.total) AS gross, SUM(COALESCE(rf.amount, 0)) AS refunded, "
+                + "MAX(CASE WHEN " + when + " LIKE '____-__-_____:__%' THEN " + when + " END) AS last_time "
+                + "FROM orders o LEFT JOIN (SELECT order_id, SUM(amount) AS amount FROM refunds GROUP BY order_id) rf ON rf.order_id = o.id "
+                + "WHERE o.status = " + com.coffeeshop.coffeeshopmanagement.config.SqlStatus.PAID + " AND o.customer_id IS NOT NULL "
+                + "GROUP BY o.customer_id";
+        return sql;
+    }
+
     /**
-     * Every paid order that has a customer, for the visits / total spent / last visit figures (TODO 4.39). One query; the sums
-     * are made in Java ({@code CustomerStats}). A row whose stored time cannot be read still counts as a visit and as money.
+     * What every customer who has a paid order has bought: visits, total spent and last visit (TODO 4.39), worked out by the
+     * database in one grouped query (TODO 2.101), so only one row per customer comes back, not one per order ever paid. The total is
+     * what was paid <b>less the line refunds</b> ({@code refunds}), as the shift close, the reports and the dashboard count it; an
+     * order that was refunded whole is no longer PAID and is not counted at all. A time that cannot be read is left out of "last
+     * visit" only (the visit and the money still count): the pattern accepts both the {@code T} of SQLite and the space of MariaDB.
      */
-    public List<com.coffeeshop.coffeeshopmanagement.service.CustomerStats.Row> paidOrderRows() {
-        String sql = "SELECT customer_id, COALESCE(paid_at, order_date) AS paid_time, total FROM orders WHERE status = "
-                + com.coffeeshop.coffeeshopmanagement.config.SqlStatus.PAID + " AND customer_id IS NOT NULL";
-        List<com.coffeeshop.coffeeshopmanagement.service.CustomerStats.Row> result = new ArrayList<>();
+    public java.util.Map<Integer, com.coffeeshop.coffeeshopmanagement.service.CustomerStats.Figures> figures() {
+        String sql = figuresSql();
+        java.util.Map<Integer, com.coffeeshop.coffeeshopmanagement.service.CustomerStats.Figures> result = new java.util.HashMap<>();
         try (Connection connection = DatabaseConfig.getConnection();
              Statement statement = connection.createStatement();
              ResultSet rs = statement.executeQuery(sql)) {
             while (rs.next()) {
-                LocalDateTime time;
+                LocalDateTime last;
                 try {
-                    time = DbTime.parse(rs.getString("paid_time"));
+                    last = DbTime.parse(rs.getString("last_time"));
                 } catch (RuntimeException e) {
-                    time = null;
+                    last = null;
                 }
-                result.add(new com.coffeeshop.coffeeshopmanagement.service.CustomerStats.Row(rs.getInt("customer_id"), time,
-                        com.coffeeshop.coffeeshopmanagement.util.Money.fromDong(rs.getLong("total"))));
+                result.put(rs.getInt("customer_id"), com.coffeeshop.coffeeshopmanagement.service.CustomerStats.figures(rs.getInt("visits"),
+                        com.coffeeshop.coffeeshopmanagement.util.Money.fromDong(rs.getLong("gross")),
+                        com.coffeeshop.coffeeshopmanagement.util.Money.fromDong(rs.getLong("refunded")), last));
             }
         } catch (SQLException e) {
             throw new DataAccessException("Failed to load customer purchases", e);
@@ -207,7 +248,7 @@ public class CustomerDAO {
             params.add("%" + OrderDAO.escapeLike(phoneKey == null ? keyword : phoneKey) + "%");
             params.add(like);
         }
-        sql.append(" ORDER BY full_name, id LIMIT ?");
+        sql.append(" ORDER BY ").append(DatabaseConfig.dialect().vietnameseOrder("full_name")).append(", id LIMIT ?"); // 3.84: before the cut
         List<Customer> result = new ArrayList<>();
         try (Connection connection = DatabaseConfig.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql.toString())) {
@@ -263,9 +304,45 @@ public class CustomerDAO {
         customer.setPhone(rs.getString("phone"));
         customer.setEmail(rs.getString("email"));
         customer.setLoyaltyPoints(rs.getInt("loyalty_points"));
+        customer.setLifetimePoints(rs.getInt("lifetime_points"));
         String createdAt = rs.getString("created_at");
         customer.setCreatedAt(DbTime.parse(createdAt));
         customer.setAnonymisedAt(DbTime.parse(rs.getString("anonymised_at")));
+        customer.setBirthday(BirthdayRules.parse(rs.getString("birthday")));
+        customer.setBirthdayUsedOn(BirthdayRules.parse(rs.getString("birthday_used_on"))); // TODO 3.66
         return customer;
     }
+
+    /**
+     * Records that the birthday discount is given to {@code customerId} on {@code today} (TODO 3.66, rule D25 of {@link BirthdayRules}),
+     * on the connection of the payment, so it is saved or lost with the sale. Refuses, with a sentence fit to show, when there is no
+     * such customer or it is anonymous, when today is not their birthday, and when it was already given today: the write only succeeds if
+     * the day is not already there, so two tills paying two orders of the same customer at the same moment cannot both give it. It is
+     * one line in the audit trail (customer, order, who).
+     */
+    static void useBirthday(Connection connection, int customerId, int orderId, java.time.LocalDate today) throws SQLException {
+        String name;
+        java.time.LocalDate birthday;
+        try (PreparedStatement read = connection.prepareStatement(
+                "SELECT full_name, birthday FROM customers WHERE id = ? AND anonymised_at IS NULL")) {
+            read.setInt(1, customerId);
+            try (ResultSet rs = read.executeQuery()) {
+                if (!rs.next()) throw new DataAccessException(I18n.t("birthday.use.nocustomer"));
+                name = rs.getString(1);
+                birthday = BirthdayRules.parse(rs.getString(2));
+            }
+        }
+        if (!BirthdayRules.isBirthday(birthday, today)) throw new DataAccessException(I18n.t("birthday.use.notToday"));
+        try (PreparedStatement mark = connection.prepareStatement(
+                "UPDATE customers SET birthday_used_on = ? WHERE id = ? AND (birthday_used_on IS NULL OR birthday_used_on <> ?)")) {
+            mark.setString(1, today.toString());
+            mark.setInt(2, customerId);
+            mark.setString(3, today.toString());
+            if (mark.executeUpdate() == 0) throw new DataAccessException(I18n.t("birthday.use.already"));
+        }
+        // the date itself is personal data: the line says only that the discount was given, to whom and on which order
+        AuditDAO.write(connection, com.coffeeshop.coffeeshopmanagement.model.AuditAction.BIRTHDAY_DISCOUNT_USED,
+                com.coffeeshop.coffeeshopmanagement.model.AuditTarget.CUSTOMER, customerId, name, null, null, "order #" + orderId);
+    }
 }
+

@@ -21,7 +21,7 @@ import static org.junit.Assert.*;
  * <p>The ceilings can only go down. A file may not grow past its ceiling (growth fails the build early, while the change is
  * small); a file that has shrunk by more than {@link #SLACK} lines must have its ceiling lowered (so a refactor keeps what it
  * gained); a file with no entry gets {@link #DEFAULT_CEILING}. To lower a number, edit {@link #CEILINGS}. Never raise one: split
- * the class instead.
+ * the class instead. Since TODO 6.54 is finished no class, the till screen included, may be over {@link #NO_ENTRY_ABOVE} lines.
  */
 public class ControllerSizeTest {
 
@@ -33,22 +33,23 @@ public class ControllerSizeTest {
     /** The ceiling of a class that has no entry below (every small dialog and every new class). */
     static final int DEFAULT_CEILING = 400;
 
-    /** Ceilings of the big classes, in lines, as of 2026-10-27 (the line count of the file that day). They only go down. */
+    /**
+     * Ceilings of the big classes, in lines, as of 2026-10-27 (the line count of the file that day). They only go down. TODO 2.86: the
+     * ceilings of {@code CustomerController} (421 then, 485 for a while) and {@code ReportWindow} (472) were once set up to the size the
+     * files had grown to; the code was then moved out (CustomerMergeButtons, ReportCsv, ReportTexts) and both are lowered to the new size.
+     */
     static final Map<String, Integer> CEILINGS = Map.of(
-            "OrderController", 1738,
-            "ProductController", 824,
-            "AdminDashboardController", 651,
-            "AccountController", 508,
-            "ReportWindow", 472,
+            "OrderController", 877,
+            "ProductController", 720,
+            "AdminDashboardController", 569,
+            "AccountController", 507,
+            "ReportWindow", 406,
             "StaffController", 466,
-            "OrderHistoryWindow", 435,
-            "CustomerController", 421);
+            "OrderHistoryWindow", 415,
+            "CustomerController", 339);
 
-    /** The hard rule that no entry may be above, whatever the map says (the admin-screen rule of 6.4, now for all but one). */
+    /** The hard rule that no entry may be above, whatever the map says (the admin-screen rule of 6.4, now for every controller; TODO 6.54). */
     static final int NO_ENTRY_ABOVE = 900;
-
-    /** The one class allowed above {@link #NO_ENTRY_ABOVE}, until the till screen is split (TODO 6.54). */
-    static final String THE_BIGGEST = "OrderController";
 
     private static Map<String, Integer> lineCounts() throws IOException {
         Map<String, Integer> counts = new TreeMap<>();
@@ -103,12 +104,9 @@ public class ControllerSizeTest {
     }
 
     @Test
-    public void onlyTheTillScreenMayHaveACeilingOverNineHundred() {
+    public void noCeilingIsOverNineHundredNotEvenTheTillScreens() {
         for (Map.Entry<String, Integer> e : CEILINGS.entrySet()) {
-            if (!e.getKey().equals(THE_BIGGEST)) {
-                assertTrue(e.getKey() + " has a ceiling of " + e.getValue() + ", over " + NO_ENTRY_ABOVE,
-                        e.getValue() <= NO_ENTRY_ABOVE);
-            }
+            assertTrue(e.getKey() + " has a ceiling of " + e.getValue() + ", over " + NO_ENTRY_ABOVE, e.getValue() <= NO_ENTRY_ABOVE);
         }
         assertTrue(DEFAULT_CEILING <= NO_ENTRY_ABOVE);
     }

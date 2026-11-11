@@ -49,11 +49,8 @@ final class SqliteToMariaDbImporter {
             spec("employees", List.of("id", "full_name", "phone", "email", "address", "position", "salary", "hire_date", "active",
                     "anonymised_at"),
                     Set.of("anonymised_at"), Set.of("hire_date")),
-            spec("customers", List.of("id", "full_name", "phone", "email", "loyalty_points", "created_at", "anonymised_at"),
-                    Set.of("created_at", "anonymised_at"), Set.of()),
-            spec("customer_merges", List.of("id", "kept_id", "removed_id", "removed_name", "orders_moved", "points_moved",
-                    "merged_by", "merged_at"),
-                    Set.of("merged_at"), Set.of()),
+            spec("customers", List.of("id", "full_name", "phone", "email", "loyalty_points", "lifetime_points", "created_at", "anonymised_at", "birthday", "birthday_used_on"),
+                    Set.of("created_at", "anonymised_at"), Set.of("birthday", "birthday_used_on")),
             spec("users", List.of("id", "username", "password_hash", "role", "status", "employee_id", "customer_id", "created_at", "must_change_password",
                     "pin_hash", "pin_failures"),
                     Set.of("created_at"), Set.of()),
@@ -63,12 +60,17 @@ final class SqliteToMariaDbImporter {
                     Set.of(), Set.of()),
             spec("orders", List.of("id", "order_date", "employee_id", "customer_id", "status", "subtotal", "discount", "total",
                     "payment_method", "paid_at", "table_number", "discount_reason", "paid_by", "points_earned", "cash_received", "change_given",
-                    "transfer_ref", "points_redeemed", "points_value", "cancelled_at"),
-                    Set.of("order_date", "paid_at", "cancelled_at"), Set.of()),
+                    "transfer_ref", "points_redeemed", "points_value", "cancelled_by", "cancelled_at", "cancel_reason", "voucher_code", "voucher_value", "queue_no", "rev", "queue_day", "channel", "print_count", "promo_value",
+                    "complimentary_kind", "complimentary_for", "complimentary_note", "complimentary_value"),
+                    Set.of("order_date", "paid_at", "cancelled_at"), Set.of("queue_day")),
             spec("order_items", List.of("id", "order_id", "product_id", "product_name", "quantity", "unit_price", "line_total", "unit_cost",
-                    "note"),
+                    "note", "size_name", "size_percent", "extras", "option_cost", "promo_name", "promo_value"),
                     Set.of(), Set.of()),
             spec("order_payments", List.of("id", "order_id", "method", "amount"), Set.of(), Set.of()),
+            spec("refunds", List.of("id", "order_id", "order_item_id", "quantity", "line_amount", "amount", "method", "restocked", "reason",
+                    "refunded_by", "refunded_by_name", "refunded_at"),
+                    Set.of("refunded_at"), Set.of()),
+            spec("stock_takes", List.of("order_item_id", "ingredient_id", "amount"), Set.of(), Set.of()), // TODO 2.96
             spec("dining_tables", List.of("id", "table_number", "name", "status", "capacity", "current_order_id"),
                     Set.of(), Set.of()),
             spec("stock_log", List.of("id", "logged_at", "kind", "product_id", "product_name", "quantity", "stock_before", "stock_after",
@@ -77,10 +79,32 @@ final class SqliteToMariaDbImporter {
             spec("expenses", List.of("id", "spent_on", "amount", "category", "note", "from_drawer", "recorded_by", "recorded_by_name",
                     "created_at"),
                     Set.of("created_at"), Set.of("spent_on")),
+            spec("ingredients", List.of("id", "name", "unit", "stock", "min_stock", "created_at", "unit_cost"),
+                    Set.of("created_at"), Set.of()),
+            spec("recipes", List.of("product_id", "ingredient_id", "amount"), Set.of(), Set.of()),
+            spec("product_options", List.of("id", "product_id", "kind", "name", "price_delta", "cost_delta", "recipe_percent", "is_default", "active"),
+                    Set.of(), Set.of()),
+            spec("time_clock", List.of("id", "user_id", "user_name", "clock_in", "clock_out"), Set.of("clock_in", "clock_out"), Set.of()),
+            spec("gift_cards", List.of("id", "code", "initial_amount", "balance", "sold_by", "created_at", "sold_by_id"), Set.of("created_at"), Set.of()),
+            spec("gift_card_moves", List.of("id", "card_id", "order_id", "amount", "moved_at"), Set.of("moved_at"), Set.of()),
+            spec("reservations", List.of("id", "table_number", "customer_name", "phone", "reserved_for", "people", "note", "status",
+                    "created_by", "created_at", "closed_at", "created_by_id", "customer_id"),
+                    Set.of("reserved_for", "created_at", "closed_at"), Set.of()),
+            spec("vouchers", List.of("id", "code", "kind", "value", "min_subtotal", "valid_from", "valid_to", "max_uses", "used_count",
+                    "active", "created_at", "once_per_customer"),
+                    Set.of("created_at"), Set.of("valid_from", "valid_to")),
+            spec("promotions", List.of("id", "name", "kind", "percent", "fixed_price", "buy_qty", "free_qty", "days", "time_from", "time_to",
+                    "valid_from", "valid_to", "active", "created_at"),
+                    Set.of("created_at"), Set.of("valid_from", "valid_to")),
+            spec("promotion_targets", List.of("id", "promotion_id", "product_id", "category_id", "quantity"), Set.of(), Set.of()),
             spec("shift_closes", List.of("id", "period_start", "period_end", "closed_by", "closed_by_name", "paid_orders", "revenue",
                     "cash_sales", "opening_cash", "expected_cash", "counted_cash", "difference", "note", "cash_out"),
                     Set.of("period_start", "period_end"), Set.of()),
-            spec("app_flags", List.of("name"), Set.of(), Set.of()));
+            spec("audit_log", List.of("id", "logged_at", "actor_user_id", "actor_employee_id", "actor_name", "action", "target_type",
+                    "target_id", "target_label", "old_value", "new_value", "detail"),
+                    Set.of("logged_at"), Set.of()),
+            spec("app_flags", List.of("name"), Set.of(), Set.of()),
+            spec("settings", List.of("name", "value"), Set.of(), Set.of()));
 
     private static TableSpec spec(String name, List<String> columns, Set<String> dateTimes, Set<String> dates) {
         return new TableSpec(name, columns, dateTimes, dates);
@@ -316,8 +340,8 @@ final class SqliteToMariaDbImporter {
     /** Removes what the app created on its first start so the old data can take its place; runs inside the import's transaction. */
     private static void clearFirstRunData(Connection maria) throws SQLException {
         try (Statement statement = maria.createStatement()) {
-            for (String table : List.of("order_payments", "order_items", "dining_tables", "orders", "products", "categories", "users", "customer_merges", "customers",
-                    "employees", "stock_log", "expenses", "shift_closes", "app_flags")) {
+            for (String table : List.of("promotion_targets", "promotions", "gift_card_moves", "gift_cards", "time_clock", "product_options", "recipes", "ingredients", "refunds", "order_payments", "stock_takes", "order_items", "dining_tables", "orders", "products", "categories", "users", "customers",
+                    "employees", "stock_log", "expenses", "vouchers", "reservations", "shift_closes", "audit_log", "app_flags", "settings")) {
                 statement.executeUpdate("DELETE FROM " + table);
             }
         }

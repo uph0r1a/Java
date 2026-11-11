@@ -34,6 +34,17 @@ public class StockLogDAO {
      * @return the stock after the receipt
      */
     public int receive(int productId, int quantity, BigDecimal unitCost, String supplier, String note) {
+        return receive(productId, quantity, unitCost, supplier, note, com.coffeeshop.coffeeshopmanagement.service.ReceiptCost.Mode.KEEP);
+    }
+
+    /**
+     * Receives stock and, when {@code costMode} says so (TODO 4.52), also updates the product's cost from the price of this delivery: the
+     * new price, or the weighted average of the stock in hand and what arrived. The change is one audit line (a cost change, like the
+     * product form) on the same transaction. Lines already paid keep the cost they were sold at ({@code order_items.unit_cost});
+     * only later sales use the new one. Nothing changes when no price was typed or the cost comes out the same.
+     */
+    public int receive(int productId, int quantity, BigDecimal unitCost, String supplier, String note,
+                       com.coffeeshop.coffeeshopmanagement.service.ReceiptCost.Mode costMode) {
         Permissions.requireAdmin("receive stock");
         if (StockRules.parseQuantity(String.valueOf(quantity)) < 0) {
             throw new DataAccessException(I18n.t("stock.val.quantity"));
@@ -42,11 +53,16 @@ public class StockLogDAO {
             connection.setAutoCommit(false);
             try {
                 String name;
-                try (PreparedStatement read = connection.prepareStatement("SELECT name FROM products WHERE id = ?")) {
+                int stockBefore;
+                BigDecimal costBefore;
+                try (PreparedStatement read = connection.prepareStatement("SELECT name, stock, cost FROM products WHERE id = ?")) {
                     read.setInt(1, productId);
                     try (ResultSet rs = read.executeQuery()) {
                         if (!rs.next()) throw new DataAccessException(I18n.t("stock.product.gone"));
                         name = rs.getString(1);
+                        stockBefore = rs.getInt(2);
+                        long cost = rs.getLong(3);
+                        costBefore = com.coffeeshop.coffeeshopmanagement.util.Money.fromDongOrNull(cost, rs.wasNull());
                     }
                 }
                 try (PreparedStatement raise = connection.prepareStatement(
@@ -69,6 +85,19 @@ public class StockLogDAO {
                 }
                 insertLine(connection, StockLogEntry.RECEIPT, productId, name, quantity, after - quantity, after, unitCost,
                         StockRules.cleanText(supplier), StockRules.cleanText(note));
+                BigDecimal costAfter = com.coffeeshop.coffeeshopmanagement.service.ReceiptCost.resulting(costMode, stockBefore, costBefore, quantity, unitCost);
+                if (costAfter != null && (costBefore == null || costBefore.compareTo(costAfter) != 0)) { // TODO 4.52
+                    try (PreparedStatement update = connection.prepareStatement("UPDATE products SET cost = ? WHERE id = ?")) {
+                        update.setLong(1, com.coffeeshop.coffeeshopmanagement.util.Money.toDong(costAfter));
+                        update.setInt(2, productId);
+                        update.executeUpdate();
+                    }
+                    AuditDAO.write(connection, com.coffeeshop.coffeeshopmanagement.model.AuditAction.PRODUCT_COST,
+                            com.coffeeshop.coffeeshopmanagement.model.AuditTarget.PRODUCT, productId, name,
+                            costBefore == null ? null : String.valueOf(com.coffeeshop.coffeeshopmanagement.util.Money.toDong(costBefore)),
+                            String.valueOf(com.coffeeshop.coffeeshopmanagement.util.Money.toDong(costAfter)),
+                            costMode == com.coffeeshop.coffeeshopmanagement.service.ReceiptCost.Mode.AVERAGE ? "stock receipt, average" : "stock receipt");
+                }
                 connection.commit();
                 return after;
             } catch (SQLException | RuntimeException e) {

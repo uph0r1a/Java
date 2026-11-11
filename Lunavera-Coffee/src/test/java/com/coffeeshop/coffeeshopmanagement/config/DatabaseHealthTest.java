@@ -7,6 +7,8 @@ import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import static org.junit.Assert.*;
 
@@ -96,5 +98,54 @@ public class DatabaseHealthTest {
         assertTrue(line, line.contains("20/10/2026 08:30"));
         // the warning is about the backups folder and does not change
         assertNotNull(DatabaseHealth.warning(with, NOW));
+    }
+
+    /** TODO 6.75: the second line counts the rows of the tables that only grow, in a fixed order, and leaves out what could not be counted. */
+    @Test
+    public void theRowCountsAreShownInTheOrderOfTheTableListAndSkipWhatIsMissing() {
+        Map<String, Long> rows = new LinkedHashMap<>();
+        rows.put("customers", 7L);          // put in the wrong order on purpose
+        rows.put("audit_log", 5678L);
+        rows.put("orders", 1234L);
+        String text = DatabaseHealth.rowsText(rows);
+        assertTrue(text, text.indexOf("1234") >= 0 && text.indexOf("1234") < text.indexOf("5678"));
+        assertTrue(text, text.indexOf("5678") < text.indexOf("7"));
+        assertFalse("a table that was not counted is not shown as 0", text.contains(" 0"));
+        assertEquals("", DatabaseHealth.rowsText(Map.of()));
+    }
+
+    @Test
+    public void aRealZeroIsShownAndAnUnknownTableIsNot() {
+        assertTrue(DatabaseHealth.rowsText(Map.of("stock_log", 0L)).endsWith(" 0")); // a real 0 is shown
+        assertTrue(DatabaseHealth.rowsText(Map.of("not_a_counted_table", 5L)).isEmpty());
+    }
+
+    @Test
+    public void theLineGetsASecondLineOnlyWhenRowsWereCounted() {
+        DatabaseHealth.Health without = new DatabaseHealth.Health(2_000_000L, null, 2, 0);
+        assertTrue(without.rows().isEmpty());
+        assertFalse(DatabaseHealth.describe(without, NOW, ZoneOffset.UTC).contains("\n"));
+
+        DatabaseHealth.Health with = new DatabaseHealth.Health(2_000_000L, null, 2, 0, null, Map.of("orders", 4321L, "expenses", 12L));
+        String line = DatabaseHealth.describe(with, NOW, ZoneOffset.UTC);
+        String[] parts = line.split("\n");
+        assertEquals(line, 2, parts.length);
+        assertTrue(line, parts[1].contains("4321") && parts[1].contains("12"));
+        assertTrue("the first line is the old one", parts[0].contains("v2"));
+    }
+
+    @Test
+    public void theRowsOfAReadingCannotBeChangedAfterwards() {
+        Map<String, Long> source = new LinkedHashMap<>();
+        source.put("orders", 1L);
+        DatabaseHealth.Health health = new DatabaseHealth.Health(null, null, 0, 0, null, source);
+        source.put("customers", 2L);
+        assertEquals(1, health.rows().size());
+        try {
+            health.rows().put("expenses", 3L);
+            fail("the map of a reading is read-only");
+        } catch (UnsupportedOperationException expected) {
+            // good
+        }
     }
 }

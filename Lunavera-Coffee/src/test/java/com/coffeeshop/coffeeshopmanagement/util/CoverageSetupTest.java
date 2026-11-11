@@ -40,7 +40,11 @@ public class CoverageSetupTest {
     }
 
     @Test
-    public void noMinimumFailsTheBuildYet() throws IOException {
-        assertFalse("decide on a minimum only after reading the first report (TODO 6.59)", pom().contains("<goal>check</goal>"));
+    public void aFloorFailsTheBuildAtVerifyAfterTheReport() throws IOException {
+        String pom = pom();
+        assertTrue("the check goal (TODO 6.81)", pom.contains("<goal>check</goal>"));
+        int check = pom.indexOf("<id>jacoco-check</id>");
+        assertTrue(check > pom.indexOf("<id>jacoco-report</id>"));
+        assertTrue(pom.substring(check, check + 300).contains("<phase>verify</phase>"));
     }
 }

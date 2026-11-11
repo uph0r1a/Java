@@ -83,7 +83,7 @@
 }
 
 .empty-label {
-    -fx-text-fill: #888888;
+    -fx-text-fill: #757575;
 }
 
 .total-label {
@@ -137,7 +137,7 @@
 
 .qr-subtitle {
     -fx-font-size: 11px;
-    -fx-text-fill: #888888;
+    -fx-text-fill: #757575;
 }
 
 .invoice-footer-shop {
@@ -172,4 +172,14 @@
 
 .close-button:hover {
     -fx-background-color: #dfe3d8;
+}
+
+/* The mark of a receipt that was printed before (TODO 3.72): plain black on white so it survives a black-and-white thermal printer. */
+.invoice-copy-mark {
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #000000;
+    -fx-border-color: #000000;
+    -fx-border-width: 2;
+    -fx-padding: 4 12 4 12;
 }

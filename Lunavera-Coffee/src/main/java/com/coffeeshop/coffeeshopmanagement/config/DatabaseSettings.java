@@ -299,8 +299,19 @@ public record DatabaseSettings(SqlDialect dialect, String host, int port, String
 
     /** The JDBC URL of the MariaDB/MySQL database (host and name were checked above, so nothing odd can be injected). */
     public String mariaDbUrl() {
+        return mariaDbUrl(database);
+    }
+
+    /**
+     * The same URL for another database on the same server (the restore's scratch database, TODO 1.8). The name must be one
+     * that passes the same check as {@code db.name}; anything else is refused, so nothing odd can be injected.
+     */
+    public String mariaDbUrl(String databaseName) {
+        if (databaseName == null || !SAFE_NAME.matcher(databaseName).matches()) {
+            throw new IllegalArgumentException("Not a usable database name");
+        }
         StringBuilder url = new StringBuilder("jdbc:mariadb://").append(hostForUrl()).append(':').append(port).append('/')
-                .append(database).append("?connectTimeout=5000&socketTimeout=").append(socketTimeoutMillis)
+                .append(databaseName).append("?connectTimeout=5000&socketTimeout=").append(socketTimeoutMillis)
                 .append("&sslMode=").append(sslMode.value());
         if (sslServerCert != null) {
             url.append("&serverSslCert=").append(encodeForUrl(sslServerCert));

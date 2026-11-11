@@ -5,7 +5,7 @@ import com.coffeeshop.coffeeshopmanagement.model.Category;
 import com.coffeeshop.coffeeshopmanagement.model.Product;
 import com.coffeeshop.coffeeshopmanagement.util.Csv;
 import com.coffeeshop.coffeeshopmanagement.util.MoneyParser;
-import com.coffeeshop.coffeeshopmanagement.util.TextLengthLimiter;
+import com.coffeeshop.coffeeshopmanagement.util.TextLimits;
 import com.coffeeshop.coffeeshopmanagement.util.TextNormalizer;
 
 import java.math.BigDecimal;
@@ -112,7 +112,7 @@ public final class ProductCsv {
             Product p = new Product();
             String n = TextNormalizer.nfc(unprotect(cell(row, name)));
             if (n == null || n.isBlank()) problem = I18n.t("csv.p.noname");
-            else if (n.length() > TextLengthLimiter.NAME_MAX) problem = I18n.t("csv.p.namelong", TextLengthLimiter.NAME_MAX);
+            else if (n.length() > TextLimits.NAME_MAX) problem = I18n.t("csv.p.namelong", TextLimits.NAME_MAX);
             p.setName(n);
             Category found = null;
             if (problem == null) {
@@ -174,7 +174,7 @@ public final class ProductCsv {
             }
             if (problem == null) {
                 String d = description < 0 ? "" : TextNormalizer.nfc(unprotect(cell(row, description)));
-                if (d != null && d.length() > TextLengthLimiter.DESCRIPTION_MAX) problem = I18n.t("csv.p.desclong", TextLengthLimiter.DESCRIPTION_MAX);
+                if (d != null && d.length() > TextLimits.DESCRIPTION_MAX) problem = I18n.t("csv.p.desclong", TextLimits.DESCRIPTION_MAX);
                 else p.setDescription(d == null || d.isEmpty() ? null : d);
             }
             if (problem == null) {
@@ -316,12 +316,8 @@ public final class ProductCsv {
      * @throws NumberFormatException when the text is not a whole number
      */
     static int parseStock(String text) {
-        String s = text.trim().replace('\u00A0', ' ').replace('\u202F', ' ');
-        String digits = s.startsWith("-") ? s.substring(1) : s;
-        boolean plain = digits.matches("[0-9]+");
-        boolean dotted = digits.matches("[0-9]{1,3}(\\.[0-9]{3})+");
-        boolean spaced = digits.matches("[0-9]{1,3}( [0-9]{3})+");
-        if (!plain && !dotted && !spaced) throw new NumberFormatException(text);
-        return Integer.parseInt((s.startsWith("-") ? "-" : "") + digits.replace(".", "").replace(" ", ""));
+        java.util.OptionalLong value = WholeNumber.parse(text); // the one reader of whole numbers (TODO 2.95)
+        if (value.isEmpty() || value.getAsLong() > Integer.MAX_VALUE || value.getAsLong() < Integer.MIN_VALUE) throw new NumberFormatException(text);
+        return (int) value.getAsLong();
     }
 }

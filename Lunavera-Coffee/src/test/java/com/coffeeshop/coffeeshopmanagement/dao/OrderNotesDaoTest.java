@@ -96,17 +96,21 @@ public class OrderNotesDaoTest {
     public void aChangedNoteOnAnOpenOrderIsSavedAndAnUnchangedOneKeepsItsRow() {
         Order saved = orderDAO.insert(order(OrderStatus.OPEN, "90000"), List.of(line(1, "no ice"), line(1, null)));
         List<OrderItem> first = orderDAO.findItemsByOrderId(saved.getId());
+        int notedRow = first.get(0).getId();
         int plainRow = first.get(1).getId();
 
         assertTrue(orderDAO.updateIfStillOpen(saved, List.of(line(1, "extra ice"), line(1, null))));
         List<OrderItem> second = orderDAO.findItemsByOrderId(saved.getId());
         assertEquals(2, second.size());
         assertEquals("a changed note is a changed line", "extra ice", second.get(0).getNote());
+        assertEquals("TODO 2.100: and it stays where it was, with the row it had", notedRow, second.get(0).getId());
         assertEquals("the untouched line keeps its row", plainRow, second.get(1).getId());
 
         assertTrue(orderDAO.updateIfStillOpen(saved, List.of(line(1, null), line(1, null))));
         List<OrderItem> third = orderDAO.findItemsByOrderId(saved.getId());
         assertNull(third.get(0).getNote());
+        assertEquals("taking the note off keeps the row too", notedRow, third.get(0).getId());
+        assertEquals(plainRow, third.get(1).getId());
     }
 
     @Test

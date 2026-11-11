@@ -12,16 +12,14 @@ public final class StockRules {
     private StockRules() {
     }
 
-    /** The number of pieces typed, or -1 when it is not a whole number from 1 to the stock ceiling. */
+    /**
+     * The number of pieces typed, or -1 when it is not a whole number from 1 to the stock ceiling. The reading is {@link WholeNumber}'s
+     * (TODO 2.95): {@code 1.500} is 1500, but {@code 1.5}, {@code 2,5} and {@code 7.5} are refused instead of becoming 15, 25 and 75.
+     */
     public static int parseQuantity(String typed) {
-        if (typed == null) return -1;
-        String digits = typed.strip().replace(".", "").replace(",", "").replace(" ", "");
-        if (digits.isEmpty() || digits.length() > 9) return -1;
-        for (int i = 0; i < digits.length(); i++) {
-            if (digits.charAt(i) < '0' || digits.charAt(i) > '9') return -1;
-        }
-        int value = Integer.parseInt(digits);
-        return value >= 1 && value <= Limits.MAX_STOCK ? value : -1;
+        java.util.OptionalLong value = WholeNumber.parse(typed);
+        if (value.isEmpty()) return -1;
+        return value.getAsLong() >= 1 && value.getAsLong() <= Limits.MAX_STOCK ? (int) value.getAsLong() : -1;
     }
 
     /** True when adding {@code quantity} to {@code currentStock} would pass {@link Limits#MAX_STOCK}. */
@@ -32,8 +30,9 @@ public final class StockRules {
     /** Free text kept as one short line: line breaks and runs of spaces become one space, cut at {@link #TEXT_MAX}; null for nothing. */
     public static String cleanText(String typed) {
         if (typed == null) return null;
-        String one = typed.replaceAll("[\\p{Cntrl}\\s]+", " ").strip();
-        if (one.length() > TEXT_MAX) one = one.substring(0, TEXT_MAX).stripTrailing();
+        // composed accents first (TODO 3.18): the same word typed two ways must be stored one way
+        String one = java.text.Normalizer.normalize(com.coffeeshop.coffeeshopmanagement.util.TextNormalizer.clean(typed), java.text.Normalizer.Form.NFC).replaceAll("[\\p{Cntrl}\\s]+", " ").strip();
+        if (one.length() > TEXT_MAX) one = com.coffeeshop.coffeeshopmanagement.util.TextClip.clip(one, TEXT_MAX).stripTrailing();
         return one.isEmpty() ? null : one;
     }
 }

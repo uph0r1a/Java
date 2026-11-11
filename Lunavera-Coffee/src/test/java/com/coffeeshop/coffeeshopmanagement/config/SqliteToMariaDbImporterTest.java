@@ -45,6 +45,9 @@ public class SqliteToMariaDbImporterTest {
             HashSet<String> mariaColumns = new HashSet<>(SchemaColumns.columns(ddl.get(spec.name())));
             // MariaDB only: the lower-case key that makes login names unique (TODO 1.9). The server fills it, so it is never copied.
             if (spec.name().equals("users")) mariaColumns.remove("username_key");
+            // MariaDB only (TODO 2.98): the generated columns behind the "one at a time" keys; the server works them out, never copied.
+            if (spec.name().equals("orders")) mariaColumns.remove("open_table_key");
+            if (spec.name().equals("time_clock")) mariaColumns.remove("open_user_key");
             assertEquals("columns of " + spec.name(), mariaColumns, new HashSet<>(spec.columns()));
             assertTrue(spec.name(), spec.columns().containsAll(spec.dateTimeColumns()));
             assertTrue(spec.name(), spec.columns().containsAll(spec.dateColumns()));

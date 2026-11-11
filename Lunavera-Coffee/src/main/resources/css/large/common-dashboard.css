@@ -1,0 +1,80 @@
+/*
+ * GENERATED FILE - do not edit by hand (TODO 5.44, the large text).
+ * The large sizes of common-dashboard.css, rule by rule.
+ * Added by AppStyle to a window while the large text is chosen. Regenerate with service/LargeTextSheet.main after a
+ * change to any style sheet; LargeTextSheetTest fails when a file here is out of date.
+ */
+
+.page-title {
+    -fx-font-size: 25px !important;
+}
+
+.page-subtitle {
+    -fx-font-size: 15px !important;
+}
+
+.account-name,
+.admin-name {
+    -fx-font-size: 16px !important;
+}
+
+.account-role,
+.admin-role {
+    -fx-font-size: 13px !important;
+}
+
+.stat-title {
+    -fx-font-size: 13px !important;
+}
+
+.stat-value {
+    -fx-font-size: 28px !important;
+}
+
+.stat-description {
+    -fx-font-size: 13px !important;
+}
+
+.stat-icon {
+    -fx-font-size: 16px !important;
+}
+
+.section-title {
+    -fx-font-size: 18px !important;
+}
+
+.filter-label {
+    -fx-font-size: 13px !important;
+}
+
+.axis-label {
+    -fx-font-size: 13px !important;
+}
+
+.order-status-label {
+    -fx-font-size: 15px !important;
+}
+
+.order-status-value {
+    -fx-font-size: 18px !important;
+}
+
+.secondary-button {
+    -fx-font-size: 15px !important;
+}
+
+.inventory-name {
+    -fx-font-size: 15px !important;
+}
+
+.inventory-description {
+    -fx-font-size: 13px !important;
+}
+
+.inventory-danger {
+    -fx-font-size: 13px !important;
+}
+
+.inventory-warning {
+    -fx-font-size: 13px !important;
+}

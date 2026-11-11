@@ -18,7 +18,7 @@ public final class CapsLockWarning {
     /** The warning line: orange, hidden and taking no room until it is needed. */
     public static Label newLabel() {
         Label label = new Label(I18n.t("capslock.warning"));
-        label.setStyle("-fx-text-fill: #b45309; -fx-font-weight: bold; -fx-font-size: 12px;");
+        label.setStyle("-fx-text-fill: #b45309; -fx-font-weight: bold; " + TextSize.size(12));
         label.setVisible(false);
         label.setManaged(false);
         return label;

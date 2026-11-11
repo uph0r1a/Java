@@ -1,7 +1,7 @@
 package com.coffeeshop.coffeeshopmanagement.controller;
 
 import com.coffeeshop.coffeeshopmanagement.util.I18n;
-import com.coffeeshop.coffeeshopmanagement.dao.TableDAO;
+import com.coffeeshop.coffeeshopmanagement.service.TableService;
 import com.coffeeshop.coffeeshopmanagement.model.DiningTable;
 import com.coffeeshop.coffeeshopmanagement.service.DashboardStatsService;
 import com.coffeeshop.coffeeshopmanagement.service.DashboardStatsService.DashboardStats;
@@ -25,7 +25,7 @@ import javafx.scene.layout.VBox;
  * currently applies its own admin-only checks for the actions employees aren't allowed to
  * perform, rather than being hidden here).
  */
-public class EmployeeController {
+public class EmployeeController extends ScreenNavigation {
 
     @FXML
     private Label dashboardProductCountLabel;
@@ -47,7 +47,7 @@ public class EmployeeController {
     private GridPane homeTableGrid;
 
     private final DashboardStatsService dashboardStatsService = new DashboardStatsService();
-    private final TableDAO tableDAO = new TableDAO();
+    private final TableService tables = new TableService();
 
     @FXML
     private void initialize() {
@@ -107,6 +107,7 @@ public class EmployeeController {
         }
         if (lowStockList != null) {
             DashboardWidgets.fillLowStock(lowStockList, stats.lowStockProducts());
+            DashboardWidgets.showLowIngredients(null, lowStockList); // TODO 4.41
         }
         loadHomeTableGrid();
     }
@@ -114,25 +115,9 @@ public class EmployeeController {
     private void loadHomeTableGrid() {
         if (homeTableGrid == null) return;
         Async.run(
-                tableDAO::findAll,
-                tables -> DashboardWidgets.fillTableGrid(homeTableGrid, tables, this::handleHomeTableClick),
+                () -> java.util.Map.entry(tables.findAll(), ReservationPanel.badgesOrNone()),
+                loaded -> DashboardWidgets.fillTableGrid(homeTableGrid, loaded.getKey(), loaded.getValue(), this::handleHomeTableClick),
                 error -> AlertUtil.error(I18n.t("common.error.title"), I18n.t("dashboard.load.tables", error.getMessage()))
         );
-    }
-
-    @FXML
-    public void openOrderManagement(ActionEvent event) {
-        SceneNavigator.switchScene(event, "/fxml/quanlydonhang.fxml");
-    }
-
-    @FXML
-    public void openCustomerManagement(ActionEvent event) {
-        SceneNavigator.switchScene(event, "/fxml/quanlykhachhang.fxml");
-    }
-
-    @FXML
-    public void logout(ActionEvent event) {
-        Session.clear();
-        SceneNavigator.switchScene(event, "/fxml/dangnhap.fxml");
     }
 }

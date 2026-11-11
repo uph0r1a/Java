@@ -1,8 +1,8 @@
 package com.coffeeshop.coffeeshopmanagement.controller;
 
+import com.coffeeshop.coffeeshopmanagement.service.TableService;
 import com.coffeeshop.coffeeshopmanagement.config.AppFlags;
 import com.coffeeshop.coffeeshopmanagement.config.ShopSettings;
-import com.coffeeshop.coffeeshopmanagement.dao.TableDAO;
 import com.coffeeshop.coffeeshopmanagement.service.SetupPlan;
 import com.coffeeshop.coffeeshopmanagement.util.AlertUtil;
 import com.coffeeshop.coffeeshopmanagement.util.Async;
@@ -115,7 +115,7 @@ public final class SetupWizard {
     static int apply(String shopName, int wantedTables, List<Integer> tableNumbers) {
         ShopSettings.setName(shopName);
         SetupPlan.TablePlan plan = SetupPlan.planTables(tableNumbers, wantedTables);
-        TableDAO tables = new TableDAO();
+        TableService tables = new TableService();
         int kept = 0;
         for (int i = 0; i < plan.toAdd(); i++) {
             tables.add("", SetupPlan.DEFAULT_SEATS);

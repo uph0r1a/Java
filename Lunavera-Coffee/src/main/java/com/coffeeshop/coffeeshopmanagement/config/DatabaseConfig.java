@@ -93,7 +93,8 @@ public final class DatabaseConfig {
         }
     }
 
-    private static DatabaseSettings settings() {
+    /** The settings of this run; package-private for {@link MariaDbRestore}, which needs the server address for its scratch database. */
+    static DatabaseSettings settings() {
         return current().settings();
     }
 
@@ -160,13 +161,15 @@ public final class DatabaseConfig {
                 // check landing mid-payment) get an immediate "database is locked" SQLException instead of
                 // one of them just waiting briefly - SQLite's default busy behavior is to not wait at all.
                 pragma.execute("PRAGMA busy_timeout = 5000");
-                if (walActive) {
-                    // Only safe together with WAL (TODO 6.16): a commit then waits for the log, not for the disk, and a power cut
-                    // still cannot damage the file. In the old rollback-journal mode it would be a durability risk, so it stays off.
-                    pragma.execute("PRAGMA synchronous = NORMAL");
-                }
+                // FULL, in WAL mode and without it (TODO 2.92). With WAL, NORMAL leaves the log unflushed until a checkpoint: the file
+                // cannot be damaged, but a payment that was committed (the cashier saw "paid", the cash is in the drawer) can be taken
+                // back by a power cut or a crash of the operating system. FULL flushes the log at every commit, one flush per
+                // payment or autosave, which a till does not notice. Setting it for every connection also keeps the old
+                // rollback-journal mode (WAL refused) at its safe default instead of leaving it to the driver.
+                pragma.execute("PRAGMA synchronous = " + SQLITE_SYNCHRONOUS);
             }
             registerSearchKeyFunction(connection);
+            registerVietnameseCollation(connection);
             return connection;
         } catch (SQLException | RuntimeException e) {
             try {
@@ -177,6 +180,13 @@ public final class DatabaseConfig {
             throw e;
         }
     }
+
+    /**
+     * What every SQLite connection is told about flushing to disk (TODO 2.92): {@code FULL}, which {@code PRAGMA synchronous} answers
+     * as 2. A sale that the till showed as paid must survive a power cut; {@code NORMAL} (1) does not promise that under WAL.
+     * MariaDB's counterpart is {@code innodb_flush_log_at_trx_commit = 1}, its default (see docs/DATABASE.md).
+     */
+    static final String SQLITE_SYNCHRONOUS = "FULL";
 
     /** The SQL function that {@link #searchKeySql} calls on SQLite (TODO 3.31). */
     static final String SEARCH_KEY_FUNCTION = "VN_KEY";
@@ -197,13 +207,49 @@ public final class DatabaseConfig {
         });
     }
 
+    /** The collation {@link SqlDialect#vietnameseOrder} names on SQLite (TODO 3.84). */
+    static final String VIETNAMESE_COLLATION = "VN_ORDER";
+
+    /**
+     * Gives this SQLite connection the {@code VN_ORDER} collation, which compares two names the Vietnamese way
+     * ({@link com.coffeeshop.coffeeshopmanagement.util.VietnameseOrder}). Without it SQLite sorts by code point and every name that
+     * starts with a mark ({@code Ân}, {@code Đặng}) lands after {@code Zung}; with a {@code LIMIT} that even changes which customers
+     * are listed. Registered per connection, so a statement that uses it must run on a connection from {@link #getConnection()}.
+     */
+    private static void registerVietnameseCollation(Connection connection) throws SQLException {
+        org.sqlite.Collation.create(connection, VIETNAMESE_COLLATION, new org.sqlite.Collation() {
+            @Override
+            protected int xCompare(String first, String second) {
+                return com.coffeeshop.coffeeshopmanagement.util.VietnameseOrder.compare(first, second);
+            }
+        });
+    }
+
     /**
      * The SQL for "this column, ready for a search match" (TODO 3.31). On SQLite it is {@code VN_KEY(column)}; on MariaDB the
      * column itself, because its {@code utf8mb4_unicode_ci} collation already ignores case and accents. Compare it with a
      * text made by {@code TextNormalizer.searchKey}.
      */
     public static String searchKeySql(String column) {
-        return settings().isMariaDb() ? column : SEARCH_KEY_FUNCTION + "(" + column + ")";
+        return settings().isMariaDb() ? mariaDbSearchKey(column) : SEARCH_KEY_FUNCTION + "(" + column + ")";
+    }
+
+    /**
+     * On MariaDB the column, with the invisible characters that older rows may still hold taken out the way
+     * {@code TextNormalizer.clean} does for what is typed (TODO 3.71): non-breaking and narrow spaces become a normal space and the
+     * zero-width space, the left/right marks, the embedding marks and the byte-order mark disappear. Only the ones people actually
+     * paste are listed (the database cannot say "every format character"); new rows are clean on save anyway.
+     */
+    public static String mariaDbSearchKey(String column) {
+        String expression = column;
+        for (String space : new String[] {"C2A0", "E280AF"}) { // U+00A0, U+202F
+            expression = "REPLACE(" + expression + ", _utf8mb4 X'" + space + "', ' ')";
+        }
+        for (String invisible : new String[] {"E2808B", "E2808E", "E2808F", "E280AA", "E280AB", "E280AC", "EFBBBF"}) {
+            // U+200B, U+200E, U+200F, U+202A, U+202B, U+202C, U+FEFF
+            expression = "REPLACE(" + expression + ", _utf8mb4 X'" + invisible + "', '')";
+        }
+        return expression;
     }
 
     /**
@@ -360,6 +406,7 @@ public final class DatabaseConfig {
         // Before the first-run window can ask for an administrator: an empty MariaDB database may be filled from the old SQLite file.
         SqliteToMariaDbImporter.importIfRequested(connection, settings());
         backfillUnitCostOnce(connection); // after the import, so imported lines get their cost too (TODO 3.53)
+        TextNormalization.runOnce(connection); // old text into the composed accent form, once (TODO 3.18)
 
         seedDiningTables(connection);
         MenuSeeder.seedIfNeeded(connection);
@@ -422,7 +469,23 @@ public final class DatabaseConfig {
     /** Adds every column listed in {@link SqliteSchema#LATER_COLUMNS} that the table does not have yet (both databases). */
     static void addLaterColumns(Connection connection) throws SQLException {
         for (String[] column : SqliteSchema.LATER_COLUMNS) {
-            addColumnIfMissing(connection, column[0], column[1], column[2]);
+            addLaterColumn(connection, column);
+        }
+    }
+
+    /**
+     * Adds one of the {@link SqliteSchema#LATER_COLUMNS} when it is missing and, for the one that needs it, fills it for the rows that
+     * already exist: {@code customers.lifetime_points} (TODO 3.80) starts as what the customer has now plus the points spent on
+     * paid orders, an estimate for the past (a balance is what was earned minus what was spent) that is exact from then on. Only when
+     * the column was just added, so a later start never overwrites it.
+     */
+    static void addLaterColumn(Connection connection, String[] column) throws SQLException {
+        boolean added = addColumnIfMissing(connection, column[0], column[1], column[2]);
+        if (added && "customers".equals(column[0]) && "lifetime_points".equals(column[1])) {
+            try (Statement statement = connection.createStatement()) {
+                statement.executeUpdate("UPDATE customers SET lifetime_points = loyalty_points + COALESCE((SELECT SUM(o.points_redeemed) "
+                        + "FROM orders o WHERE o.customer_id = customers.id AND o.status = " + SqlStatus.PAID + "), 0)");
+            }
         }
     }
 
@@ -461,14 +524,14 @@ public final class DatabaseConfig {
         }
     }
 
-    /** Adds a column to an existing table only when it is not there yet (checked, not guessed from an error). */
-    static void addColumnIfMissing(Connection connection, String table, String column, String definition) throws SQLException {
+    /** Adds a column to an existing table only when it is not there yet (checked, not guessed from an error); true when it was added. */
+    static boolean addColumnIfMissing(Connection connection, String table, String column, String definition) throws SQLException {
         if (SqlDialect.of(connection) == SqlDialect.SQLITE) {
             try (Statement statement = connection.createStatement();
                  ResultSet rs = statement.executeQuery("PRAGMA table_info(" + table + ")")) {
                 while (rs.next()) {
                     if (column.equalsIgnoreCase(rs.getString("name"))) {
-                        return;
+                        return false;
                     }
                 }
             }
@@ -480,7 +543,7 @@ public final class DatabaseConfig {
                 statement.setString(2, column);
                 try (ResultSet rs = statement.executeQuery()) {
                     if (rs.next()) {
-                        return;
+                        return false;
                     }
                 }
             }
@@ -488,6 +551,7 @@ public final class DatabaseConfig {
         try (Statement statement = connection.createStatement()) {
             statement.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " " + definition);
         }
+        return true;
     }
 
     private static boolean tableExists(Connection connection, String tableName) throws SQLException {

@@ -40,10 +40,10 @@ public class DatabaseConfigWalTest {
     }
 
     @Test
-    public void everyConnectionUsesNormalSynchronousAndKeepsItsOtherSettings() throws Exception {
+    public void everyConnectionUsesFullSynchronousAndKeepsItsOtherSettings() throws Exception {
         TestDatabaseSupport.requireSqlite();
         try (Connection c = DatabaseConfig.getConnection()) {
-            assertEquals("1 is NORMAL", "1", pragma(c, "synchronous"));
+            assertEquals("2 is FULL (TODO 2.92: a paid sale survives a power cut)", "2", pragma(c, "synchronous"));
             assertEquals("1", pragma(c, "foreign_keys"));
             assertEquals("5000", pragma(c, "busy_timeout"));
         }

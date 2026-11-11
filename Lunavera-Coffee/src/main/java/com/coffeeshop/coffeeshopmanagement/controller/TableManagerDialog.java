@@ -1,6 +1,7 @@
 package com.coffeeshop.coffeeshopmanagement.controller;
 
-import com.coffeeshop.coffeeshopmanagement.dao.TableDAO;
+import com.coffeeshop.coffeeshopmanagement.util.TextLengthLimiter;
+import com.coffeeshop.coffeeshopmanagement.service.TableService;
 import com.coffeeshop.coffeeshopmanagement.model.DiningTable;
 import com.coffeeshop.coffeeshopmanagement.service.TableRules;
 import com.coffeeshop.coffeeshopmanagement.util.AlertUtil;
@@ -26,12 +27,12 @@ import java.util.stream.Collectors;
 
 /**
  * The owner's screen for the tables (TODO 4.18): add a table, rename it, change its seats, remove it. A table that has an open
- * order (or is marked "in use" by hand) cannot be removed; the database decides that in one statement ({@link TableDAO#remove}).
+ * order (or is marked "in use" by hand) cannot be removed; the database decides that in one statement ({@link TableService#remove}).
  * The table's NUMBER never changes, because every order keeps the number of its table.
  */
 final class TableManagerDialog {
 
-    private final TableDAO tableDAO = new TableDAO();
+    private final TableService tables = new TableService();
     private final TableView<DiningTable> view = new TableView<>();
     private final Runnable onChanged;
 
@@ -75,7 +76,7 @@ final class TableManagerDialog {
         remove.disableProperty().bind(view.getSelectionModel().selectedItemProperty().isNull());
         HBox buttons = new HBox(8, add, edit, remove);
 
-        Dialog<ButtonType> dialog = new Dialog<>();
+        Dialog<ButtonType> dialog = com.coffeeshop.coffeeshopmanagement.util.AlertUtil.configured(new Dialog<>()); // owner, modality and fits a short screen (TODO 2.89, 2.99)
         dialog.setTitle(I18n.t("tablemgr.title"));
         dialog.setHeaderText(I18n.t("tablemgr.intro"));
         dialog.getDialogPane().setContent(new VBox(10, buttons, view));
@@ -85,7 +86,7 @@ final class TableManagerDialog {
     }
 
     private void reload() {
-        Async.run(tableDAO::findAll, tables -> view.setItems(FXCollections.observableArrayList(tables)),
+        Async.run(tables::findAll, tables -> view.setItems(FXCollections.observableArrayList(tables)),
                 error -> AlertUtil.warning(I18n.t("tablemgr.title"), String.valueOf(error.getMessage())));
     }
 
@@ -110,6 +111,8 @@ final class TableManagerDialog {
         TextField nameField = new TextField(existing == null ? "" : existing.displayName());
         nameField.setPromptText(I18n.t("tablemgr.name.prompt"));
         TextField seatsField = new TextField(existing == null ? "4" : String.valueOf(existing.getCapacity()));
+        TextLengthLimiter.limit(nameField, TableRules.MAX_NAME); // TODO 5.50: stop typing at the limit the rules enforce
+        TextLengthLimiter.limit(seatsField, String.valueOf(TableRules.MAX_CAPACITY).length());
         GridPane form = new GridPane();
         form.setHgap(10);
         form.setVgap(10);
@@ -123,7 +126,7 @@ final class TableManagerDialog {
         problem.setStyle("-fx-text-fill: #b3261e;");
         form.add(problem, 0, 2, 2, 1);
 
-        Dialog<ButtonType> dialog = new Dialog<>();
+        Dialog<ButtonType> dialog = com.coffeeshop.coffeeshopmanagement.util.AlertUtil.configured(new Dialog<>()); // owner, modality and fits a short screen (TODO 2.89, 2.99)
         dialog.setTitle(I18n.t(existing == null ? "tablemgr.add" : "tablemgr.edit"));
         dialog.getDialogPane().setContent(form);
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
@@ -146,13 +149,13 @@ final class TableManagerDialog {
                 : TableRules.nameToStore(nameField.getText(), existing.getName(), existing.displayName());
         int seats = TableRules.parseCapacity(seatsField.getText());
         if (existing == null) {
-            Async.run(() -> tableDAO.add(name, seats), number -> {
+            Async.run(() -> tables.add(name, seats), number -> {
                 SecurityLog.event(SecurityLog.actor() + " added table " + number);
                 changed();
             }, error -> AlertUtil.warning(I18n.t("tablemgr.title"), String.valueOf(error.getMessage())));
         } else {
             Async.run(() -> {
-                tableDAO.update(existing.getTableNumber(), name, seats);
+                tables.update(existing.getTableNumber(), name, seats);
                 return null;
             }, ignored -> {
                 SecurityLog.event(SecurityLog.actor() + " edited table " + existing.getTableNumber());
@@ -176,7 +179,7 @@ final class TableManagerDialog {
         if (!AlertUtil.confirm(I18n.t("tablemgr.remove.title"), I18n.t("tablemgr.remove.confirm", table.displayName()))) {
             return;
         }
-        Async.run(() -> tableDAO.remove(table.getTableNumber()), removed -> {
+        Async.run(() -> tables.remove(table.getTableNumber()), removed -> {
             if (removed) {
                 SecurityLog.event(SecurityLog.actor() + " removed table " + table.getTableNumber());
             } else {

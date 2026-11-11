@@ -23,7 +23,7 @@ public class DataRuleSqlTest {
             assertFalse(rule.message().isBlank());
             assertFalse("a quote would break the trigger text: " + rule.message(), rule.message().contains("'"));
         }
-        assertTrue(names.size() >= 7);
+        assertTrue("the seven rules of 6.24 and the eight of 6.87", names.size() >= 15);
     }
 
     @Test
@@ -48,7 +48,8 @@ public class DataRuleSqlTest {
         String sqlite = String.join("\n", SqliteSchema.TABLES).toLowerCase();
         String maria = String.join("\n", MariaDbSchema.TABLES).toLowerCase();
         for (String column : new String[]{"price", "cost", "stock", "quantity", "unit_price", "line_total", "subtotal", "discount",
-                "total", "loyalty_points", "role", "status"}) {
+                "total", "loyalty_points", "role", "status",
+                "initial_amount", "balance", "clock_out", "clock_in", "min_subtotal", "used_count", "max_uses", "line_amount", "people", "amount"}) {
             assertTrue("SQLite has no column " + column, sqlite.contains(column));
             assertTrue("MariaDB has no column " + column, maria.contains(column));
         }

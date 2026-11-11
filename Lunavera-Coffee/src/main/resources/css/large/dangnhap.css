@@ -1,0 +1,40 @@
+/*
+ * GENERATED FILE - do not edit by hand (TODO 5.44, the large text).
+ * The large sizes of dangnhap.css, rule by rule.
+ * Added by AppStyle to a window while the large text is chosen. Regenerate with service/LargeTextSheet.main after a
+ * change to any style sheet; LargeTextSheetTest fails when a file here is out of date.
+ */
+
+.login-title {
+    -fx-font-size: 28px !important;
+}
+
+.login-subtitle {
+    -fx-font-size: 15px !important;
+}
+
+.field-label {
+    -fx-font-size: 14px !important;
+}
+
+.login-field {
+    -fx-font-size: 15px !important;
+}
+
+.login-button {
+    -fx-font-size: 15px !important;
+}
+
+.password-inner,
+.password-inner:focused,
+.password-inner:hover {
+    -fx-font-size: 15px !important;
+}
+
+.data-location {
+    -fx-font-size: 13px !important;
+}
+
+.language-button {
+    -fx-font-size: 14px !important;
+}

@@ -1,0 +1,80 @@
+/* Shared by every main screen: the sidebar (logo, menu buttons, separator, log-out button).
+   Loaded BEFORE the screen's own sheet (the stylesheets attribute of each FXML file), so a screen can still override a rule here.
+   Used by: admin-trangchu.css, quanlydanhmuc.css, quanlydonhang.css, quanlysanpham.css, quanlytaikhoan.css. */
+
+/* ==================== SIDEBAR ==================== */
+.sidebar {
+    -fx-background-color: #e4eed6;
+    -fx-border-color: #cbdbba;
+    -fx-border-width: 0 1px 0 0;
+}
+
+.sidebar-separator {
+    -fx-background-color: #d1dfc1;
+    -fx-padding: 0 15px;
+}
+
+.sidebar-separator .line {
+    -fx-border-color: #d1dfc1;
+    -fx-border-width: 0.5px;
+}
+
+/* Menu Button */
+.menu-button {
+    -fx-background-color: transparent;
+    -fx-background-radius: 9px;
+    -fx-border-radius: 9px;
+    -fx-text-fill: #345823;
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-alignment: CENTER_LEFT;
+    -fx-padding: 10px 18px;
+    -fx-cursor: hand;
+}
+
+.menu-button:hover {
+    -fx-background-color: #d5e6bf;
+    -fx-text-fill: #1c380f;
+}
+
+/* Menu Active: Xanh lá mạ non đậm, tương phản cao */
+.menu-button-active {
+    -fx-background-color: #3e7728;
+    -fx-background-radius: 9px;
+    -fx-text-fill: #ffffff;
+    -fx-font-weight: bold;
+    -fx-effect: dropshadow(gaussian, rgba(45, 85, 25, 0.28), 8, 0, 0, 2);
+}
+
+.menu-button-active:hover {
+    -fx-background-color: #356722;
+    -fx-text-fill: #ffffff;
+}
+
+.logout-button {
+    -fx-background-color: #d9e8c6;
+    -fx-background-radius: 8px;
+    -fx-border-color: #c4d9ab;
+    -fx-border-radius: 8px;
+    -fx-border-width: 1px;
+    -fx-text-fill: #395f26;
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-alignment: CENTER_LEFT;
+    -fx-padding: 9px 14px;
+    -fx-cursor: hand;
+}
+
+.logout-button:hover {
+    -fx-background-color: #cce0b5;
+    -fx-text-fill: #1d3a10;
+    -fx-border-color: #b0cb93;
+}
+
+.sidebar-footer {
+    -fx-text-fill: #5b7e45;
+    -fx-font-size: 12px;
+    -fx-font-style: italic;
+    -fx-line-spacing: 4px;
+    -fx-padding: 6px 0 0 0;
+}

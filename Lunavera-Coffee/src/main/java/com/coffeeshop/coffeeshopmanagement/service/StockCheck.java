@@ -83,6 +83,18 @@ public final class StockCheck {
         return result;
     }
 
+    /** The box shown when the payment box cannot open: one line per shortage, then what to do (the cashier changes the cart and pays again). */
+    public static String message(List<Shortage> shortages) {
+        StringBuilder message = new StringBuilder();
+        for (Shortage shortage : shortages) {
+            String name = com.coffeeshop.coffeeshopmanagement.config.SeedNames.product(shortage.name());
+            message.append(shortage.kind() == Kind.UNAVAILABLE
+                    ? com.coffeeshop.coffeeshopmanagement.util.I18n.t("pos.stock.recheck.off", name)
+                    : com.coffeeshop.coffeeshopmanagement.util.I18n.t("pos.stock.recheck.short", name, shortage.wanted(), shortage.available())).append('\n');
+        }
+        return message.append('\n').append(com.coffeeshop.coffeeshopmanagement.util.I18n.t("pos.stock.recheck.footer")).toString();
+    }
+
     private static List<Integer> productIds(List<OrderItem> lines) {
         List<Integer> ids = new ArrayList<>();
         for (OrderItem line : lines) {

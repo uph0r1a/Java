@@ -41,6 +41,24 @@ public final class AlertUtil {
         show(Alert.AlertType.ERROR, title, message);
     }
 
+    /**
+     * The start-up failure box with one extra button next to "Close" (TODO 5.40: "Use the local file on this computer"). Returns true
+     * only when the extra button was pressed; "Close", Esc and Enter (Close is the default, so a key press never starts something new)
+     * give false.
+     */
+    public static boolean errorWithChoice(String title, String message, String actionLabel) {
+        ButtonType act = new ButtonType(actionLabel, javafx.scene.control.ButtonBar.ButtonData.LEFT);
+        ButtonType close = new ButtonType(I18n.t("common.close"), javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE);
+        Alert alert = new Alert(Alert.AlertType.ERROR, message, act, close);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        configure(alert);
+        setDefaultButton(alert, close);
+        setCancelButton(alert, close);
+        Optional<ButtonType> result = alert.showAndWait();
+        return result.isPresent() && result.get() == act;
+    }
+
     public static void warning(String title, String message) {
         show(Alert.AlertType.WARNING, title, message);
     }
@@ -58,6 +76,33 @@ public final class AlertUtil {
         Optional<ButtonType> result = alert.showAndWait();
         if (result.isPresent() && result.get() == act && action != null) {
             action.run();
+        }
+    }
+
+    /**
+     * An information box with several extra buttons next to "Close" (for example "Print the sheet" and "Save the sheet"): the one that
+     * is pressed runs its action, and "Close" (or Esc) runs none. {@code labels} and {@code actions} are matched by position.
+     */
+    public static void infoWithActions(String title, String message, java.util.List<String> labels, java.util.List<Runnable> actions) {
+        java.util.List<ButtonType> buttons = new java.util.ArrayList<>();
+        for (String label : labels) {
+            buttons.add(new ButtonType(label, javafx.scene.control.ButtonBar.ButtonData.LEFT));
+        }
+        ButtonType close = new ButtonType(I18n.t("common.close"), javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE);
+        java.util.List<ButtonType> all = new java.util.ArrayList<>(buttons);
+        all.add(close);
+        Alert alert = new Alert(Alert.AlertType.INFORMATION, message, all.toArray(new ButtonType[0]));
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        configure(alert);
+        setDefaultButton(alert, buttons.isEmpty() ? close : buttons.get(0));
+        setCancelButton(alert, close);
+        Optional<ButtonType> result = alert.showAndWait();
+        if (result.isPresent()) {
+            int index = buttons.indexOf(result.get());
+            if (index >= 0 && index < actions.size() && actions.get(index) != null) {
+                actions.get(index).run();
+            }
         }
     }
 
@@ -80,13 +125,29 @@ public final class AlertUtil {
         alert.setTitle(title);
         alert.setHeaderText(null);
         alert.setContentText(message);
+        if (type == Alert.AlertType.ERROR) addCopyButton(alert, title, message);
         configure(alert);
         alert.showAndWait();
+    }
+
+    /** A "Sao chép" button on an error box that copies its title and text and leaves the box open (TODO 5.46). */
+    private static void addCopyButton(Alert alert, String title, String message) {
+        ButtonType copy = new ButtonType(I18n.t("copy.button"), javafx.scene.control.ButtonBar.ButtonData.LEFT);
+        alert.getButtonTypes().add(copy);
+        Node button = alert.getDialogPane().lookupButton(copy);
+        button.addEventFilter(javafx.event.ActionEvent.ACTION, e -> {
+            ClipboardText.copy(CopyText.error(title, message));
+            e.consume();
+        });
     }
 
     /** Applies the same owner + modality treatment to any other Dialog (e.g. the custom
      *  add/edit-category and add/edit-account forms), so every popup in the app is consistent. */
     public static void configure(Dialog<?> dialog) {
+        // A long message is wrapped by the dialog, but the window is sized before it wraps and the last line is cut to "...":
+        // the pane keeps the height its text needs (TODO 1.7, seen with the sample-menu notice in English).
+        dialog.getDialogPane().setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+        DialogFit.install(dialog); // scrolls and limits the height on a short screen (TODO 2.99)
         Window owner = activeWindow();
         if (owner != null) {
             dialog.initOwner(owner);
@@ -96,6 +157,12 @@ public final class AlertUtil {
         } else {
             dialog.initModality(Modality.WINDOW_MODAL);
         }
+    }
+
+    /** {@link #configure} for a dialog made in one expression: {@code Dialog<ButtonType> d = AlertUtil.configured(new Dialog<>());} (TODO 2.89). */
+    public static <D extends Dialog<?>> D configured(D dialog) {
+        configure(dialog);
+        return dialog;
     }
 
     /**
@@ -188,6 +255,10 @@ public final class AlertUtil {
         } else if (node instanceof javafx.scene.control.DatePicker picker) {
             out.append(picker.getValue()).append('\u0001');
         }
+        if (node instanceof javafx.scene.control.ScrollPane scroll) { // a dialog's content is in one (TODO 2.99)
+            collectState(scroll.getContent(), out);
+            return;
+        }
         if (node instanceof javafx.scene.Parent parent) {
             for (Node child : parent.getChildrenUnmodifiable()) collectState(child, out);
         }
@@ -206,7 +277,8 @@ public final class AlertUtil {
 
     /** The window the user was actually looking at when the alert was triggered - whichever
      *  currently-open JavaFX window reports itself as focused. */
-    private static Window activeWindow() {
+    /** The window that has the focus now, or null; the owner of a dialog opened from a helper (the print dialog of the shift sheet). */
+    static Window activeWindow() {
         for (Window window : Window.getWindows()) {
             if (window.isFocused()) {
                 return window;

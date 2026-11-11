@@ -106,10 +106,30 @@ public class TableDAO {
                 statement.setInt(1, tableNumber);
                 statement.executeUpdate();
             }
+            // The unpaid order that is thrown away with the table (TODO 4.2): remembered first, so the audit line can say which order
+            // and how much was on it; at most one, but the loop does not rely on that.
+            java.util.Map<Integer, java.math.BigDecimal> thrownAway = new java.util.LinkedHashMap<>();
             try (PreparedStatement statement = connection.prepareStatement(
-                    "UPDATE orders SET status = " + SqlStatus.CANCELLED + " WHERE table_number = ? AND status = " + SqlStatus.OPEN)) {
+                    "SELECT id, total FROM orders WHERE table_number = ? AND status = " + SqlStatus.OPEN)) {
                 statement.setInt(1, tableNumber);
+                try (java.sql.ResultSet rs = statement.executeQuery()) {
+                    while (rs.next()) {
+                        thrownAway.put(rs.getInt(1), com.coffeeshop.coffeeshopmanagement.util.Money.fromDong(rs.getLong(2)));
+                    }
+                }
+            }
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "UPDATE orders SET status = " + SqlStatus.CANCELLED + ", cancelled_by = ?, cancelled_at = ? "
+                            + "WHERE table_number = ? AND status = " + SqlStatus.OPEN)) {
+                OrderDAO.setCancelledBy(statement, 1);
+                statement.setString(2, com.coffeeshop.coffeeshopmanagement.util.DbTime.write(com.coffeeshop.coffeeshopmanagement.util.AppClock.now()));
+                statement.setInt(3, tableNumber);
                 statement.executeUpdate();
+            }
+            for (java.util.Map.Entry<Integer, java.math.BigDecimal> order : thrownAway.entrySet()) {
+                AuditDAO.write(connection, com.coffeeshop.coffeeshopmanagement.model.AuditAction.TABLE_EMPTIED,
+                        com.coffeeshop.coffeeshopmanagement.model.AuditTarget.ORDER, order.getKey(), "#" + order.getKey(),
+                        com.coffeeshop.coffeeshopmanagement.service.AuditRules.money(order.getValue()), null, String.valueOf(tableNumber));
             }
             connection.commit();
         } catch (SQLException e) {
@@ -189,6 +209,12 @@ public class TableDAO {
         try (Connection connection = DatabaseConfig.getConnection()) {
             List<DiningTable> existing = tablesOf(connection);
             checkNameAndSeats(clean, capacity, existing, tableNumber);
+            List<WaitingBooking> tooBig = waitingBookings(connection, tableNumber, capacity); // TODO 2.97
+            if (!tooBig.isEmpty()) {
+                WaitingBooking first = tooBig.get(0);
+                throw new IllegalArgumentException(I18n.t("tablemgr.seats.booked", capacity, first.people(), first.name(),
+                        first.when().format(BOOKING_TIME)));
+            }
             try (PreparedStatement statement = connection.prepareStatement(
                     "UPDATE dining_tables SET name = ?, capacity = ? WHERE table_number = ?")) {
                 statement.setString(1, clean);
@@ -216,11 +242,13 @@ public class TableDAO {
         Permissions.requireAdmin("remove a table");
         String delete = "DELETE FROM dining_tables WHERE table_number = ? AND status <> " + SqlStatus.OCCUPIED
                 + " AND NOT EXISTS (SELECT 1 FROM orders o WHERE o.table_number = ? AND o.status = " + SqlStatus.OPEN + ")"
+                + " AND NOT EXISTS (SELECT 1 FROM reservations r WHERE r.table_number = ? AND r.status = 'BOOKED')" // TODO 2.97
                 + " AND (SELECT COUNT(*) FROM (SELECT table_number FROM dining_tables) all_tables) > 1";
         try (Connection connection = DatabaseConfig.getConnection()) {
             try (PreparedStatement statement = connection.prepareStatement(delete)) {
                 statement.setInt(1, tableNumber);
                 statement.setInt(2, tableNumber);
+                statement.setInt(3, tableNumber);
                 if (statement.executeUpdate() > 0) {
                     return true;
                 }
@@ -232,10 +260,42 @@ public class TableDAO {
             if (left.size() <= 1) {
                 throw new IllegalArgumentException(I18n.t("tablemgr.remove.last"));
             }
+            List<WaitingBooking> booked = waitingBookings(connection, tableNumber, 0);
+            if (!booked.isEmpty()) { // TODO 2.97: a waiting booking would be left with a table that is not on the map
+                WaitingBooking first = booked.get(0);
+                throw new IllegalArgumentException(I18n.t("tablemgr.remove.booked", I18n.t("orders.table", tableNumber), booked.size(),
+                        first.name(), first.people(), first.when().format(BOOKING_TIME)));
+            }
             return false; // in use
         } catch (SQLException e) {
             throw new DataAccessException(I18n.t("tablemgr.fail.remove", e.getMessage()), e);
         }
+    }
+
+    private static final java.time.format.DateTimeFormatter BOOKING_TIME = java.time.format.DateTimeFormatter.ofPattern("HH:mm dd/MM");
+
+    /** A booking that still waits for a table: enough to name it in a message. */
+    private record WaitingBooking(String name, int people, java.time.LocalDateTime when) {
+    }
+
+    /**
+     * The bookings still waiting for this table, soonest first, of more than {@code morePeopleThan} people (0: all of them).
+     * Read on the given connection, so the answer is the one the removal or the change is decided on (TODO 2.97).
+     */
+    private static List<WaitingBooking> waitingBookings(Connection connection, int tableNumber, int morePeopleThan) throws SQLException {
+        List<WaitingBooking> found = new ArrayList<>();
+        try (PreparedStatement statement = connection.prepareStatement(
+                "SELECT customer_name, people, reserved_for FROM reservations WHERE table_number = ? AND status = 'BOOKED' AND people > ? "
+                        + "ORDER BY reserved_for, id")) {
+            statement.setInt(1, tableNumber);
+            statement.setInt(2, morePeopleThan);
+            try (ResultSet rs = statement.executeQuery()) {
+                while (rs.next()) {
+                    found.add(new WaitingBooking(rs.getString(1), rs.getInt(2), com.coffeeshop.coffeeshopmanagement.util.DbTime.parse(rs.getString(3))));
+                }
+            }
+        }
+        return found;
     }
 
     /** The tables with their stored names, read on the given connection (the names are all the rules need). */

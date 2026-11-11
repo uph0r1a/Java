@@ -42,11 +42,29 @@ public enum SqlDialect {
         return this == SQLITE ? column + " COLLATE NOCASE" : column + " COLLATE utf8mb4_unicode_ci";
     }
 
+    /**
+     * A name column in an ORDER BY in Vietnamese order (TODO 3.84): {@code Ă Â Đ Ê Ô Ơ Ư} next to their base letters, capitals and
+     * small letters alike. On SQLite the column is compared with the {@code VN_ORDER} collation that {@code DatabaseConfig} registers on
+     * every connection (SQLite itself compares by code point and would put the accented letters after Z); on MariaDB
+     * {@code utf8mb4_unicode_ci} already orders them that way. Use it in the ORDER BY of any list of names, never in a table definition.
+     */
+    public String vietnameseOrder(String column) {
+        return this == SQLITE ? column + " COLLATE " + DatabaseConfig.VIETNAMESE_COLLATION : column + " COLLATE utf8mb4_unicode_ci";
+    }
+
     /** The statement that creates the small key/flag table used by the one-time seeders. */
     public String createFlagsTable() {
         return this == SQLITE
                 ? "CREATE TABLE IF NOT EXISTS app_flags (name TEXT PRIMARY KEY)"
                 : "CREATE TABLE IF NOT EXISTS app_flags (name VARCHAR(100) NOT NULL PRIMARY KEY) "
+                        + "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+    }
+
+    /** The statement that creates the settings table (TODO 6.74), for code that may run before the start-up schema pass. */
+    public String createSettingsTable() {
+        return this == SQLITE
+                ? "CREATE TABLE IF NOT EXISTS settings (name TEXT PRIMARY KEY, value TEXT NOT NULL)"
+                : "CREATE TABLE IF NOT EXISTS settings (name VARCHAR(100) NOT NULL PRIMARY KEY, value VARCHAR(500) NOT NULL) "
                         + "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
     }
 

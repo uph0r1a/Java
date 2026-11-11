@@ -345,6 +345,16 @@ public class TableDAOTest {
         java.util.List<DiningTable> before = tableDAO.findAll();
         java.util.List<Integer> removed = new java.util.ArrayList<>();
         try {
+            // Every test class of a run shares one database, and others leave tables in use or holding an open order (a table in use
+            // cannot be removed, TODO 2.90): free them all first, so this test starts from tables that can go.
+            for (DiningTable t : before) {
+                tableDAO.setEmpty(t.getTableNumber());
+            }
+            // and a table with a waiting booking cannot be removed either (TODO 2.97): close what other classes left waiting
+            ReservationDAO bookings = new ReservationDAO();
+            for (com.coffeeshop.coffeeshopmanagement.model.Reservation waiting : bookings.findWaiting()) {
+                bookings.close(waiting.id(), com.coffeeshop.coffeeshopmanagement.model.Reservation.Status.CANCELLED);
+            }
             // free every table except one: only removing the LAST one must be refused
             // (a copy of the real list is kept; every removed row is put back below)
             for (DiningTable t : before) {

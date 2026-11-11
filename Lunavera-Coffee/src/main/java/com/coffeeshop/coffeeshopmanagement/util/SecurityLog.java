@@ -94,6 +94,6 @@ public final class SecurityLog {
     public static String clean(String typed) {
         if (typed == null) return "";
         String one = typed.replaceAll("[\\p{Cntrl}\\p{Zl}\\p{Zp}\\x{80}-\\x{9F}]", " ").trim();
-        return one.length() > 40 ? one.substring(0, 40) + "..." : one;
+        return one.length() > 40 ? TextClip.clip(one, 40) + "..." : one;
     }
 }

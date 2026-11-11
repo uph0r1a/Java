@@ -19,8 +19,8 @@ import java.util.logging.Logger;
 
 /**
  * Logs the person out after a while with no mouse, keyboard or touch activity (TODO 2.9), so a till left logged in
- * is not left open for the next person. Default 15 minutes; {@code -Dlunavera.idleMinutes=30} changes it and
- * {@code 0} turns it off. Any window counts (dialogs, receipt, history), because they all get the activity listener.
+ * is not left open for the next person. The owner sets the minutes in Settings (15 until changed, 0 = off, TODO 4.49);
+ * {@code -Dlunavera.idleMinutes=30} overrides that for one run. Any window counts (dialogs, receipt, history), because they all get the activity listener.
  */
 public final class IdleLogout {
 
@@ -37,18 +37,25 @@ public final class IdleLogout {
     private IdleLogout() {
     }
 
+    /** The limit is read again at every look, so a change in Settings (TODO 4.49) counts at once; {@code -Dlunavera.idleMinutes} overrides it. */
     public static void install() {
-        install(IdleTracker.limitFromSetting(System.getProperty(SETTING)), 10_000);
+        install(() -> IdleTracker.limit(System.getProperty(SETTING), com.coffeeshop.coffeeshopmanagement.service.ShopRules.current().idleMinutes()), 10_000);
     }
 
     /** @param checkEveryMillis how often to look (short values are for tests) */
     public static void install(Duration limit, long checkEveryMillis) {
         if (installed) return;
-        installed = true;
         if (limit.isZero()) {
-            LOGGER.info("Idle auto-logout is switched off (" + SETTING + "=0)");
+            installed = true;
+            LOGGER.warning("Idle auto-logout is switched off (" + SETTING + "=0): a till left signed in stays open");
             return;
         }
+        install(() -> limit, checkEveryMillis);
+    }
+
+    private static void install(java.util.function.Supplier<Duration> limit, long checkEveryMillis) {
+        if (installed) return;
+        installed = true;
         Window.getWindows().addListener((ListChangeListener<Window>) change -> {
             while (change.next()) {
                 if (change.wasAdded()) change.getAddedSubList().forEach(IdleLogout::watch);
@@ -56,18 +63,13 @@ public final class IdleLogout {
         });
         Window.getWindows().forEach(IdleLogout::watch);
 
-        timer = new Timeline(new KeyFrame(javafx.util.Duration.millis(checkEveryMillis), e -> tick(limit)));
+        timer = new Timeline(new KeyFrame(javafx.util.Duration.millis(checkEveryMillis), e -> tick(limit.get())));
         timer.setCycleCount(Animation.INDEFINITE);
         timer.play();
     }
 
     private static void tick(Duration limit) {
-        if (Session.getCurrentUser() == null) {
-            TRACKER.touch(); // not signed in: the clock starts when someone signs in
-            return;
-        }
-        if (TRACKER.isIdle(limit)) {
-            TRACKER.touch();
+        if (TRACKER.checkIdle(Session.getCurrentUser() != null, limit)) {
             // later, not inside the animation pulse: ending the session shows a dialog
             Platform.runLater(() -> {
                 if (!TillLock.lockForIdle()) SessionGuard.idleLogout(limit); // lock first, sign out when it stays idle or cannot lock (TODO 4.36)

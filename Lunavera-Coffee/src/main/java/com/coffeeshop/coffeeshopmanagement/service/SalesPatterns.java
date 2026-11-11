@@ -1,5 +1,6 @@
 package com.coffeeshop.coffeeshopmanagement.service;
 
+import com.coffeeshop.coffeeshopmanagement.util.BusinessDay;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.DayOfWeek;
@@ -74,7 +75,7 @@ public final class SalesPatterns {
             sum[i] = BigDecimal.ZERO;
         }
         for (PaidOrder order : orders) {
-            int day = order.time().getDayOfWeek().getValue();
+            int day = BusinessDay.dayOf(order.time()).getDayOfWeek().getValue(); // the weekday of the shop's day (TODO 4.50): 00:40 on Saturday is still Friday evening
             count[day]++;
             sum[day] = sum[day].add(order.total());
         }

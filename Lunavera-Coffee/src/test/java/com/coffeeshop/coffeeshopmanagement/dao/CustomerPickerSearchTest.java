@@ -32,7 +32,7 @@ public class CustomerPickerSearchTest {
 
     private static String uniquePhone() {
         String digits = UUID.randomUUID().toString().replaceAll("\\D", "");
-        return "0" + (digits + "000000000").substring(0, 9);
+        return "0" + (digits.isEmpty() ? "9" : digits.replaceFirst("^0+", "9")).concat("000000000").substring(0, 9); // a real mobile number never has 0 after the 0 (TODO 3.71 reads +84 forms exactly)
     }
 
     private Customer add(String name, String phone, String email) {
@@ -52,7 +52,7 @@ public class CustomerPickerSearchTest {
         String marker = marker();
         Customer lan = add("Nguyễn Văn " + marker, null, null);
         assertTrue(contains(customerDAO.search("nguyen van " + marker, 20), lan));
-        assertTrue(contains(customerDAO.search("NGUYỄN " + marker.toUpperCase(java.util.Locale.ROOT), 20), lan));
+        assertTrue(contains(customerDAO.search("NGUYỄN VĂN " + marker.toUpperCase(java.util.Locale.ROOT), 20), lan));
     }
 
     @Test

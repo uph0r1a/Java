@@ -2,8 +2,10 @@ package com.coffeeshop.coffeeshopmanagement.config;
 
 import com.coffeeshop.coffeeshopmanagement.model.AccountStatus;
 import com.coffeeshop.coffeeshopmanagement.model.OrderStatus;
+import com.coffeeshop.coffeeshopmanagement.model.Reservation;
 import com.coffeeshop.coffeeshopmanagement.model.Role;
 import com.coffeeshop.coffeeshopmanagement.model.TableStatus;
+import com.coffeeshop.coffeeshopmanagement.model.Voucher;
 import com.coffeeshop.coffeeshopmanagement.util.I18n;
 
 import java.sql.Connection;
@@ -28,6 +30,13 @@ import java.util.stream.Stream;
  *   <li><b>version 3</b> (TODO 3.36): an index on {@code orders.paid_at}. The date filters (history, reports, dashboard) are
  *       ranges on {@code paid_at} and {@code order_date} now, and the paid time had no index on SQLite. MariaDB's tables are
  *       created with it, so its step only covers a database made before that.</li>
+ *   <li><b>version 4</b> (TODO 4.37 / 6.90): indexes on {@code refunds(order_id)} and {@code refunds(refunded_at)}. The refund
+ *       reports and the "lines already refunded" look-up of one order read the refunds table by those two columns; MariaDB's table is
+ *       created with both ({@code idx_refunds_order}, {@code idx_refunds_at}), SQLite's had none.</li>
+ *   <li><b>version 5</b> (TODO 6.72): the rest of the plain indexes MariaDB's tables are made with and SQLite had none of, on {@code stock_log},
+ *       {@code expenses}, {@code reservations}, {@code audit_log}, {@code shift_closes}, {@code gift_card_moves}, {@code time_clock} and
+ *       {@code orders (status, order_date)}, and on SQLite {@code order_items (product_id)}; see
+ *       {@link #INDEXES_SINCE_V5}. {@code MariaDbSchemaTest} now compares the index columns of the two, not only the table columns.</li>
  * </ul>
  * Plus one rule that is re-checked at every start because it can fail on old data (TODO 2.7): at most one customer per
  * phone number, enforced by a unique index as soon as no duplicates exist.
@@ -37,7 +46,7 @@ public final class SchemaMigrations {
 
     private static final Logger LOGGER = Logger.getLogger(SchemaMigrations.class.getName());
 
-    public static final int LATEST_VERSION = 3;
+    public static final int LATEST_VERSION = 5;
     static final String UNIQUE_PHONE_INDEX = "ux_customers_phone";
 
     /**
@@ -52,9 +61,27 @@ public final class SchemaMigrations {
     static {
         SQLITE_STEPS.put(2, SchemaMigrations::createPerformanceIndexes); // TODO 2.6
         SQLITE_STEPS.put(3, SchemaMigrations::createPaidAtIndex);        // TODO 3.36
+        SQLITE_STEPS.put(4, SchemaMigrations::createRefundIndexes);      // TODO 4.37 (6.90 a)
+        SQLITE_STEPS.put(5, SchemaMigrations::createMirroredIndexes);    // TODO 6.72
     }
 
     private SchemaMigrations() {
+    }
+
+    /**
+     * A numbered step that adds columns to tables that already exist (TODO 6.6). Use it, registered under the new version in
+     * {@link #SQLITE_STEPS} and in {@link MariaDbMigrations#STEPS}, instead of adding a line to {@link SqliteSchema#LATER_COLUMNS},
+     * which is frozen (see {@code LaterColumnsAreFrozenTest}). The column must ALSO be in the CREATE TABLE of both schema classes,
+     * because a new MariaDB database is made at the latest version and runs no step. Safe to run twice: a column that is there is
+     * left alone, so a new SQLite file (made from the older tables, then stepped up) and an old one end in the same place.
+     * On SQLite it runs inside the step's transaction together with the version number.
+     */
+    static MariaDbMigrations.Step addColumns(String[]... columns) {
+        return connection -> {
+            for (String[] column : columns) {
+                DatabaseConfig.addColumnIfMissing(connection, column[0], column[1], column[2]);
+            }
+        };
     }
 
     static void upgrade(Connection connection) throws SQLException {
@@ -62,6 +89,7 @@ public final class SchemaMigrations {
             ensureMariaEmployeePhoneKey(connection); // MariaDB/MySQL: MariaDbSchema creates everything else; this key came later
             ensureMariaLoginNameKey(connection);      // so did this one (TODO 1.9)
             ensureMariaProductCodeKey(connection);    // and the product code (TODO 4.42)
+            ensureMariaOneAtATimeKeys(connection);    // and the three "one at a time" rules (TODO 2.98)
             ensureMariaDataRules(connection);
             return;
         }
@@ -70,8 +98,12 @@ public final class SchemaMigrations {
             // A database made (or restored) by a newer build: older code must not open and change it (TODO 2.42).
             throw new IllegalStateException(I18n.t("db.newer.sqlite", version, LATEST_VERSION));
         }
+        List<Integer> missing = MariaDbMigrations.plan(version, LATEST_VERSION, SQLITE_STEPS.keySet());
+        if (!missing.isEmpty()) {
+            PreUpgradeBackup.takeIfNeeded(connection, version, LATEST_VERSION); // TODO 6.9: a way back before any step changes the data
+        }
         // The missing steps in order, the version written after each one, so a failure half way resumes from the right place.
-        for (int step : MariaDbMigrations.plan(version, LATEST_VERSION, SQLITE_STEPS.keySet())) {
+        for (int step : missing) {
             LOGGER.info("Upgrading the SQLite database to version " + step + " ...");
             // The step and the version number together (TODO 3.37): killed in between, the file is at the old version with none of
             // the step applied, not at the old version with half of it.
@@ -85,6 +117,8 @@ public final class SchemaMigrations {
         ensureUniqueLoginNames(connection);
         ensureUniqueProductCode(connection);
         ensureOneOpenOrderPerTable(connection);
+        ensureOneOpenClockIn(connection);       // TODO 2.98
+        ensureUniqueQueueNumber(connection);    // TODO 2.98
         ensureDataRules(connection);
     }
 
@@ -102,6 +136,88 @@ public final class SchemaMigrations {
     }
 
     static final String ONE_OPEN_ORDER_INDEX = "ux_orders_one_open_per_table";
+
+    // ---- the "one at a time" rules (TODO 2.98) ----
+
+    static final String ONE_OPEN_CLOCK_INDEX = "ux_time_clock_one_open";
+    static final String QUEUE_NUMBER_INDEX = "ux_orders_queue_day_no";
+
+    /** SQLite: at most one open clock-in per person, a partial unique index (TODO 2.98; built like the other rules, skipped while duplicates exist). */
+    static void ensureOneOpenClockIn(Connection connection) throws SQLException {
+        buildUnique(connection, ONE_OPEN_CLOCK_INDEX, "time_clock", "user_id", "clock_out IS NULL",
+                "SELECT user_id FROM time_clock WHERE clock_out IS NULL GROUP BY user_id HAVING COUNT(*) > 1");
+    }
+
+    /**
+     * Gives the take-away orders of before their shop day (the calendar day of the time they were opened: the day start of
+     * TODO 4.50 did not exist then). Only rows that have a number and no day yet; the same statement on both databases.
+     */
+    static void backfillQueueDay(Connection connection) throws SQLException {
+        try (Statement statement = connection.createStatement()) {
+            statement.executeUpdate("UPDATE orders SET queue_day = DATE(order_date) WHERE queue_no IS NOT NULL AND queue_day IS NULL");
+        }
+    }
+
+    private static final String DUPLICATE_QUEUE_NUMBERS = "SELECT queue_day FROM orders WHERE queue_no IS NOT NULL AND queue_day IS NOT NULL "
+            + "GROUP BY queue_day, queue_no HAVING COUNT(*) > 1";
+
+    /** SQLite: one take-away number once per shop day, a unique index on (day, number) (TODO 2.98). */
+    static void ensureUniqueQueueNumber(Connection connection) throws SQLException {
+        backfillQueueDay(connection);
+        buildUnique(connection, QUEUE_NUMBER_INDEX, "orders", "queue_day, queue_no", "queue_no IS NOT NULL AND queue_day IS NOT NULL",
+                DUPLICATE_QUEUE_NUMBERS);
+    }
+
+    /**
+     * MariaDB/MySQL (TODO 2.98): the three rules SQLite has as partial unique indexes, which these servers do not have. Each is a
+     * stored generated column that holds the value only while the rule applies and is NULL otherwise, with a unique key on it
+     * (a unique key lets any number of NULLs repeat): {@code orders.open_table_key} (the table number while the order is OPEN),
+     * {@code time_clock.open_user_key} (the person while the stretch is open), and for the take-away number the plain column
+     * {@code orders.queue_day} with a unique key on (day, number). A new database is created with them ({@link MariaDbSchema});
+     * an older one gets them here at the start. Like the other unique rules, a key that cannot be built because duplicates
+     * already exist is skipped with a warning and tried again at the next start. Needs MariaDB 10.2.1+ or MySQL 5.7+ (stored
+     * generated columns).
+     */
+    static void ensureMariaOneAtATimeKeys(Connection connection) throws SQLException {
+        backfillQueueDay(connection);
+        buildMariaKey(connection, "orders", "open_table_key", ONE_OPEN_ORDER_INDEX,
+                "INT GENERATED ALWAYS AS (CASE WHEN status = " + SqlStatus.OPEN + " THEN table_number END) STORED",
+                "(open_table_key)",
+                "SELECT table_number FROM orders WHERE status = " + SqlStatus.OPEN
+                        + " AND table_number IS NOT NULL GROUP BY table_number HAVING COUNT(*) > 1");
+        buildMariaKey(connection, "time_clock", "open_user_key", ONE_OPEN_CLOCK_INDEX,
+                "INT GENERATED ALWAYS AS (CASE WHEN clock_out IS NULL THEN user_id END) STORED",
+                "(open_user_key)",
+                "SELECT user_id FROM time_clock WHERE clock_out IS NULL GROUP BY user_id HAVING COUNT(*) > 1");
+        buildMariaKey(connection, "orders", "queue_day", QUEUE_NUMBER_INDEX, null, "(queue_day, queue_no)", DUPLICATE_QUEUE_NUMBERS);
+    }
+
+    /** Adds {@code column} (when a definition is given and it is missing) and the unique key {@code index}, unless it exists or duplicates block it. */
+    private static void buildMariaKey(Connection connection, String table, String column, String index, String columnDefinition,
+                                      String keyColumns, String duplicatesSql) throws SQLException {
+        if (mariaIndexExists(connection, table, index)) {
+            return;
+        }
+        List<String> duplicates = new ArrayList<>();
+        try (Statement statement = connection.createStatement();
+             ResultSet rs = statement.executeQuery(duplicatesSql)) {
+            while (rs.next()) duplicates.add(rs.getString(1));
+        }
+        if (!duplicates.isEmpty()) {
+            LOGGER.warning(duplicates.size() + " duplicate value(s) in " + table + ": the unique rule " + index
+                    + " cannot be enforced by the database until they are fixed. Ask the database for them with the GROUP BY ... HAVING "
+                    + "COUNT(*) > 1 query on the column the rule covers (see docs/DATABASE.md).");
+            return;
+        }
+        try (Statement statement = connection.createStatement()) {
+            boolean addColumn = columnDefinition != null && !mariaColumnExists(connection, table, column);
+            statement.execute("ALTER TABLE " + table + (addColumn ? " ADD COLUMN " + column + " " + columnDefinition + "," : "")
+                    + " ADD UNIQUE KEY " + index + " " + keyColumns);
+        } catch (SQLException e) {
+            // A server that cannot do it (too old, no stored generated columns): the code still checks the rule, as before.
+            LOGGER.log(Level.WARNING, "The unique rule " + index + " was not added: " + e.getMessage());
+        }
+    }
 
     /**
      * One rule the database itself enforces (TODO 6.24). {@code violation} is the condition that must never be true for a row,
@@ -138,7 +254,39 @@ public final class SchemaMigrations {
                     "Trạng thái bàn không hợp lệ."),
             new DataRule("customers_points_not_negative", "customers",
                     "{r}.loyalty_points < 0",
-                    "Điểm tích lũy không được âm."));
+                    "Điểm tích lũy không được âm."),
+            // The tables added after the rules above (TODO 6.87). The code checks each of these today; they are the second line of
+            // defence for money when a second till or a hand edit in phpMyAdmin goes around the code. Each is the weakest form the
+            // code already keeps, so no legitimate row is refused.
+            new DataRule("gift_cards_valid", "gift_cards",
+                    "{r}.initial_amount <= 0 OR {r}.balance < 0",
+                    "Thẻ quà tặng: số tiền ban đầu phải lớn hơn 0 và số dư không được âm."),
+            new DataRule("gift_card_moves_not_zero", "gift_card_moves",
+                    "{r}.amount = 0",
+                    "Một lần dùng hoặc hoàn tiền thẻ quà tặng không thể là 0 đồng."),
+            new DataRule("time_clock_in_before_out", "time_clock",
+                    "{r}.clock_out IS NOT NULL AND {r}.clock_out < {r}.clock_in",
+                    "Giờ ra ca không được trước giờ vào ca."),
+            new DataRule("vouchers_valid", "vouchers",
+                    "{r}.value <= 0 OR {r}.min_subtotal < 0 OR {r}.used_count < 0"
+                            + " OR {r}.kind NOT IN ('" + Voucher.PERCENT + "', '" + Voucher.AMOUNT + "')"
+                            + " OR ({r}.kind = '" + Voucher.PERCENT + "' AND {r}.value > 100)"
+                            + " OR ({r}.max_uses IS NOT NULL AND ({r}.max_uses <= 0 OR {r}.used_count > {r}.max_uses))",
+                    "Mã giảm giá không hợp lệ: giá trị phải lớn hơn 0 (phần trăm tối đa 100) và số lượt dùng không vượt quá giới hạn."),
+            new DataRule("expenses_amount_positive", "expenses",
+                    "{r}.amount <= 0",
+                    "Số tiền chi phải lớn hơn 0."),
+            // A refund row may carry 0 pieces or 0 dong (the rest of a line paid partly by gift card, a line the discount made free),
+            // so this rule only refuses what is negative.
+            new DataRule("refunds_not_negative", "refunds",
+                    "{r}.quantity < 0 OR {r}.line_amount < 0 OR {r}.amount < 0",
+                    "Số lượng và số tiền hoàn không được âm."),
+            new DataRule("order_payments_positive", "order_payments",
+                    "{r}.amount <= 0",
+                    "Số tiền của một cách thanh toán phải lớn hơn 0."),
+            new DataRule("reservations_valid", "reservations",
+                    "{r}.people <= 0 OR {r}.status NOT IN " + in(Reservation.Status.values()),
+                    "Đặt bàn không hợp lệ: số người phải lớn hơn 0 và trạng thái phải được biết."));
 
     /** How many rows already in the table break {@code rule}. */
     private static long rowsBreaking(Connection connection, DataRule rule) throws SQLException {
@@ -395,6 +543,91 @@ public final class SchemaMigrations {
         if (!mariaIndexExists(connection, "orders", PAID_AT_INDEX)) {
             try (Statement statement = connection.createStatement()) {
                 statement.execute("CREATE INDEX " + PAID_AT_INDEX + " ON orders (paid_at)");
+            }
+        }
+    }
+
+    static final String REFUNDS_ORDER_INDEX = "idx_refunds_order";
+    static final String REFUNDS_AT_INDEX = "idx_refunds_at";
+
+    /** Version 4 on SQLite (TODO 4.37): the same two indexes on {@code refunds} that MariaDB's table is made with. */
+    static void createRefundIndexes(Connection connection) throws SQLException {
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("CREATE INDEX IF NOT EXISTS " + REFUNDS_ORDER_INDEX + " ON refunds(order_id)");
+            statement.execute("CREATE INDEX IF NOT EXISTS " + REFUNDS_AT_INDEX + " ON refunds(refunded_at)");
+        }
+    }
+
+    /** Version 4 on MariaDB: {@link MariaDbSchema} creates both with the table; a database whose table lacks one gets it here. */
+    static void ensureMariaRefundIndexes(Connection connection) throws SQLException {
+        if (!mariaIndexExists(connection, "refunds", REFUNDS_ORDER_INDEX)) {
+            try (Statement statement = connection.createStatement()) {
+                statement.execute("CREATE INDEX " + REFUNDS_ORDER_INDEX + " ON refunds (order_id)");
+            }
+        }
+        if (!mariaIndexExists(connection, "refunds", REFUNDS_AT_INDEX)) {
+            try (Statement statement = connection.createStatement()) {
+                statement.execute("CREATE INDEX " + REFUNDS_AT_INDEX + " ON refunds (refunded_at)");
+            }
+        }
+    }
+
+    /**
+     * The plain indexes that SQLite got in versions 2 to 4, as {name, table, columns}. Listed here so a test can compare the whole set with
+     * what {@link MariaDbSchema} creates (TODO 6.72); the statements that create them are above and in {@link #createPerformanceIndexes}.
+     */
+    static final String[][] INDEXES_BEFORE_V5 = {
+            {"idx_orders_order_date", "orders", "order_date"}, {"idx_orders_status", "orders", "status"},
+            {"idx_orders_table_number", "orders", "table_number"}, {"idx_orders_customer_id", "orders", "customer_id"},
+            {"idx_order_items_order_id", "order_items", "order_id"}, {"idx_products_category_id", "products", "category_id"},
+            {"idx_orders_paid_at", "orders", "paid_at"}, {"idx_refunds_order", "refunds", "order_id"},
+            {"idx_refunds_at", "refunds", "refunded_at"}};
+
+    /**
+     * Version 5 (TODO 6.72): the plain indexes MariaDB's tables are made with that SQLite lacked, as {name, table, columns}, with the same names
+     * as MariaDB. The reports, the audit and stock logs and the booking list read these tables by date, product, table or action, so on a shop
+     * that has run for years each of those reads was a scan of the whole table.
+     */
+    static final String[][] INDEXES_SINCE_V5 = {
+            {"idx_orders_status_date", "orders", "status, order_date"},
+            {"idx_stock_log_logged_at", "stock_log", "logged_at"}, {"idx_stock_log_product", "stock_log", "product_id"},
+            {"idx_expenses_spent_on", "expenses", "spent_on"}, {"idx_expenses_created_at", "expenses", "created_at"},
+            {"idx_reservations_when", "reservations", "reserved_for"}, {"idx_reservations_table", "reservations", "table_number, status"},
+            {"idx_audit_log_logged_at", "audit_log", "logged_at"}, {"idx_audit_log_action", "audit_log", "action"},
+            {"idx_audit_log_target", "audit_log", "target_type, target_id"},
+            {"idx_shift_closes_period_end", "shift_closes", "period_end"},
+            {"idx_gift_card_moves_order", "gift_card_moves", "order_id"},
+            {"idx_time_clock_user_out", "time_clock", "user_id, clock_out"}};
+
+    /**
+     * Version 5, SQLite only: MariaDB's foreign key on {@code order_items.product_id} already makes an index there, SQLite's does not. The
+     * product reports (best sellers, margin, refunds by product) read {@code order_items} by product.
+     */
+    static final String[][] INDEXES_SQLITE_ONLY_SINCE_V5 = {
+            {"idx_order_items_product_id", "order_items", "product_id"}};
+
+    /** Version 5 on SQLite. */
+    static void createMirroredIndexes(Connection connection) throws SQLException {
+        try (Statement statement = connection.createStatement()) {
+            for (String[] index : concat(INDEXES_SINCE_V5, INDEXES_SQLITE_ONLY_SINCE_V5)) {
+                statement.execute("CREATE INDEX IF NOT EXISTS " + index[0] + " ON " + index[1] + "(" + index[2] + ")");
+            }
+        }
+    }
+
+    private static String[][] concat(String[][] first, String[][] second) {
+        String[][] all = java.util.Arrays.copyOf(first, first.length + second.length);
+        System.arraycopy(second, 0, all, first.length, second.length);
+        return all;
+    }
+
+    /** Version 5 on MariaDB: {@link MariaDbSchema} creates all of them with the tables; one that is missing is added here. */
+    static void ensureMariaMirroredIndexes(Connection connection) throws SQLException {
+        for (String[] index : INDEXES_SINCE_V5) {
+            if (!mariaIndexExists(connection, index[1], index[0])) {
+                try (Statement statement = connection.createStatement()) {
+                    statement.execute("CREATE INDEX " + index[0] + " ON " + index[1] + " (" + index[2] + ")");
+                }
             }
         }
     }

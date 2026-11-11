@@ -7,3 +7,40 @@
 .root {
     -fx-font-family: "Be Vietnam Pro";
 }
+
+/* =========================================================
+   LANGUAGE SWITCH IN THE SIDEBAR (TODO 1.7)
+   The same two-part pill as the login screen, in the sidebar's greens. LanguagePill slides no thumb: the screen is rebuilt
+   at once, so the new screen simply draws the thumb under the chosen language.
+   ========================================================= */
+
+.sidebar-language {
+    -fx-background-color: rgba(255, 255, 255, 0.82);
+    -fx-background-radius: 16px;
+    -fx-padding: 3px;
+}
+
+.sidebar-language-thumb {
+    -fx-background-color: #5b7e45;
+    -fx-background-radius: 13px;
+}
+
+.sidebar-language-button {
+    -fx-background-color: transparent;
+    -fx-background-radius: 13px;
+    -fx-text-fill: #5b7e45;
+    -fx-font-size: 12px;
+    -fx-padding: 0;
+    -fx-alignment: CENTER;
+    -fx-cursor: hand;
+}
+
+.sidebar-language-button:hover {
+    -fx-text-fill: #1d3a10;
+}
+
+.sidebar-language-button.sidebar-language-active,
+.sidebar-language-button.sidebar-language-active:hover {
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+}

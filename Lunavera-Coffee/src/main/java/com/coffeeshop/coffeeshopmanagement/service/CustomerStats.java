@@ -8,13 +8,12 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * What a customer has bought (TODO 4.39): number of visits (paid orders), total spent and the last visit, worked out in Java from
- * the paid orders so SQLite and MariaDB give the same figures. Also the rules for "regular" and "not back for a while", and the
+ * What a customer has bought (TODO 4.39): number of visits (paid orders), total spent (less line refunds) and the last visit, summed
+ * by the database ({@code CustomerDAO.figures}, TODO 2.101). Also the rules for "regular" and "not back for a while", and the
  * ranking of the best customers.
  */
 public final class CustomerStats {
@@ -26,10 +25,6 @@ public final class CustomerStats {
     /** How many customers the "best customers" filter shows. */
     public static final int TOP_COUNT = 10;
 
-    /** One paid order of a known customer. */
-    public record Row(int customerId, LocalDateTime time, BigDecimal total) {
-    }
-
     public record Figures(int visits, BigDecimal spent, LocalDateTime lastVisit) {
         public static final Figures NONE = new Figures(0, BigDecimal.ZERO, null);
     }
@@ -39,16 +34,13 @@ public final class CustomerStats {
     private CustomerStats() {
     }
 
-    public static Map<Integer, Figures> aggregate(List<Row> rows) {
-        Map<Integer, Figures> result = new HashMap<>();
-        for (Row row : rows) {
-            Figures old = result.getOrDefault(row.customerId(), Figures.NONE);
-            BigDecimal total = row.total() == null ? BigDecimal.ZERO : row.total();
-            LocalDateTime last = old.lastVisit();
-            if (row.time() != null && (last == null || row.time().isAfter(last))) last = row.time();
-            result.put(row.customerId(), new Figures(old.visits() + 1, old.spent().add(total), last));
-        }
-        return result;
+    /**
+     * One customer's figures from the sums the database made (TODO 2.101): {@code gross} is what their paid orders came to and
+     * {@code refunded} what was given back on lines of those orders; the total spent is the difference, never below zero.
+     */
+    public static Figures figures(int visits, BigDecimal gross, BigDecimal refunded, LocalDateTime lastVisit) {
+        BigDecimal spent = (gross == null ? BigDecimal.ZERO : gross).subtract(refunded == null ? BigDecimal.ZERO : refunded);
+        return new Figures(visits, spent.signum() < 0 ? BigDecimal.ZERO : spent, lastVisit);
     }
 
     public static Figures of(Map<Integer, Figures> all, int customerId) {

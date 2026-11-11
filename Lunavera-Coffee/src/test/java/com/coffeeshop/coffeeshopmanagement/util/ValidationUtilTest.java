@@ -86,6 +86,14 @@ public class ValidationUtilTest {
         assertFalse(ValidationUtil.isValidPassword("Lunavera2026")); // the shop's own name
     }
 
+    /** TODO 2A.47: the eight examples of the item passed the old rule (8 characters, a letter and a digit) and are refused now. */
+    @Test
+    public void theEasyPasswordsOfTheItemAreRefused() {
+        for (String easy : new String[]{"letmein123", "iloveyou123", "qwertyuiop1", "1q2w3e4r5t", "trustno1x", "caphe2026", "admin2026!", "aaaaaaaa1"}) {
+            assertFalse(easy, ValidationUtil.isValidPassword(easy));
+        }
+    }
+
     @Test
     public void normalizePhoneGivesOneFormForEveryWayOfWritingTheSameNumber() {
         assertEquals("0901111222", ValidationUtil.normalizePhone("0901111222"));
