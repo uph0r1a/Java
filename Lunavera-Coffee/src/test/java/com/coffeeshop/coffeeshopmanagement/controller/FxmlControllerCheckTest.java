@@ -7,7 +7,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
@@ -44,25 +43,11 @@ public class FxmlControllerCheckTest {
     private static final Path CSS_DIR = MAIN.resolve("resources").resolve("css");
     private static final Path JAVA_DIR = MAIN.resolve("java");
 
-    /** fx:id values that no code or style sheet reaches, as found by the first run (harmless: FXMLLoader ignores them). Format {@code file:id}. */
-    static final Set<String> KNOWN_DEAD_IDS = new TreeSet<>(Arrays.asList(
-            "admin-trangchu.fxml:phpMyAdminButton", "admin-trangchu.fxml:reportButton", "admin-trangchu.fxml:revenueXAxis",
-            "admin-trangchu.fxml:revenueYAxis", "admin-trangchu.fxml:transferQrButton",
-            "dangnhap.fxml:loginCard",
-            "quanlydanhmuc.fxml:QuanLyDanhMucRoot", "quanlydanhmuc.fxml:addCategoryButton",
-            "quanlydonhang.fxml:accountMenuButton", "quanlydonhang.fxml:categoryMenuButton", "quanlydonhang.fxml:editOrderButton",
-            "quanlydonhang.fxml:orderHistoryButton", "quanlydonhang.fxml:printOrderButton", "quanlydonhang.fxml:startOrderButton",
-            "quanlydonhang.fxml:tableDetailButton", "quanlydonhang.fxml:toggleStatusButton",
-            "quanlykhachhang.fxml:accountMenuButton", "quanlykhachhang.fxml:categoryMenuButton", "quanlykhachhang.fxml:quanLyKhachHangRoot",
-            "quanlysanpham.fxml:QuanLySanPhamRoot", "quanlysanpham.fxml:addCategoryButton",
-            "quanlytaikhoan.fxml:QuanLyTaiKhoanRoot", "quanlytaikhoan.fxml:closeDetailButton", "quanlytaikhoan.fxml:detailAvatar",
-            "quanlytaikhoan.fxml:editAccountButton"));
+    /** fx:id values that no code or style sheet reaches, (the list is empty since the 25 leftovers of the first run were deleted, TODO 6.30; a new dead id fails the test). Format {@code file:id}. */
+    static final Set<String> KNOWN_DEAD_IDS = new TreeSet<>();
 
-    /** Style classes used in an FXML file but defined in none of the style sheets it loads (nor app.css). Format {@code file:class}. */
-    static final Set<String> KNOWN_UNDEFINED_CLASSES = new TreeSet<>(Arrays.asList(
-            "admin-trangchu.fxml:primary-button",
-            "employee-trangchu.fxml:section-subtitle",
-            "quanlykhachhang.fxml:primary-button", "quanlykhachhang.fxml:search-field"));
+    /** Style classes used in an FXML file but defined in none of the style sheets it loads (nor app.css) (empty since the 4 leftovers were deleted, TODO 6.30). Format {@code file:class}. */
+    static final Set<String> KNOWN_UNDEFINED_CLASSES = new TreeSet<>();
 
     private static final Pattern CONTROLLER = Pattern.compile("fx:controller=\"([^\"]+)\"");
     private static final Pattern HANDLER = Pattern.compile("\\bon[A-Z]\\w*=\"#(\\w+)\"");

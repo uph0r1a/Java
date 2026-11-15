@@ -1,9 +1,12 @@
 package com.coffeeshop.coffeeshopmanagement.util;
 
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Rectangle2D;
 import javafx.scene.Node;
+import javafx.scene.Scene;
 import javafx.scene.control.Dialog;
+import javafx.scene.control.DialogEvent;
 import javafx.scene.control.DialogPane;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
@@ -45,13 +48,17 @@ public final class DialogFit {
         double maxHeight = DialogFitMath.maxHeight(area.getHeight());
         double maxWidth = DialogFitMath.maxWidth(area.getWidth());
         Node content = pane.getContent();
+        Label longText = null;
+        double longTextWidth = 0;
         if (content == null && DialogFitMath.isLongText(pane.getContentText())) {
             // an alert with a long message (a list of skipped rows, a help text): scroll it instead of cutting it off
             Label text = new Label(pane.getContentText());
             text.setWrapText(true);
-            text.setMaxWidth(Math.min(560, maxWidth - 80));
+            longTextWidth = Math.min(560, maxWidth - 80);
+            text.setMaxWidth(longTextWidth);
             pane.setContentText(null);
             content = text;
+            longText = text;
         }
         if (content != null && !(content instanceof ScrollPane)) {
             pane.setContent(scrolling(content));
@@ -60,6 +67,30 @@ public final class DialogFit {
         // AlertUtil keeps a dialog at the height its text needs (TODO 1.7); on a screen too short for that height the scroll box wins (TODO 2.99).
         if (pane.prefHeight(-1) > maxHeight) pane.setMinHeight(javafx.scene.layout.Region.USE_COMPUTED_SIZE);
         pane.setMaxWidth(maxWidth);
+        if (longText != null && pane.getContent() instanceof ScrollPane scroll) {
+            final Label shownText = longText;
+            final double width = longTextWidth;
+            // The window is sized before the text wraps, so the scroll box can come out shorter than its text even on a tall screen
+            // (seen on the restore confirmation: the last paragraph and the question were out of sight). Once it shows, measure the
+            // wrapped text and give the box the height it needs, as far as the screen allows.
+            dialog.addEventHandler(DialogEvent.DIALOG_SHOWN, e -> Platform.runLater(() -> growToText(pane, scroll, shownText, width, area)));
+        }
+    }
+
+    private static void growToText(DialogPane pane, ScrollPane scroll, Label text, double width, Rectangle2D area) {
+        Scene scene = pane.getScene();
+        if (scene == null || scene.getWindow() == null) return;
+        Window window = scene.getWindow();
+        double needed = Math.ceil(text.prefHeight(width)) + 4;
+        double viewport = scroll.getViewportBounds().getHeight();
+        if (needed <= viewport + 1) return;
+        double room = pane.getMaxHeight() - (pane.getHeight() - viewport); // the buttons and the padding stay
+        double wanted = Math.min(needed, room);
+        if (wanted <= viewport + 1) return;
+        scroll.setPrefViewportHeight(wanted);
+        window.sizeToScene();
+        double y = Math.min(window.getY(), area.getMaxY() - window.getHeight());
+        window.setY(Math.max(area.getMinY(), y));
     }
 
     /** The content in a scroll box that looks like no box at all while nothing needs scrolling. */

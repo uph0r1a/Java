@@ -92,6 +92,14 @@ public class SqlDumpReaderTest {
     }
 
     @Test
+    public void theTransactionWordsOfANewerMariadbDumpAreSkippedNotRefused() throws Exception {
+        List<SqlDumpReader.Statement> all = read("START TRANSACTION;\nINSERT INTO `categories` VALUES (1,'a');\nCOMMIT;\n");
+        assertEquals(List.of(SqlDumpReader.Kind.SESSION, SqlDumpReader.Kind.INSERT, SqlDumpReader.Kind.SESSION),
+                all.stream().map(SqlDumpReader.Statement::kind).toList());
+        refused("COMMIT; DROP TABLE `a`;", "DROP");
+    }
+
+    @Test
     public void whatAnAppDumpNeverHoldsIsRefused() throws Exception {
         refused("DROP DATABASE `lunavera`;", "DROP DATABASE");
         refused("GRANT ALL ON *.* TO 'x'@'%';", "GRANT");

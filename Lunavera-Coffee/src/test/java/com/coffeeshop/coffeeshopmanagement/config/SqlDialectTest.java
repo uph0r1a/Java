@@ -26,7 +26,7 @@ public class SqlDialectTest {
     @Test
     public void vietnameseOrderingIsSpelledPerDatabase() {
         assertEquals("c.full_name COLLATE VN_ORDER", SqlDialect.SQLITE.vietnameseOrder("c.full_name"));
-        assertEquals("c.full_name COLLATE utf8mb4_unicode_ci", SqlDialect.MARIADB.vietnameseOrder("c.full_name"));
+        assertEquals("c.full_name COLLATE utf8mb4_vietnamese_ci", SqlDialect.MARIADB.vietnameseOrder("c.full_name"));
         assertEquals("an expression works too", "COALESCE(a, b) COLLATE VN_ORDER", SqlDialect.SQLITE.vietnameseOrder("COALESCE(a, b)"));
     }
 

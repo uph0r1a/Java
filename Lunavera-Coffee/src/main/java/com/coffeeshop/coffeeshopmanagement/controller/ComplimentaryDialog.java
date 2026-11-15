@@ -39,8 +39,12 @@ final class ComplimentaryDialog {
     private ComplimentaryDialog() {
     }
 
-    /** @return the payment to save, or empty when the person changed their mind */
-    static Optional<CheckoutService.Payment> ask(List<OrderItem> items, Role role) {
+    /**
+     * @param staffList the people a free drink can be given to, read by the caller in the background (TODO 6.14): the window is built on the
+     *              screen thread and must not wait for the database; an empty list makes the confirm step say to choose a person
+     * @return the payment to save, or empty when the person changed their mind
+     */
+    static Optional<CheckoutService.Payment> ask(List<OrderItem> items, Role role, List<Employee> staffList) {
         final int cups = ComplimentaryRules.cups(items);
         final int limit = ComplimentaryRules.cashierCupsPerDay();
         final boolean admin = ComplimentaryRules.unlimited(role);
@@ -60,11 +64,7 @@ final class ComplimentaryDialog {
         tasting.setDisable(!admin); // a tasting has no person to count against: administrators only
 
         ComboBox<Employee> person = new ComboBox<>();
-        try {
-            person.getItems().addAll(new ComplimentaryService().staffToChoose());
-        } catch (RuntimeException failed) {
-            // an empty list: the confirm step then says to choose a person, and the payment itself refuses an unknown one
-        }
+        person.getItems().addAll(staffList); // an empty list: the confirm step then says to choose a person, and the payment itself refuses an unknown one
         person.setConverter(new StringConverter<>() {
             @Override
             public String toString(Employee e) {

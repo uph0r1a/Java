@@ -63,8 +63,14 @@ public final class AppStyle {
     /** Registers the bundled font files with JavaFX. A missing file is logged, not fatal: the default font is used. */
     static void loadFonts() {
         for (String file : FONT_FILES) {
-            URL url = AppStyle.class.getResource(file);
-            Font font = url == null ? null : Font.loadFont(url.toExternalForm(), 12);
+            // A stream, not a URL string: Font.loadFont(String) fails when the path holds a space ("/storage/Lunavera Coffee/...", or a jar
+            // under "C:\\Program Files"), because the space is written %20 in the URL.
+            Font font = null;
+            try (java.io.InputStream in = AppStyle.class.getResourceAsStream(file)) {
+                if (in != null) font = Font.loadFont(in, 12);
+            } catch (java.io.IOException e) {
+                LOGGER.log(Level.FINE, "Could not read the bundled font " + file, e);
+            }
             if (font == null) {
                 LOGGER.log(Level.WARNING, "Could not load the bundled font " + file + "; the default font will be used");
             }

@@ -208,7 +208,7 @@ public final class MariaDbSchema {
             """
             CREATE TABLE IF NOT EXISTS login_attempts (
                 scope VARCHAR(20) NOT NULL,
-                name_key VARCHAR(100) NOT NULL,
+                name_key VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
                 failures INT NOT NULL DEFAULT 0,
                 last_failure BIGINT NOT NULL DEFAULT 0,
                 blocked_until BIGINT NOT NULL DEFAULT 0,

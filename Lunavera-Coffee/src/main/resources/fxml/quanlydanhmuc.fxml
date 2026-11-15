@@ -15,7 +15,7 @@
 <?import javafx.scene.image.Image?>
 <?import javafx.scene.image.ImageView?>
 
-<BorderPane fx:id="QuanLyDanhMucRoot" maxHeight="1000" maxWidth="1600" prefHeight="1000" prefWidth="1600" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.coffeeshop.coffeeshopmanagement.controller.CategoryController">
+<BorderPane maxHeight="1000" maxWidth="1600" prefHeight="1000" prefWidth="1600" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.coffeeshop.coffeeshopmanagement.controller.CategoryController">
 
     <stylesheets>
         <URL value="@../css/common.css"/>
@@ -172,7 +172,7 @@
                     <!-- Move the selected category along the tabs of the sales screen (TODO 5.31) -->
                     <Button mnemonicParsing="false" onAction="#handleMoveCategoryUp" text="%sort.up" />
                     <Button mnemonicParsing="false" onAction="#handleMoveCategoryDown" text="%sort.down" />
-                    <Button fx:id="addCategoryButton" mnemonicParsing="false" onAction="#handleAddCategory" styleClass="primary-button" text="%categories.add" />
+                    <Button mnemonicParsing="false" onAction="#handleAddCategory" styleClass="primary-button" text="%categories.add" />
                 </HBox>
 
                 <!-- ================= TABLE ================= -->

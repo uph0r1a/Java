@@ -124,6 +124,26 @@ public final class TestDatabaseSupport {
         return freshDays(1);
     }
 
+    // ------------------------------------------------------------------ a dining table of a test's own (TODO 6.77)
+
+    /**
+     * A new dining table that no other test uses, for a test that opens an order on a table (the numbers 1 to 12 belong to the
+     * starter list and were used by four classes at once, so an order one of them left open broke the others when the classes ran in
+     * another order). Administrator only, like every change of the table list; give it back with {@link #dropTable}.
+     */
+    public static int ownTable() {
+        return new TableDAO().add("test-own-" + System.nanoTime(), 4);
+    }
+
+    /** Removes a table made by {@link #ownTable}; a table that is still in use stays (best effort, it is nobody else's). */
+    public static void dropTable(int number) {
+        try {
+            new TableDAO().remove(number);
+        } catch (RuntimeException ignored) {
+            // kept: the table list is not what the test is about
+        }
+    }
+
     // ------------------------------------------------------------------ putting tables back (TODO 6.77)
 
     /**

@@ -1,5 +1,6 @@
 package com.coffeeshop.coffeeshopmanagement.controller;
 
+import com.coffeeshop.coffeeshopmanagement.util.PasswordReveal;
 import com.coffeeshop.coffeeshopmanagement.util.I18n;
 import com.coffeeshop.coffeeshopmanagement.service.DatabaseInfo;
 import com.coffeeshop.coffeeshopmanagement.dao.DataAccessException;
@@ -64,8 +65,8 @@ public final class FirstRunDialog {
         grid.add(intro, 0, 0, 2, 1);
         grid.addRow(1, new Label(I18n.t("accounts.label.fullname")), nameField);
         grid.addRow(2, new Label(I18n.t("accounts.label.username")), userField);
-        grid.addRow(3, new Label(I18n.t("accounts.label.password")), passwordField);
-        grid.addRow(4, new Label(I18n.t("password.label.confirm")), confirmField);
+        grid.addRow(3, new Label(I18n.t("accounts.label.password")), PasswordReveal.boxed(passwordField));
+        grid.addRow(4, new Label(I18n.t("password.label.confirm")), PasswordReveal.boxed(confirmField));
         Label capsLock = com.coffeeshop.coffeeshopmanagement.util.CapsLockWarning.newLabel(); // TODO 5.26
         grid.add(capsLock, 0, 5, 2, 1);
         com.coffeeshop.coffeeshopmanagement.util.CapsLockWarning.install(capsLock, userField, passwordField, confirmField);

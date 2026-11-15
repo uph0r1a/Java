@@ -30,7 +30,7 @@ final class SqlDumpReader {
         INSERT,
         /** {@code DROP TABLE IF EXISTS `t`}: skipped (the scratch database starts empty; a live table is never dropped). */
         DROP_TABLE,
-        /** {@code LOCK TABLES}, {@code UNLOCK TABLES}, a plain {@code SET}: skipped. */
+        /** {@code LOCK TABLES}, {@code UNLOCK TABLES}, a plain {@code SET}, {@code START TRANSACTION} and {@code COMMIT} (newer {@code mariadb-dump} writes them around the data): skipped. */
         SESSION
     }
 
@@ -57,6 +57,8 @@ final class SqlDumpReader {
     private static final Pattern INSERT = Pattern.compile("(?is)^INSERT\\s+INTO\\s+" + IDENT.pattern() + "\\s*(?:\\([^)]*\\)\\s*)?VALUES\\s*\\(.*");
     private static final Pattern LOCK = Pattern.compile("(?is)^LOCK\\s+TABLES\\s+" + IDENT.pattern() + "\\s+WRITE\\s*$");
     private static final Pattern UNLOCK = Pattern.compile("(?is)^UNLOCK\\s+TABLES\\s*$");
+    /** {@code mariadb-dump} 11 and later wraps the rows in a transaction; the reader runs only the tables and rows, so these are skipped like {@code SET}. */
+    private static final Pattern TRANSACTION = Pattern.compile("(?is)^(?:START\\s+TRANSACTION|COMMIT)\\s*$");
     private static final Pattern PLAIN_SET = Pattern.compile("(?is)^SET\\s+[@A-Za-z_].*");
 
     private SqlDumpReader() {
@@ -133,7 +135,8 @@ final class SqlDumpReader {
         if (m.matches()) {
             return new Statement(Kind.INSERT, m.group(1), sql);
         }
-        if (LOCK.matcher(sql).matches() || UNLOCK.matcher(sql).matches() || PLAIN_SET.matcher(sql).matches()) {
+        if (LOCK.matcher(sql).matches() || UNLOCK.matcher(sql).matches() || PLAIN_SET.matcher(sql).matches()
+                || TRANSACTION.matcher(sql).matches()) {
             return new Statement(Kind.SESSION, "", sql);
         }
         throw new UnsupportedDumpException(I18n.t("backup.restore.sql.unsupported", firstWords(sql)));

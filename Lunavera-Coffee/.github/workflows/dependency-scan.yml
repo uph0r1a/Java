@@ -17,6 +17,8 @@ permissions:
   contents: read
 jobs:
   osv-scan:
+    # No timeout-minutes here (TODO 6.66): GitHub does not allow it on a job that calls a reusable workflow (`uses:`), so the
+    # workflow file would be refused. The time limit has to be set inside the called workflow, which is not ours.
     # The reusable workflow asks for these three rights; the caller must grant at least them.
     permissions:
       actions: read

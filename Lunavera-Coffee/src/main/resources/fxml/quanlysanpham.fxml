@@ -7,7 +7,7 @@
 <?import javafx.scene.image.Image?>
 <?import javafx.scene.image.ImageView?>
 
-<BorderPane fx:id="QuanLySanPhamRoot"
+<BorderPane
             maxHeight="1000"
             maxWidth="1600"
             prefHeight="1000"
@@ -178,7 +178,6 @@
                             mnemonicParsing="false"
                             styleClass="add-category-button"
                             text="%categories.add"
-                            fx:id="addCategoryButton"
                             onAction="#handleAddCategory"/>
                 </VBox>
 

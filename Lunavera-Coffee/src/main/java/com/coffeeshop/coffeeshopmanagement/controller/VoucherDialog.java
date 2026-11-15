@@ -95,15 +95,15 @@ public final class VoucherDialog {
         TableView<Voucher> table = new TableView<>();
         table.setPrefHeight(260);
         table.setPlaceholder(new Label(I18n.t("voucher.empty")));
-        table.getColumns().add(column(I18n.t("voucher.col.code"), 150, v -> v.code()));
+        table.getColumns().add(column(I18n.t("voucher.col.code"), 130, v -> v.code()));
         table.getColumns().add(column(I18n.t("voucher.col.worth"), 100, VoucherRules::worth));
         table.getColumns().add(column(I18n.t("voucher.col.min"), 110, v -> CurrencyUtil.format(v.minSubtotal())));
-        table.getColumns().add(column(I18n.t("voucher.col.days"), 190,
+        table.getColumns().add(column(I18n.t("voucher.col.days"), 170,
                 v -> (v.validFrom() == null ? "…" : v.validFrom().toString()) + " – " + (v.validTo() == null ? "…" : v.validTo().toString())));
         table.getColumns().add(column(I18n.t("voucher.col.used"), 90,
                 v -> v.maxUses() == null ? String.valueOf(v.usedCount()) : v.usedCount() + " / " + v.maxUses()));
         table.getColumns().add(column(I18n.t("voucher.col.state"), 90, v -> I18n.t(v.active() ? "voucher.on" : "voucher.off")));
-        table.getColumns().add(column(I18n.t("voucher.col.once"), 90, v -> v.oncePerCustomer() ? I18n.t("common.yes") : ""));
+        table.getColumns().add(column(I18n.t("voucher.col.once"), 130, v -> v.oncePerCustomer() ? I18n.t("common.yes") : ""));
         Button toggleButton = new Button(I18n.t("voucher.toggle"));
         toggleButton.setDisable(true);
         table.getSelectionModel().selectedItemProperty().addListener((o, was, now) -> toggleButton.setDisable(now == null));

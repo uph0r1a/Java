@@ -308,7 +308,7 @@ public class ReportDAO {
                 + "UNION ALL SELECT p.method AS payment_method, " + count + " AS cnt, p.amount * " + sign + " AS amount FROM " + ledger
                 + " JOIN order_payments p ON p.order_id = o.id WHERE o." + SalesLedger.PART + " = 0 "
                 + "UNION ALL SELECT o." + SalesLedger.METHOD + " AS payment_method, 0 AS cnt, o." + SalesLedger.TOTAL + " * " + sign + " AS amount FROM "
-                + ledger + " WHERE o." + SalesLedger.PART + " = 1) lines "
+                + ledger + " WHERE o." + SalesLedger.PART + " = 1) pay_lines "
                 + "GROUP BY payment_method ORDER BY revenue DESC";
         List<PaymentSplit> result = new ArrayList<>();
         try (Connection connection = DatabaseConfig.getConnection();

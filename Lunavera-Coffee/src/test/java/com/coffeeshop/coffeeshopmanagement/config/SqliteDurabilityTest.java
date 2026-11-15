@@ -1,6 +1,7 @@
 package com.coffeeshop.coffeeshopmanagement.config;
 
 import com.coffeeshop.coffeeshopmanagement.dao.TestDatabaseSupport;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.sql.Connection;
@@ -15,6 +16,12 @@ import static org.junit.Assert.assertEquals;
  * A power cut itself cannot be staged here; this checks the setting that decides what survives one.
  */
 public class SqliteDurabilityTest {
+
+    /** PRAGMA synchronous is SQLite's: a run with {@code -Dlunavera.test.db=mariadb} skips this class (TODO 2.92). */
+    @BeforeClass
+    public static void onlyOnSqlite() {
+        TestDatabaseSupport.requireSqlite();
+    }
 
     private static int synchronousOf(Connection connection) throws Exception {
         try (Statement statement = connection.createStatement(); ResultSet rs = statement.executeQuery("PRAGMA synchronous")) {

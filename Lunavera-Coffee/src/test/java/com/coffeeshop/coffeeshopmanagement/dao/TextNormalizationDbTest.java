@@ -62,6 +62,9 @@ public class TextNormalizationDbTest {
 
     @Test
     public void aCategoryThatWouldRepeatAnExistingNameIsLeftAsItWas() throws Exception {
+        // MariaDB's collation treats the composed and the separate spelling as the same name, so its unique rule refuses the set-up itself
+        org.junit.Assume.assumeTrue("SQLite-only: on MariaDB the two spellings are one name and cannot both be inserted",
+                DatabaseConfig.isSqlite());
         String tag = UUID.randomUUID().toString().substring(0, 8);
         String composed = "Nhom " + tag + " " + COMPOSED;
         String separate = "Nhom " + tag + " " + SEPARATE;

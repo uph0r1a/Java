@@ -56,7 +56,6 @@ public class Product {
 
     public int getStock() { return stock; }
     public void setStock(int stock) { this.stock = stock; }
-    public Integer getLoadedStock() { return loadedStock; }
     public void setLoadedStock(Integer loadedStock) { this.loadedStock = loadedStock; }
     /** True when this object was read from the database and its stock number was not changed since. */
     public boolean isStockUntouchedSinceLoad() { return loadedStock != null && loadedStock == stock; }

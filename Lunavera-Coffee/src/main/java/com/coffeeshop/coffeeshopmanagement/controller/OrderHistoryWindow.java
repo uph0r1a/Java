@@ -222,7 +222,7 @@ public final class OrderHistoryWindow {
     }
 
     private void buildColumns() {
-        addColumn(OrderDAO.HistorySortKey.ID, column(I18n.t("history.col.id"), 80, s -> com.coffeeshop.coffeeshopmanagement.util.CopyText.orderNumber(s.order().getId())));
+        addColumn(OrderDAO.HistorySortKey.ID, column(I18n.t("history.col.id"), 100, s -> com.coffeeshop.coffeeshopmanagement.util.CopyText.orderNumber(s.order().getId())));
         addColumn(OrderDAO.HistorySortKey.DATE, column(I18n.t("history.col.time"), 150, s -> shownTime(s.order()) != null
                 ? shownTime(s.order()).format(TIME_FORMAT) : "-"));
         addColumn(OrderDAO.HistorySortKey.EMPLOYEE, column(I18n.t("history.col.employee"), 150, s -> orDash(s.employeeName())));
@@ -232,7 +232,7 @@ public final class OrderHistoryWindow {
         table.getColumns().add(column(I18n.t("history.col.discount"), 200, com.coffeeshop.coffeeshopmanagement.util.HistoryText::discount));
         addColumn(OrderDAO.HistorySortKey.TOTAL, column(I18n.t("history.col.total"), 120, s -> CurrencyUtil.format(s.order().getTotal())));
         addColumn(OrderDAO.HistorySortKey.STATUS, column(I18n.t("history.col.status"), 120, s -> statusLabel(s.order().getStatus()) + (s.linesRefunded() ? " " + I18n.t("history.refunded.mark") : ""))); // TODO 4.37: some lines were given back
-        table.getColumns().add(column(I18n.t("history.col.cash"), 120, com.coffeeshop.coffeeshopmanagement.util.HistoryText::cashGiven)); // TODO 3.17
+        table.getColumns().add(column(I18n.t("history.col.cash"), 140, com.coffeeshop.coffeeshopmanagement.util.HistoryText::cashGiven)); // TODO 3.17
         table.getColumns().add(column(I18n.t("history.col.change"), 110, com.coffeeshop.coffeeshopmanagement.util.HistoryText::change));
     }
 

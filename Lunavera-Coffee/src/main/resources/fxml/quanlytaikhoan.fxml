@@ -17,7 +17,7 @@
 <?import javafx.scene.image.Image?>
 <?import javafx.scene.image.ImageView?>
 
-<BorderPane fx:id="QuanLyTaiKhoanRoot" maxHeight="1000" maxWidth="1600" prefHeight="1000" prefWidth="1600" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.coffeeshop.coffeeshopmanagement.controller.AccountController">
+<BorderPane maxHeight="1000" maxWidth="1600" prefHeight="1000" prefWidth="1600" xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.coffeeshop.coffeeshopmanagement.controller.AccountController">
 
     <stylesheets>
         <URL value="@../css/common.css"/>
@@ -216,14 +216,14 @@
                     <HBox alignment="CENTER_LEFT">
                         <Label styleClass="section-title" text="%accounts.detail.title" />
                         <Region HBox.hgrow="ALWAYS" />
-                        <Button fx:id="closeDetailButton" mnemonicParsing="false" onAction="#handleCloseDetail" styleClass="close-button" text="×">
+                        <Button mnemonicParsing="false" onAction="#handleCloseDetail" styleClass="close-button" text="×">
                      <tooltip><Tooltip text="%common.close"/></tooltip>
                   </Button>
                     </HBox>
 
                     <!-- ================= PROFILE ================= -->
                     <VBox alignment="CENTER" spacing="5" styleClass="profile-box">
-                        <Label fx:id="detailAvatar" styleClass="avatar" text="●" />
+                        <Label styleClass="avatar" text="●" />
                         <Label fx:id="detailUsername" styleClass="profile-name" text="%accounts.detail.none" />
                         <Label fx:id="detailRole" styleClass="role-badge" text="%accounts.detail.empty" />
                     </VBox>
@@ -302,7 +302,7 @@
 
                     <!-- ================= ACTIONS ================= -->
                     <HBox spacing="8">
-                        <Button fx:id="editAccountButton" mnemonicParsing="false" onAction="#handleEditAccount" styleClass="secondary-button" text="%common.edit.button" HBox.hgrow="ALWAYS" />
+                        <Button mnemonicParsing="false" onAction="#handleEditAccount" styleClass="secondary-button" text="%common.edit.button" HBox.hgrow="ALWAYS" />
 
                         <Button fx:id="lockAccountButton" mnemonicParsing="false" onAction="#handleLockAccount" styleClass="danger-button" text="%accounts.button.lock" HBox.hgrow="ALWAYS" />
                     </HBox>

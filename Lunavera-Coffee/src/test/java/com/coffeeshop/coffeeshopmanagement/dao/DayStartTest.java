@@ -38,6 +38,8 @@ import static org.junit.Assert.*;
 public class DayStartTest {
 
     private static final AtomicInteger NEXT = new AtomicInteger(0);
+    /** The MariaDB test database keeps its orders between runs, so each run starts in a block of days of its own (SQLite starts empty every time). */
+    private static final long RUN_BLOCK = java.util.concurrent.ThreadLocalRandom.current().nextLong(0, 3000) * 100L;
 
     private final OrderDAO orderDAO = new OrderDAO();
     private final ReportDAO reports = new ReportDAO();
@@ -59,7 +61,7 @@ public class DayStartTest {
         TestSession.admin();
         BusinessDay.resetForTests();
         savedToday = AppClock.today();
-        d = LocalDate.of(2400, 1, 1).plusDays(NEXT.incrementAndGet() * 5L);
+        d = LocalDate.of(2400, 1, 1).plusDays(RUN_BLOCK + NEXT.incrementAndGet() * 5L);
         AppClock.fix(d.plusDays(1).atTime(12, 0));
         Category category = new Category();
         category.setName("test-daystart-category-" + UUID.randomUUID());

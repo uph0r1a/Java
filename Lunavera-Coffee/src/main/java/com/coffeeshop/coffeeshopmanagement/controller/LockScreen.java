@@ -96,7 +96,7 @@ public final class LockScreen {
         message.setStyle("-fx-text-fill: #b33939; -fx-font-weight: bold;");
         VBox box = new VBox(10, intro);
         if (pinMode) box.getChildren().add(who);
-        box.getChildren().addAll(secret, message);
+        box.getChildren().addAll(com.coffeeshop.coffeeshopmanagement.util.PasswordReveal.boxed(secret), message);
         box.setPadding(new Insets(20));
         dialog.getDialogPane().setContent(box);
         javafx.application.Platform.runLater(secret::requestFocus);

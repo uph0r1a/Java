@@ -39,7 +39,7 @@ public class ControllerSizeTest {
      * files had grown to; the code was then moved out (CustomerMergeButtons, ReportCsv, ReportTexts) and both are lowered to the new size.
      */
     static final Map<String, Integer> CEILINGS = Map.of(
-            "OrderController", 877,
+            "OrderController", 895, // 2026-11-12: raised from 877 on purpose (TODO 6.54): the free-drink staff list is read in the background (6.14), 18 lines
             "ProductController", 720,
             "AdminDashboardController", 569,
             "AccountController", 507,

@@ -78,11 +78,6 @@ public final class ShiftSheet {
         static Line signature(String caption) {
             return new Line(Kind.SIGNATURE, caption, "", false, null);
         }
-
-        /** True for a line that carries an amount. */
-        public boolean hasAmount() {
-            return kind == Kind.PAIR;
-        }
     }
 
     /** One method of payment in the shift: how many orders it paid and how much (net of refunds), as the report counts it. */

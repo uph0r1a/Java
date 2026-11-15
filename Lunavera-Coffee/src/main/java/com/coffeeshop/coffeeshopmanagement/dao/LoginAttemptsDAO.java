@@ -48,10 +48,19 @@ public final class LoginAttemptsDAO implements LoginAttemptStore {
         return com.coffeeshop.coffeeshopmanagement.util.TextClip.clip(k, MAX_KEY_LENGTH);
     }
 
+    /**
+     * {@code name_key = ?}, compared byte for byte on MariaDB (TODO 2A.19): under {@code utf8mb4_unicode_ci} the control character that
+     * stands for the account's NUL is ignored, so a typed {@code account:7} would read, and share, the bucket of {@code \u0001account:7}.
+     * SQLite compares text exactly already.
+     */
+    static String nameIs() {
+        return DatabaseConfig.isSqlite() ? "name_key = ?" : "name_key COLLATE utf8mb4_bin = ?";
+    }
+
     @Override
     public Attempts load(String scope, String key, long nowMono) {
         String name = cut(key);
-        String sql = "SELECT failures, last_failure, blocked_until FROM login_attempts WHERE scope = ? AND name_key = ?";
+        String sql = "SELECT failures, last_failure, blocked_until FROM login_attempts WHERE scope = ? AND " + nameIs() + "";
         try (Connection connection = DatabaseConfig.getConnection()) {
             int failures;
             long lastFailure;
@@ -112,7 +121,7 @@ public final class LoginAttemptsDAO implements LoginAttemptStore {
     @Override
     public void delete(String scope, String key) {
         try (Connection connection = DatabaseConfig.getConnection();
-             PreparedStatement statement = connection.prepareStatement("DELETE FROM login_attempts WHERE scope = ? AND name_key = ?")) {
+             PreparedStatement statement = connection.prepareStatement("DELETE FROM login_attempts WHERE scope = ? AND " + nameIs())) {
             statement.setString(1, scope);
             statement.setString(2, cut(key));
             statement.executeUpdate();
@@ -124,7 +133,7 @@ public final class LoginAttemptsDAO implements LoginAttemptStore {
     private static int update(Connection connection, String scope, String name, int failures, long lastFailure, long blockedUntil)
             throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
-                "UPDATE login_attempts SET failures = ?, last_failure = ?, blocked_until = ? WHERE scope = ? AND name_key = ?")) {
+                "UPDATE login_attempts SET failures = ?, last_failure = ?, blocked_until = ? WHERE scope = ? AND " + nameIs())) {
             statement.setInt(1, failures);
             statement.setLong(2, lastFailure);
             statement.setLong(3, blockedUntil);
@@ -168,7 +177,7 @@ public final class LoginAttemptsDAO implements LoginAttemptStore {
         }
         List<String[]> victims = new ArrayList<>();
         try (PreparedStatement statement = connection.prepareStatement(
-                "SELECT scope, name_key FROM login_attempts WHERE NOT (scope = ? AND name_key = ?) "
+                "SELECT scope, name_key FROM login_attempts WHERE NOT (scope = ? AND " + nameIs() + ") "
                         + "ORDER BY (CASE WHEN blocked_until > ? THEN 1 ELSE 0 END) ASC, failures ASC, last_failure ASC LIMIT ?")) {
             statement.setString(1, scope);
             statement.setString(2, justStored);
@@ -180,7 +189,7 @@ public final class LoginAttemptsDAO implements LoginAttemptStore {
                 }
             }
         }
-        try (PreparedStatement delete = connection.prepareStatement("DELETE FROM login_attempts WHERE scope = ? AND name_key = ?")) {
+        try (PreparedStatement delete = connection.prepareStatement("DELETE FROM login_attempts WHERE scope = ? AND " + nameIs())) {
             for (String[] victim : victims) {
                 delete.setString(1, victim[0]);
                 delete.setString(2, victim[1]);

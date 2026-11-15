@@ -160,7 +160,7 @@ public class SupportReportPropertyTest {
         for (int i = 0; i < n; i++) {
             out.append(WORDS[random.nextInt(WORDS.length)]).append(' ');
             if (random.nextBoolean()) out.append(1 + random.nextInt(9_999_999)).append(' '); // up to seven digits: an id, a count, a size
-            if (random.nextInt(4) == 0) out.append(1 + random.nextInt(99)).append('.').append(String.format("%03d", random.nextInt(1000))).append(" VND ");
+            if (random.nextInt(4) == 0) out.append(1 + random.nextInt(99)).append('.').append(String.format(java.util.Locale.ROOT, "%03d", random.nextInt(1000))).append(" VND ");
         }
         return out.toString().stripTrailing();
     }

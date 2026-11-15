@@ -1,5 +1,6 @@
 package com.coffeeshop.coffeeshopmanagement.controller;
 
+import com.coffeeshop.coffeeshopmanagement.util.PasswordReveal;
 import com.coffeeshop.coffeeshopmanagement.service.BackupCrypto;
 import com.coffeeshop.coffeeshopmanagement.util.AlertUtil;
 import com.coffeeshop.coffeeshopmanagement.util.I18n;
@@ -50,8 +51,8 @@ public final class BackupPassphraseDialog {
         grid.setVgap(10);
         grid.setPadding(new Insets(20));
         grid.add(intro, 0, 0, 2, 1);
-        grid.addRow(1, new Label(I18n.t("backup.pass.label")), phraseField);
-        grid.addRow(2, new Label(I18n.t("backup.pass.again")), confirmField);
+        grid.addRow(1, new Label(I18n.t("backup.pass.label")), PasswordReveal.boxed(phraseField));
+        grid.addRow(2, new Label(I18n.t("backup.pass.again")), PasswordReveal.boxed(confirmField));
         Label capsLock = com.coffeeshop.coffeeshopmanagement.util.CapsLockWarning.newLabel(); // TODO 5.26
         grid.add(capsLock, 0, 3, 2, 1);
         com.coffeeshop.coffeeshopmanagement.util.CapsLockWarning.install(capsLock, phraseField, confirmField);
@@ -97,7 +98,7 @@ public final class BackupPassphraseDialog {
         grid.setVgap(10);
         grid.setPadding(new Insets(20));
         grid.add(intro, 0, 0, 2, 1);
-        grid.addRow(1, new Label(I18n.t("backup.pass.open.label")), phraseField);
+        grid.addRow(1, new Label(I18n.t("backup.pass.open.label")), PasswordReveal.boxed(phraseField));
         Label capsLock = com.coffeeshop.coffeeshopmanagement.util.CapsLockWarning.newLabel(); // TODO 5.26
         grid.add(capsLock, 0, 2, 2, 1);
         com.coffeeshop.coffeeshopmanagement.util.CapsLockWarning.install(capsLock, phraseField);

@@ -258,8 +258,9 @@ public final class TransferQrGuard {
             throw new IOException(I18n.t("pos.qr.accept.fail.message"), e);
         }
         Files.deleteIfExists(folder.resolve(HASH_FILE));
+        // the holder's name and the bank are not written here: this log goes into the support zip; the audit log keeps the old and new text
         SecurityLog.event(SecurityLog.actor() + " SET the transfer QR picture (" + target.getFileName()
-                + ", holder/bank: " + (text.isEmpty() ? "none" : text.replace('\n', ' ')) + ")");
+                + ", account text " + (text.equals(oldText) ? "unchanged" : text.isEmpty() ? "removed" : "changed") + ")");
         return target;
     }
 
@@ -311,8 +312,9 @@ public final class TransferQrGuard {
             throw new IOException(I18n.t("pos.qr.accept.fail.message"), e);
         }
         Files.deleteIfExists(folder.resolve(HASH_FILE));
+        // the holder's name and the bank are not written here: this log goes into the support zip; the audit log keeps the old and new text
         SecurityLog.event(SecurityLog.actor() + " changed the transfer QR account text only (" + picture.getFileName()
-                + ", holder/bank: " + (text.isEmpty() ? "none" : text.replace('\n', ' ')) + ")");
+                + ", account text " + (text.isEmpty() ? "removed" : "changed") + ")");
     }
 
     static final String UNREADABLE = "unreadable";

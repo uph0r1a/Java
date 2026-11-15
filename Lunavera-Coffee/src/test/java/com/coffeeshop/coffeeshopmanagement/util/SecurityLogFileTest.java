@@ -55,7 +55,14 @@ public class SecurityLogFileTest {
         return Files.createTempDirectory("lunavera-seclog-test");
     }
 
+    /** The log lines of a file: the version line every file starts with (TODO 5.41) is not one of them. */
     private static List<String> lines(Path file) throws IOException {
+        List<String> all = new java.util.ArrayList<>(rawLines(file));
+        if (!all.isEmpty() && all.get(0).equals(AppVersion.logLine())) all.remove(0);
+        return all;
+    }
+
+    private static List<String> rawLines(Path file) throws IOException {
         return Files.readAllLines(file, StandardCharsets.UTF_8);
     }
 
@@ -75,6 +82,55 @@ public class SecurityLogFileTest {
         assertEquals(2, lines.size());
         assertEquals("2026-10-18 14:03:11 WARNING SECURITY: failed login: wrong password for 'admin'", lines.get(0));
         assertEquals("2026-10-18 14:03:11 INFO    SECURITY: login: admin (id 1, ADMIN)", lines.get(1));
+    }
+
+    /** TODO 5.41: the first line of a security log file is the program's version line, and only the first. */
+    @Test
+    public void everyFileStartsWithTheVersionLineOnce() throws IOException {
+        Path dir = tempDir();
+        SecurityLogFile handler = new SecurityLogFile(dir, new MovableClock("2026-10-18T07:03:11Z"));
+        handler.publish(new LogRecord(Level.INFO, "one"));
+        handler.publish(new LogRecord(Level.INFO, "two"));
+        List<String> raw = rawLines(dir.resolve("security-2026-10.log"));
+        assertEquals(3, raw.size());
+        assertEquals(AppVersion.logLine(), raw.get(0));
+        assertTrue(raw.get(0), raw.get(0).startsWith("Lunavera Coffee "));
+        assertTrue(raw.get(1), raw.get(1).endsWith(" one"));
+        assertEquals("the line is written once, not on every record", 1, raw.stream().filter(l -> l.equals(AppVersion.logLine())).count());
+    }
+
+    @Test
+    public void aNewMonthAndANumberedPartStartWithTheVersionLineToo() throws IOException {
+        Path dir = tempDir();
+        MovableClock clock = new MovableClock("2026-10-31T16:59:59Z");
+        SecurityLogFile handler = new SecurityLogFile(dir, clock, 150, 24);
+        for (int i = 0; i < 4; i++) handler.publish(new LogRecord(Level.INFO, "line number " + i + " padded to make the file fill up quickly"));
+        clock.set("2026-10-31T17:00:00Z");
+        handler.publish(new LogRecord(Level.INFO, "november"));
+        int files = 0;
+        try (var list = Files.list(dir)) {
+            for (Path f : (Iterable<Path>) list::iterator) {
+                files++;
+                assertEquals(f.getFileName().toString(), AppVersion.logLine(), rawLines(f).get(0));
+            }
+        }
+        assertTrue("a part and a month were started", files >= 3);
+    }
+
+    @Test
+    public void anExistingEmptyFileGetsTheVersionLineAndAFileWithLinesDoesNot() throws IOException {
+        Path dir = tempDir();
+        Files.writeString(dir.resolve("security-2026-10.log"), "");
+        SecurityLogFile handler = new SecurityLogFile(dir, new MovableClock("2026-10-18T07:03:11Z"));
+        handler.publish(new LogRecord(Level.INFO, "first"));
+        assertEquals(AppVersion.logLine(), rawLines(dir.resolve("security-2026-10.log")).get(0));
+        // a file written before this version has no head; it is not given one in the middle of its lines
+        Path old = tempDir();
+        Files.writeString(old.resolve("security-2026-10.log"), "2026-10-01 10:00:00 INFO    old line" + System.lineSeparator());
+        new SecurityLogFile(old, new MovableClock("2026-10-18T07:03:11Z")).publish(new LogRecord(Level.INFO, "new"));
+        List<String> raw = rawLines(old.resolve("security-2026-10.log"));
+        assertEquals(2, raw.size());
+        assertFalse(raw.contains(AppVersion.logLine()));
     }
 
     @Test

@@ -95,11 +95,6 @@ public final class OptionRules {
         return null;
     }
 
-    /** True when the product has at least one option the till should offer (a switched-off one is not offered). */
-    public static boolean anyActive(List<ProductOption> options) {
-        return options.stream().anyMatch(ProductOption::active);
-    }
-
     public static List<ProductOption> sizesOf(List<ProductOption> options) {
         return options.stream().filter(o -> o.kind() == OptionKind.SIZE).toList();
     }

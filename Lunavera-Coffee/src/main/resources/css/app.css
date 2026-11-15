@@ -44,3 +44,52 @@
     -fx-text-fill: white;
     -fx-font-weight: bold;
 }
+
+/* =========================================================
+   THE EYE INSIDE A PASSWORD BOX IN A DIALOG (TODO 6.35, PasswordReveal.boxed)
+   The box looks like one ordinary text field; the field inside it is borderless and the eye sits at its right edge, as on the login
+   screen (dangnhap.css has the round version of the same idea).
+   ========================================================= */
+
+.reveal-box {
+    -fx-background-color: -fx-text-box-border, -fx-control-inner-background;
+    -fx-background-insets: 0, 1;
+    -fx-background-radius: 3, 2;
+}
+
+.reveal-box:focused-within {
+    -fx-background-color: -fx-focus-color, -fx-control-inner-background, -fx-faint-focus-color, -fx-control-inner-background;
+    -fx-background-insets: -0.2, 1, -1.4, 3;
+    -fx-background-radius: 3, 2, 4, 1;
+}
+
+.reveal-inner,
+.reveal-inner:focused,
+.reveal-inner:hover {
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-border-color: transparent;
+    -fx-effect: null;
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
+}
+
+.reveal-eye {
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-border-color: transparent;
+    -fx-padding: 0 8px 0 4px;
+    -fx-cursor: hand;
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
+}
+
+.reveal-eye .password-eye-icon {
+    -fx-fill: transparent;
+    -fx-stroke: #71836A;
+    -fx-stroke-width: 1.4px;
+}
+
+.reveal-eye:hover .password-eye-icon {
+    -fx-stroke: #435443;
+}

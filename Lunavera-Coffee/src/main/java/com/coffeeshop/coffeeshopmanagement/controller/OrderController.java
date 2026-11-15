@@ -647,7 +647,25 @@ public class OrderController extends ScreenNavigation implements com.coffeeshop.
     @FXML
     public void handleGiveAway() {
         if (splitPart != null) { AlertUtil.warning(I18n.t("pos.giveaway"), I18n.t("complimentary.problem.split")); return; }
-        beginPayment(() -> ComplimentaryDialog.ask(new ArrayList<>(cart), Session.getCurrentRole()).ifPresent(payment -> completeOrder(payment, null, null)));
+        beginPayment(this::openComplimentaryDialog);
+    }
+
+    /** The people a free drink can go to are read in the background first (TODO 6.14); the screen is locked for that short read so a second click cannot open two boxes. */
+    private void openComplimentaryDialog() {
+        final List<OrderItem> lines = new ArrayList<>(cart);
+        final com.coffeeshop.coffeeshopmanagement.model.Role role = Session.getCurrentRole();
+        setPaymentInFlight(true);
+        Async.run(
+                () -> new com.coffeeshop.coffeeshopmanagement.service.ComplimentaryService().staffToChoose(),
+                staff -> {
+                    setPaymentInFlight(false);
+                    ComplimentaryDialog.ask(lines, role, staff).ifPresent(payment -> completeOrder(payment, null, null));
+                },
+                error -> {
+                    setPaymentInFlight(false);
+                    LOGGER.log(Level.WARNING, "The staff list of the free-drink box could not be read", error);
+                    ComplimentaryDialog.ask(lines, role, List.of()).ifPresent(payment -> completeOrder(payment, null, null)); // the box says to choose a person; the payment refuses an unknown one
+                });
     }
 
     private void beginPayment(Runnable open) {

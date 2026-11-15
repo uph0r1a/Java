@@ -1,5 +1,6 @@
 package com.coffeeshop.coffeeshopmanagement.controller;
 
+import com.coffeeshop.coffeeshopmanagement.util.PasswordReveal;
 import com.coffeeshop.coffeeshopmanagement.util.I18n;
 import com.coffeeshop.coffeeshopmanagement.dao.DataAccessException;
 import com.coffeeshop.coffeeshopmanagement.model.User;
@@ -80,10 +81,10 @@ public final class PasswordChangeDialog {
         grid.add(introLabel, 0, 0, 2, 1);
         int row = 1;
         if (!forced) {
-            grid.addRow(row++, new Label(I18n.t("password.label.current")), currentField);
+            grid.addRow(row++, new Label(I18n.t("password.label.current")), PasswordReveal.boxed(currentField));
         }
-        grid.addRow(row++, new Label(I18n.t("password.label.new")), newField);
-        grid.addRow(row, new Label(I18n.t("password.label.confirm")), confirmField);
+        grid.addRow(row++, new Label(I18n.t("password.label.new")), PasswordReveal.boxed(newField));
+        grid.addRow(row, new Label(I18n.t("password.label.confirm")), PasswordReveal.boxed(confirmField));
         Label capsLock = com.coffeeshop.coffeeshopmanagement.util.CapsLockWarning.newLabel(); // TODO 5.26
         grid.add(capsLock, 0, row + 1, 2, 1);
         com.coffeeshop.coffeeshopmanagement.util.CapsLockWarning.install(capsLock, currentField, newField, confirmField);

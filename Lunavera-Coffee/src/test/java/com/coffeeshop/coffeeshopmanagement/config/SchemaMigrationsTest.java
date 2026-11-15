@@ -75,7 +75,8 @@ public class SchemaMigrationsTest {
                     SchemaMigrations.PAID_AT_INDEX, SchemaMigrations.UNIQUE_PHONE_INDEX, SchemaMigrations.PRODUCT_CODE_INDEX)) {
                 assertTrue("missing index " + expected + " in " + names, names.contains(expected));
             }
-            assertEquals("the schema version: raise this number together with the new migration step (TODO 6.72 made it 5)", 5, SchemaMigrations.LATEST_VERSION);
+            assertEquals("the schema version is the highest registered step: raise LATEST_VERSION together with the new migration step",
+                    java.util.Collections.max(SchemaMigrations.SQLITE_STEPS.keySet()).intValue(), SchemaMigrations.LATEST_VERSION);
             assertEquals(SchemaMigrations.LATEST_VERSION, scalar(c, "PRAGMA user_version"));
         }
     }
@@ -119,7 +120,9 @@ public class SchemaMigrationsTest {
     @Test
     public void mariaDbHasAStepForVersion3SoAnOlderDatabaseGetsThePaidAtIndex() {
         assertTrue(MariaDbMigrations.STEPS.containsKey(3));
-        assertEquals(java.util.List.of(3, 4, 5), MariaDbMigrations.plan(2, MariaDbMigrations.LATEST_VERSION, MariaDbMigrations.STEPS.keySet()));
+        assertEquals("every version after 2 up to the latest, whatever the latest is",
+                java.util.stream.IntStream.rangeClosed(3, MariaDbMigrations.LATEST_VERSION).boxed().toList(),
+                MariaDbMigrations.plan(2, MariaDbMigrations.LATEST_VERSION, MariaDbMigrations.STEPS.keySet()));
     }
 
     /** TODO 4.37 (6.90 a): version 4 puts on SQLite's refunds table the two indexes MariaDB's table is made with. */

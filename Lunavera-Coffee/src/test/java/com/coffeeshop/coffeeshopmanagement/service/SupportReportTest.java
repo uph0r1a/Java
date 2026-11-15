@@ -50,6 +50,32 @@ public class SupportReportTest {
     }
 
     @Test
+    public void theValueInADuplicateEntryErrorIsRemoved() {
+        String line = SupportReport.scrub("SEVERE: Duplicate entry 'Nguyen Van A' for key 'phone'");
+        assertFalse(line, line.contains("Nguyen") || line.contains("Van A"));
+        assertEquals("SEVERE: Duplicate entry '" + SupportReport.REMOVED + "' for key 'phone'", line);
+        String quote = SupportReport.scrub("Duplicate entry 'O'Brien' for key 'name'");
+        assertFalse(quote, quote.contains("Brien"));
+        assertFalse(SupportReport.scrub("Duplicate entry 'Le Thi B").contains("Le Thi"));
+    }
+
+    @Test
+    public void aJdbcAddressWithItsHostAndUserIsRemoved() {
+        String line = SupportReport.scrub("Cannot connect to jdbc:mariadb://shop-pc:3306/lunavera user=lan, retrying");
+        assertFalse(line, line.contains("shop-pc") || line.contains("lunavera") || line.contains("lan,") || line.contains("user=lan"));
+        assertTrue(line, line.contains("jdbc:" + SupportReport.REMOVED) && line.endsWith(", retrying"));
+        assertFalse(SupportReport.scrub("url jdbc:mariadb://10.0.0.5/shop?user=lan&x=1").contains("10.0.0.5"));
+    }
+
+    @Test
+    public void aLongExceptionNameIsKeptButALongRunWithADigitIsNot() {
+        String name = "java.sql.SQLIntegrityConstraintViolationException: constraint";
+        assertEquals(name, SupportReport.scrub(name));
+        assertEquals("SQLIntegrityConstraintViolationException:", SupportReport.scrub("SQLIntegrityConstraintViolationException:"));
+        assertEquals(SupportReport.REMOVED, SupportReport.scrub("abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz1"));
+    }
+
+    @Test
     public void ordinaryLogLinesAreKeptAsTheyWere() {
         for (String line : new String[]{
                 "Nov 07, 2026 3:12:00 PM com.coffeeshop.coffeeshopmanagement.dao.OrderDAO payExistingOrder",

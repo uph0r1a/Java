@@ -83,6 +83,16 @@ public class ScreenFitCheck extends Application {
                 m.invoke(null, (Runnable) () -> {}, (Runnable) () -> {}, (Runnable) () -> {});
             } catch (Exception e) { throw new RuntimeException(e); }
         }, true));
+        for (String audience : new String[]{"OWNER", "CASHIER"}) { // the guide windows (TODO 6.71), opened as the Help buttons open them
+            items.add(new Item("HelpDialog" + audience, () -> {
+                try {
+                    var m = Class.forName("com.coffeeshop.coffeeshopmanagement.controller.HelpDialog").getDeclaredMethod("show", String.class);
+                    m.setAccessible(true);
+                    var f = Class.forName("com.coffeeshop.coffeeshopmanagement.util.HelpPages").getField(audience);
+                    m.invoke(null, (String) f.get(null));
+                } catch (Exception e) { throw new RuntimeException(e); }
+            }, true));
+        }
         for (String lang : new String[]{I18n.EN, I18n.VI}) {
             for (Item item : items) {
                 onFx(() -> I18n.setLanguage(lang));
@@ -113,7 +123,7 @@ public class ScreenFitCheck extends Application {
             try {
                 WritableImage img = w.getScene().snapshot(null);
                 String file = "/tmp/shots/" + lang + "_" + name + (w == main ? "" : "_win" + shot) + ".png";
-                javax.imageio.ImageIO.write(javafx.embed.swing.SwingFXUtils.fromFXImage(img, null), "png", new File(file));
+                javax.imageio.ImageIO.write(toBuffered(img), "png", new File(file));
                 shot++;
             } catch (Throwable e) { /* ignore snapshot failures */ }
         }
@@ -135,5 +145,19 @@ public class ScreenFitCheck extends Application {
             }
         }
         if (n instanceof Parent p) for (Node c : new ArrayList<>(p.getChildrenUnmodifiable())) walk(c, lang, where);
+    }
+
+    /** The picture as a java.awt image, so the PNG can be written without the javafx.swing module (which the program does not use). */
+    private static java.awt.image.BufferedImage toBuffered(javafx.scene.image.Image img) {
+        int w = (int) img.getWidth();
+        int h = (int) img.getHeight();
+        java.awt.image.BufferedImage out = new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        javafx.scene.image.PixelReader reader = img.getPixelReader();
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                out.setRGB(x, y, reader.getArgb(x, y));
+            }
+        }
+        return out;
     }
 }

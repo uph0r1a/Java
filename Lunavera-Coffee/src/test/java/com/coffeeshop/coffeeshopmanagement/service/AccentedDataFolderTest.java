@@ -22,8 +22,8 @@ import static org.junit.Assert.assertTrue;
  * TODO 3.70: the shop's data folder may be named with Vietnamese letters (moved under a Windows user such as "Nguyễn Văn An", a USB
  * stick named in Vietnamese). Every test class that makes a folder names it in plain ASCII, so this one runs the file side of the
  * backup in a folder called {@code Quán Cà Phê dữ liệu}: the program's own folders, a temporary file, a picture copy with accented
- * picture names, and the removal of a folder. (The database dump itself is in {@code MariaDbBackupFolderTest}; the same run with a
- * SQLite shop and under a real Windows account with such a name is the check in section 0 of the TODO list.) Skipped when the JVM
+ * picture names, and the removal of a folder. (The database dump itself is in {@code MariaDbBackupFolderTest}; the SQLite backup and restore in such a
+ * folder is {@code AccentedDataFolderSqliteTest}; the same under a real Windows account with such a name is the check in section 0 of the TODO list.) Skipped when the JVM
  * cannot make such a file name (a plain "C" locale); run with a UTF-8 locale.
  */
 public class AccentedDataFolderTest {

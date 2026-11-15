@@ -6,8 +6,9 @@ What each version of Lunavera Coffee changed, for the owner and for whoever keep
 **No version has been tagged yet** (`pom.xml` still says `1.0-SNAPSHOT`), so everything built so far is under
 *Unreleased* below. It is a summary by theme, not a list of commits: the numbered detail (what was done, how it was
 checked, what is still open) is in `TODO.md` (the item numbers in brackets) and `progress.md` (one entry per session).
-None of it has been run through `./mvnw -B clean test` by the owner or tried on the shop's real tills yet; see the
-"Release status" block at the top of `progress.md`.
+The owner ran `./mvnw -B clean test` on 2026-11-13 (SQLite and MariaDB 10.4.32, all green) and went through the screens
+and the first scenarios by hand; none of it has been tried on the shop's real tills yet; see the "Release status" block at
+the top of `progress.md`.
 
 ## How to add a version
 
@@ -119,6 +120,8 @@ None of it has been run through `./mvnw -B clean test` by the owner or tried on 
 
 ### Removed
 - **Deleting a customer** (4.8): customers are anonymised, never deleted; a merge is one line in the audit log and the table `customer_merges` is gone.
+- **Eight methods that nothing called** (a name that appears once across the program, the tests and the layouts, the search of TODO 6.56): `DatabaseConfig.dbUrl()`, `IngredientDAO.countRecipes()`, `OptionRules.anyActive(...)`, `Product.getLoadedStock()`, `ProductOption.isExtra()`, `ScreenFit.sameDesignAs(...)`, `ShiftSheet.Line.hasAmount()` and `Thumbnails.cachedCount()`. Nothing changes on any screen.
+- **Three language keys that nothing used** (`products.dup.checkfail`, `option.report.title`, `admin.qr.textonly`) from both language files.
 
 ### Changed
 - **Three more screens stop freezing while they wait for the database (TODO 6.14, session 259).** After a cash-out is written down in the shift-close box the total is read in the background; importing products from a CSV file reads and checks the file in the background (the window no longer freezes on a long file); and editing an account reads the person's record in the background before the box opens. 49 database calls are still made on the screen thread; the item says which and why.
@@ -246,6 +249,7 @@ None of it has been run through `./mvnw -B clean test` by the owner or tried on 
 - Refunding a paid order no longer changes an earlier day: the sale stays on the day it was paid and the refund shows as a negative line on the day it was made, in the report, the daily table, the payment split, the dashboard and its chart, and the shift totals (3.13). Orders refunded before this version keep their old treatment (not counted), because their refund day was never stored.
 
 ### Security
+- **A backup can be locked with a passphrase (TODO 2A.4).** On a SQLite shop the dashboard's "Sao lưu dữ liệu" can save the backup as an encrypted `.lvbak` file (AES, key from a passphrase typed twice); restoring it asks for the passphrase, and a wrong one is refused. Without the passphrase the file cannot be opened, so it has to be written down. The daily automatic backups stay unlocked.
 - **Expenses, vouchers, the transfer QR and the shop settings now leave a line in the audit log (TODO 2A.44).** Writing down an expense or cash taken from the drawer, deleting an expense (the line keeps the amount, category, day and note), making a voucher code, switching one on or off, choosing or accepting the bank-transfer QR, and changing the shop name, address, phone, tax code, low-stock level or day start are all shown in the audit window, in both languages. Each line is saved together with the change itself.
 - **Gift-card codes can no longer be tried without limit (TODO 2A.45).** Every unknown code typed on a till is counted and written to the security log; after 5 in a minute the gift-card lookups on that till pause for 60 seconds ("Too many unknown gift-card codes. Wait N seconds.") and one line in the audit log says so.
 - **A colleague's PIN can no longer be switched off in silence (TODO 2A.46).** When five wrong PINs for one name switch a PIN off, the audit log now gets a line (who was signed in on the till, how many wrong PINs), and the owner of the PIN sees "Your PIN was switched off" once at their next sign-in. Each till also counts wrong PINs for all names together: after 10 in a row the PIN pad of that till is closed for 15 minutes and the password of the person signed in opens it, so one till cannot switch off everybody's PIN.

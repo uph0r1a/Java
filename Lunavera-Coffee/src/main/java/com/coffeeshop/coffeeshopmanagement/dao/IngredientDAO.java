@@ -488,18 +488,6 @@ public class IngredientDAO {
         }
     }
 
-    /** The number of products that have a recipe. */
-    public int countRecipes() {
-        try (Connection connection = DatabaseConfig.getConnection();
-             Statement statement = connection.createStatement();
-             ResultSet rs = statement.executeQuery("SELECT COUNT(DISTINCT product_id) FROM recipes")) {
-            rs.next();
-            return rs.getInt(1);
-        } catch (SQLException e) {
-            throw new DataAccessException("Failed to count the recipes", e);
-        }
-    }
-
     /**
      * Replaces the recipe of a product with {@code lines} (ingredient id, amount per serving). An empty list removes it: the product
      * goes back to counting cups in {@code products.stock}.

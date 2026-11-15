@@ -51,10 +51,12 @@ public class RefundCountTest {
         abandoned.setSubtotal(BigDecimal.ZERO);
         abandoned.setDiscount(BigDecimal.ZERO);
         abandoned.setTotal(BigDecimal.ZERO);
-        abandoned.setTableNumber(9);
+        int table = TestDatabaseSupport.ownTable(); // a table of its own: the starter tables are shared with other classes
+        abandoned.setTableNumber(table);
         orderDAO.insert(abandoned, List.of());
-        new TableDAO().setEmpty(9); // the open order becomes CANCELLED but was never paid
+        new TableDAO().setEmpty(table); // the open order becomes CANCELLED but was never paid
         assertEquals(before, orderDAO.countRefunded());
+        TestDatabaseSupport.dropTable(table);
 
         Order sold = paid();
         orderDAO.cancelPaidOrder(sold.getId());

@@ -102,10 +102,6 @@ public final class DatabaseConfig {
         return current().file();
     }
 
-    private static String dbUrl() {
-        return current().url();
-    }
-
     /**
      * Forgets the resolved data folder and settings, so the next call reads {@code lunavera.dataDir} / {@code
      * LUNAVERA_DATA_DIR} and {@code database.properties} again, and {@link #initialize()} runs again against the new place.
@@ -242,6 +238,9 @@ public final class DatabaseConfig {
      */
     public static String mariaDbSearchKey(String column) {
         String expression = column;
+        // d with a stroke is its own letter in utf8mb4_unicode_ci ('Đào' LIKE '%dao%' is false), but the search box folds it to d
+        // (TextNormalizer.searchKey), so the column is folded the same way; both cases, because REPLACE is case-sensitive
+        expression = "REPLACE(REPLACE(" + expression + ", _utf8mb4 X'C491', 'd'), _utf8mb4 X'C490', 'D')"; // U+0111, U+0110
         for (String space : new String[] {"C2A0", "E280AF"}) { // U+00A0, U+202F
             expression = "REPLACE(" + expression + ", _utf8mb4 X'" + space + "', ' ')";
         }

@@ -29,7 +29,8 @@ public class ComplimentarySourceTest {
         String till = read(MAIN + "controller/OrderController.java");
         assertTrue(till.contains("public void handleGiveAway()"));
         assertTrue("both buttons share one guarded entry (a payment in flight, an empty cart, the stock check)",
-                till.contains("beginPayment(this::openPaymentDialog)") && till.contains("ComplimentaryDialog.ask("));
+                till.contains("beginPayment(this::openPaymentDialog)") && till.contains("beginPayment(this::openComplimentaryDialog)")
+                        && till.contains("ComplimentaryDialog.ask("));
         assertTrue("a free drink is not part of a split bill", till.contains("splitPart != null"));
     }
 

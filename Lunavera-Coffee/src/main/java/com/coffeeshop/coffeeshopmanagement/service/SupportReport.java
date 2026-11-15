@@ -25,7 +25,13 @@ public final class SupportReport {
     private static final Pattern SECRET_PAIR = Pattern.compile(
             "(?i)\\b(password|passphrase|passwd|pin|secret|token|hash|salt|api[_-]?key|authorization|m\u1eadt kh\u1ea9u|mat khau|m\u00e3 pin)\\b([\"']?\\s*[=:]\\s*)\\S+");
     private static final Pattern EMAIL = Pattern.compile("[\\w.+-]+@[\\w-]+(?:\\.[\\w-]+)+");
-    private static final Pattern LONG_OPAQUE = Pattern.compile("[A-Za-z0-9+/=$:_-]{40,}");
+    /** A long run of letters, digits and symbols that holds at least one digit: a hash or a key. Long class names (SQLIntegrityConstraintViolationException) have none and stay. */
+    private static final Pattern LONG_OPAQUE = Pattern.compile("(?=[A-Za-z0-9+/=$:_-]*\\d)[A-Za-z0-9+/=$:_-]{40,}");
+    /** MariaDB's {@code Duplicate entry 'value' for key 'name'}: the value is the data that was being saved (a phone, a name). */
+    private static final Pattern DUPLICATE_ENTRY = Pattern.compile("(?i)(Duplicate entry\\s+).*?(\\s+for key\\b)");
+    private static final Pattern DUPLICATE_ENTRY_CUT = Pattern.compile("(?i)(Duplicate entry\\s+)'[^']*'?");
+    /** A JDBC address with the host, the database and whatever user or password words follow it. */
+    private static final Pattern JDBC_URL = Pattern.compile("(?i)\\bjdbc:[a-z0-9]+:[^\\s\"'<>]*(?:\\s+(?:user|username|password)\\s*=\\s*[^\\s,;]+)*");
     private static final Pattern LONG_DIGITS = Pattern.compile("\\+?\\d{8,}");
     private static final Pattern GROUPED_DIGITS = Pattern.compile("\\+?\\d{2,4}[ .-]\\d{3}[ .-]\\d{3,4}\\b");
     /**
@@ -44,13 +50,16 @@ public final class SupportReport {
 
     /**
      * One log line with what can identify a person removed: a value after password, PIN, secret, token or hash; e-mail addresses;
-     * long opaque strings (hashes, keys); runs of eight or more digits, phone numbers written in groups and the user name in a home
+     * long opaque strings with a digit in them (hashes, keys); the value of a MariaDB "Duplicate entry"; a JDBC address; runs of eight or more digits, phone numbers written in groups and the user name in a home
      * folder path ({@code C:\Users\Name}). Ordinary words are kept:
      * the program never writes a customer's name to its log (TODO 2A.39), so the filter does not try to guess names.
      */
     public static String scrub(String line) {
         if (line == null) return "";
-        String text = SECRET_PAIR.matcher(line).replaceAll("$1$2" + REMOVED);
+        String text = JDBC_URL.matcher(line).replaceAll("jdbc:" + REMOVED);
+        text = DUPLICATE_ENTRY.matcher(text).replaceAll("$1'" + REMOVED + "'$2");
+        text = DUPLICATE_ENTRY_CUT.matcher(text).replaceAll("$1'" + REMOVED + "'");
+        text = SECRET_PAIR.matcher(text).replaceAll("$1$2" + REMOVED);
         text = EMAIL.matcher(text).replaceAll("[email]");
         text = WINDOWS_USER.matcher(text).replaceAll("$1[user]");
         text = UNIX_USER.matcher(text).replaceAll("$1[user]");

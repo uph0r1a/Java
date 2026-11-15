@@ -151,17 +151,19 @@ public class TableDAOTest {
 
     @Test
     public void aSaleSavedStraightAsPaidClearsAMarkOnItsTable() {
-        tableDAO.setOccupied(9, null);
+        int own = TestDatabaseSupport.ownTable(); // a table of its own: the starter tables are shared with other classes
+        tableDAO.setOccupied(own, null);
         Order paid = new Order();
         paid.setOrderDate(AppClock.now());
         paid.setPaidAt(AppClock.now());
-        paid.setTableNumber(9);
+        paid.setTableNumber(own);
         paid.setStatus(OrderStatus.PAID);
         paid.setSubtotal(BigDecimal.valueOf(20_000));
         paid.setDiscount(BigDecimal.ZERO);
         paid.setTotal(BigDecimal.valueOf(20_000));
         orderDAO.insert(paid, List.of(line()));
-        assertFalse(table(9).isOccupied());
+        assertFalse(table(own).isOccupied());
+        TestDatabaseSupport.dropTable(own);
     }
 
     /** TODO 5.11: the map can say how long an occupied table has been open. */

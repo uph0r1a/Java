@@ -15,7 +15,7 @@
 <?import javafx.scene.image.Image?>
 <?import javafx.scene.image.ImageView?>
 
-<BorderPane fx:id="quanLyKhachHangRoot"
+<BorderPane
             prefWidth="1600.0"
             prefHeight="1000.0"
             minWidth="1600.0"
@@ -80,14 +80,14 @@
             <Separator fx:id="categorySeparator" styleClass="sidebar-separator"/>
 
             <VBox fx:id="adminMenuBox" spacing="6.0">
-                <Button fx:id="categoryMenuButton"
+                <Button
                         text="%nav.categories"
                         prefHeight="48.0"
                         maxWidth="1.7976931348623157E308"
                         styleClass="menu-button"
                         onAction="#openCategoryManagement"/>
 
-                <Button fx:id="accountMenuButton"
+                <Button
                         text="%nav.accounts"
                         prefHeight="48.0"
                         maxWidth="1.7976931348623157E308"
@@ -144,15 +144,13 @@
                 <TextField fx:id="customerSearchField"
                            promptText="%customers.search.prompt"
                            prefHeight="42.0"
-                           prefWidth="400.0"
-                           styleClass="search-field"/>
+                           prefWidth="400.0"/>
 
                 <Region HBox.hgrow="ALWAYS"/>
 
                 <Button fx:id="addCustomerButton"
                         text="%customers.add"
                         prefHeight="42.0"
-                        styleClass="primary-button"
                         onAction="#handleAddCustomer"/>
             </HBox>
 
@@ -161,14 +159,14 @@
                 <TableView fx:id="customerTable" VBox.vgrow="ALWAYS">
                     <columns>
                         <TableColumn fx:id="customerIndexColumn" prefWidth="70.0" text="STT"/>
-                        <TableColumn fx:id="customerNameColumn" prefWidth="250.0" text="%customers.col.name"/>
+                        <TableColumn fx:id="customerNameColumn" prefWidth="230.0" text="%customers.col.name"/>
                         <TableColumn fx:id="customerPhoneColumn" prefWidth="180.0" text="%customers.col.phone"/>
-                        <TableColumn fx:id="customerEmailColumn" prefWidth="250.0" text="Email"/>
+                        <TableColumn fx:id="customerEmailColumn" prefWidth="200.0" text="Email"/>
                         <TableColumn fx:id="customerLoyaltyColumn" prefWidth="150.0" text="%customers.col.points"/>
                         <TableColumn fx:id="customerTierColumn" prefWidth="180.0" text="%customers.col.tier"/>
-                        <TableColumn fx:id="customerVisitsColumn" prefWidth="90.0" text="%customers.col.visits"/>
+                        <TableColumn fx:id="customerVisitsColumn" prefWidth="110.0" text="%customers.col.visits"/>
                         <TableColumn fx:id="customerSpentColumn" prefWidth="140.0" text="%customers.col.spent"/>
-                        <TableColumn fx:id="customerLastVisitColumn" prefWidth="140.0" text="%customers.col.last"/>
+                        <TableColumn fx:id="customerLastVisitColumn" prefWidth="180.0" text="%customers.col.last"/>
                         <TableColumn fx:id="customerActionColumn" prefWidth="100.0" text="%customers.col.actions"/>
                     </columns>
                     <columnResizePolicy>

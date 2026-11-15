@@ -33,6 +33,8 @@ Needs JDK 21. First start: when the old SQLite data is carried over (`db.import.
 
 Every push to GitHub also runs `./mvnw -B clean verify` (the tests and the coverage report) on Linux and Windows (`.github/workflows/ci.yml`); the Linux run keeps the coverage report as a download.
 
+Changing the code: see [`CONTRIBUTING.md`](CONTRIBUTING.md) (how to run the tests, the rules, the notes to keep, the pull request).
+
 ## Language (Vietnamese / English)
 
 The screens, pop-ups, receipts and messages are in Vietnamese or English. Choose at the top right of the login screen; the choice is
@@ -55,13 +57,14 @@ Vietnamese text typed straight into a Java string or an FXML attribute fails `Un
 
 | Path | What is in it |
 | --- | --- |
-| `tools/` | `run-library-free-tests.sh` (the quick check above), `mutation-sweep.py` (changes a rule class one thing at a time to find what no test notices, TODO 6.78), `LibraryFreeRunner.java` and `standins/` (a few lines standing in for `org.sqlite` and `AppStyle` so the check compiles without the libraries), `PhotoInventory.java` (`java tools/PhotoInventory.java` prints the list of the starter photos for `docs/PHOTO_INVENTORY.md`, TODO 6.44), `ModuleCheck.java` (before a jlink build: which dependency jars are only "automatic modules" and so stop it, TODO 6.15; `java tools/ModuleCheck.java target/deps`, see `docs/PACKAGING.md`) |
+| `tools/` | `run-library-free-tests.sh` (the quick check above), `coverage-without-maven.sh` (a JaCoCo line-coverage table per package without Maven, TODO 6.59; not yet run), `mutation-sweep.py` (changes a rule class one thing at a time to find what no test notices, TODO 6.78), `LibraryFreeRunner.java` and `standins/` (a few lines standing in for `org.sqlite` and `AppStyle` so the check compiles without the libraries), `PhotoInventory.java` (`java tools/PhotoInventory.java` prints the list of the starter photos for `docs/PHOTO_INVENTORY.md`, TODO 6.44), `ModuleCheck.java` (before a jlink build: which dependency jars are only "automatic modules" and so stop it, TODO 6.15; `java tools/ModuleCheck.java target/deps`, see `docs/PACKAGING.md`) |
 | `src/main/java/com/coffeeshop/coffeeshopmanagement/controller/` | the screens' controllers (JavaFX); one controller per admin screen (`AdminDashboardController`, `CategoryController`, `ProductController`, `AccountController`, `StaffController`) on a shared `AdminScreen` base, `OrderController` the sales screen |
 | `src/main/java/com/coffeeshop/coffeeshopmanagement/` | `LunaveraApplication` (start-up) and `Launcher`, then: `model/` (plain data classes), `dao/` (all SQL), `service/` (rules: login, accounts, backup, reports), `config/` (database set-up, schema, migrations, starter menu), `util/` (small helpers) |
 | `src/main/resources/fxml/` | the screen layouts |
 | `src/main/resources/` | `css/` (look), `fonts/`, `images/` (icons, logo), `seed-menu/` (the starter menu pictures) |
 | `src/test/java/` | the tests, in the same packages as the code they test |
 | `src/main/resources/help/` | the guides for the cashier and for the owner, in Vietnamese and English (`cashier_vi.md`, `cashier_en.md`, `owner_vi.md`, `owner_en.md`) |
+| `CONTRIBUTING.md` | how to run the tests, the rules for the code, the notes to keep and the pull request |
 | `docs/SCREEN_TOUR.md` | the list of every screen and window to open once in both languages before a release (kept complete by `ScreenTourTest`) |
 | `docs/DATABASE.md` | setting up MariaDB / phpMyAdmin |
 | `docs/RELEASE.md` | checklist before a release or an upgrade: back up, try on a copy, test a restore |

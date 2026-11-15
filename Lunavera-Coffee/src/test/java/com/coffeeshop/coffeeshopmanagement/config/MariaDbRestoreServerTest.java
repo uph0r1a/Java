@@ -169,8 +169,10 @@ public class MariaDbRestoreServerTest {
         String mark = addProduct(unique("restore-newer"));
         try {
             int newer = MariaDbMigrations.LATEST_VERSION + 1;
-            String text = Files.readString(dump).replace("INSERT INTO `schema_version` VALUES (1," + MariaDbMigrations.LATEST_VERSION + ")",
-                    "INSERT INTO `schema_version` VALUES (1," + newer + ")");
+            // the dump writes the row as "VALUES (1,5)" on one line or, in mariadb-dump 10.11, as "VALUES" and the row on the next
+            String original = Files.readString(dump);
+            String text = original.replaceAll("(INSERT INTO `schema_version` VALUES\\s*\\(1,)" + MariaDbMigrations.LATEST_VERSION + "(\\))", "$1" + newer + "$2");
+            assertTrue("the version row of the dump was found and changed", !text.equals(original));
             Files.writeString(dump, text);
             try {
                 MariaDbRestore.restore(dump, recording);

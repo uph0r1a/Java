@@ -46,10 +46,11 @@ public enum SqlDialect {
      * A name column in an ORDER BY in Vietnamese order (TODO 3.84): {@code Ă Â Đ Ê Ô Ơ Ư} next to their base letters, capitals and
      * small letters alike. On SQLite the column is compared with the {@code VN_ORDER} collation that {@code DatabaseConfig} registers on
      * every connection (SQLite itself compares by code point and would put the accented letters after Z); on MariaDB
-     * {@code utf8mb4_unicode_ci} already orders them that way. Use it in the ORDER BY of any list of names, never in a table definition.
+     * {@code utf8mb4_vietnamese_ci} does (under {@code utf8mb4_unicode_ci} {@code An}, {@code Ăn} and {@code Ân} are ties and {@code Đ} is not
+     * after {@code D}). Use it in the ORDER BY of any list of names, never in a table definition.
      */
     public String vietnameseOrder(String column) {
-        return this == SQLITE ? column + " COLLATE " + DatabaseConfig.VIETNAMESE_COLLATION : column + " COLLATE utf8mb4_unicode_ci";
+        return this == SQLITE ? column + " COLLATE " + DatabaseConfig.VIETNAMESE_COLLATION : column + " COLLATE utf8mb4_vietnamese_ci";
     }
 
     /** The statement that creates the small key/flag table used by the one-time seeders. */

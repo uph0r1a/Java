@@ -52,11 +52,6 @@ public final class ScreenFit extends Pane {
         return fit;
     }
 
-    /** True when {@code other} was drawn for the same design size (login to login, dashboard to products). */
-    public boolean sameDesignAs(ScreenFit other) {
-        return other != null && Math.abs(designWidth - other.designWidth) < 0.5 && Math.abs(designHeight - other.designHeight) < 0.5;
-    }
-
     public double designWidth() {
         return designWidth;
     }

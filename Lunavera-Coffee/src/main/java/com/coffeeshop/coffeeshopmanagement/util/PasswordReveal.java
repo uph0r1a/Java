@@ -79,6 +79,25 @@ public final class PasswordReveal {
         });
     }
 
+    /**
+     * A password box for a dialog, with the eye button inside it at the right, like the login screen's (TODO 6.35: the login screen
+     * had the eye, no other box did). The returned box looks like one text field ({@code .reveal-box}); the field and its revealed
+     * copy are borderless inside it ({@code .reveal-inner}). Use the returned box where the field would have been added; the field
+     * itself stays the one to read the text from. Call {@link #limit} first, so the revealed copy inherits the length cap.
+     */
+    public static HBox boxed(PasswordField passwordField) {
+        Button eye = new Button();
+        eye.getStyleClass().add("reveal-eye");
+        passwordField.getStyleClass().add("reveal-inner"); // before install(): the revealed copy takes the same classes
+        passwordField.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(passwordField, javafx.scene.layout.Priority.ALWAYS);
+        HBox box = new HBox(0, passwordField, eye);
+        box.getStyleClass().add("reveal-box");
+        box.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+        install(passwordField, eye);
+        return box;
+    }
+
     /** Open eye while the password is hidden (click to show); crossed-out eye while it is visible. */
     private static SVGPath icon(boolean passwordShown) {
         SVGPath path = new SVGPath();

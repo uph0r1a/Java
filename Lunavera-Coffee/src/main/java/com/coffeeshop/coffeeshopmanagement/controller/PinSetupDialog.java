@@ -1,5 +1,6 @@
 package com.coffeeshop.coffeeshopmanagement.controller;
 
+import com.coffeeshop.coffeeshopmanagement.util.PasswordReveal;
 import com.coffeeshop.coffeeshopmanagement.dao.DataAccessException;
 import com.coffeeshop.coffeeshopmanagement.service.PinRules;
 import com.coffeeshop.coffeeshopmanagement.service.PinService;
@@ -46,9 +47,9 @@ final class PinSetupDialog {
         grid.setVgap(10);
         grid.setPadding(new Insets(20));
         grid.add(intro, 0, 0, 2, 1);
-        grid.addRow(1, new Label(I18n.t("pin.set.password.label")), password);
-        grid.addRow(2, new Label(I18n.t("pin.set.new")), pin);
-        grid.addRow(3, new Label(I18n.t("pin.set.again")), again);
+        grid.addRow(1, new Label(I18n.t("pin.set.password.label")), PasswordReveal.boxed(password));
+        grid.addRow(2, new Label(I18n.t("pin.set.new")), PasswordReveal.boxed(pin));
+        grid.addRow(3, new Label(I18n.t("pin.set.again")), PasswordReveal.boxed(again));
         dialog.getDialogPane().setContent(grid);
 
         dialog.getDialogPane().lookupButton(saveType).addEventFilter(ActionEvent.ACTION, event -> {

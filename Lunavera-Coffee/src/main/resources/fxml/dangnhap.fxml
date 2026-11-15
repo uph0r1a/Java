@@ -38,7 +38,7 @@
    <AnchorPane styleClass="login-overlay"/>
 
    <!-- Login Card: Căn sát phải bằng StackPane.alignment và cách mép phải 100px -->
-   <VBox fx:id="loginCard"
+   <VBox
          alignment="CENTER"
          maxHeight="620"
          maxWidth="410"

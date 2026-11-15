@@ -1,11 +1,11 @@
 # Packaging, where the data goes, and upgrading
 
 TODO 6.15. **Partly tried on 2026-11-03** (see "What was really run" at the end): a real `jlink` image was built and started, and one
-upgrade with a backup and a restore was run. `mvn javafx:jlink` itself, Windows and MariaDB were **not** tried (the machine had no
+upgrade with a backup and a restore was run. `./mvnw javafx:jlink` itself, Windows and MariaDB were **not** tried (the machine had no
 access to Maven Central). Everything above that last section is still read from `pom.xml`, not run.
 
 **Session 243 (2026-11-08):** nothing could be built here either (no JavaFX or JDK jmods, no Maven, no network), so the real
-`mvn javafx:jlink` build and the Windows upgrade are **still not done**. What was added is the check that tells, in seconds and before
+`./mvnw javafx:jlink` build and the Windows upgrade are **still not done**. What was added is the check that tells, in seconds and before
 that build, whether `jlink` can work at all: `tools/ModuleCheck.java` (section "Before the first build: check the modules"). Reading the
 project with it in mind found one **expected** blocker, the MariaDB driver (section "If the check lists an automatic module"). It is an
 expectation from the driver's manifest as remembered, not a result: the jar was not available to look at.
@@ -31,7 +31,7 @@ memory and the profile has never run. See "If the check lists an automatic modul
   and left `org.mariadb.jdbc` out, so that one was never tried. `tools/ModuleCheck.java` checks all of them in seconds: see
   "Before the first build: check the modules" below. (The `javafx-maven-plugin` 0.0.8 settings in the pom were compared with the plugin's
   parameter names: `mainClass`, `launcher`, `jlinkZipName`, `jlinkImageName`, `noManPages`, `stripDebug`, `noHeaderFiles` are all real
-  ones. They sit in the `default-cli` execution, which is the one `mvn javafx:jlink` typed on the command line uses.)
+  ones. They sit in the `default-cli` execution, which is the one `./mvnw javafx:jlink` typed on the command line uses.)
 - **`javafx.media` (TODO 5.47).** The optional alert sounds use `javafx.scene.media.AudioClip`, so `module-info.java` has `requires javafx.media;`
   and the pom has the `javafx-media` dependency (same version as the other JavaFX jars). jlink takes the module from the `requires` line, so
   the image grows by the media module and its native libraries (on Windows a few MB; check `target/lunavera.zip`). The sounds are two
@@ -46,7 +46,7 @@ The data folder is **not** inside the packaged app. `DataPaths.dataDir()` picks,
 1. the Java property `-Dlunavera.dataDir=...`,
 2. the environment variable `LUNAVERA_DATA_DIR`,
 3. `data/` in the start-up folder, **only if it already holds a shop** (`lunavera.db` or `database.properties`): a copy installed
-   before TODO 3.69, or the project folder with `mvn javafx:run`,
+   before TODO 3.69, or the project folder with `./mvnw javafx:run`,
 4. the folder this computer used last time, remembered in the one-line file `.lunavera-data-folder` in the user's home folder
    (written once the database is open),
 5. otherwise a fixed folder of this user: `%LOCALAPPDATA%\Lunavera` on Windows, `~/Library/Application Support/Lunavera` on macOS,
@@ -88,7 +88,7 @@ project's real dependencies.
 
 **Expected, not verified:** `mariadb-java-client` 3.4.1 (the version in the pom). As far as its manifest is remembered, it only
 declares `Automatic-Module-Name: org.mariadb.jdbc` and has no `module-info.class`. If `ModuleCheck` prints `AUTOMATIC org.mariadb.jdbc`,
-then `mvn javafx:jlink` will fail with a message that an automatic module cannot be used with jlink. The 2026-11-03 build did not see this
+then `./mvnw javafx:jlink` will fail with a message that an automatic module cannot be used with jlink. The 2026-11-03 build did not see this
 because it removed the `requires org.mariadb.jdbc;` line. (A newer connector may ship a descriptor of its own: if `ModuleCheck` on a newer
 version says `REAL`, the profile below is not needed for it.)
 
@@ -206,6 +206,6 @@ the previous version = the 6.5 sources, the new one = the sources with 2.96, 4.4
 5. The previous image started on the **upgraded** data: it opened with no error (nothing it reads was removed). That will not hold
    for a change that removes or renames a column; this list does not say so for later versions.
 
-**Not tried:** `mvn javafx:jlink` and the javafx-maven-plugin, Windows (the launcher is `bin/lunavera.bat` there), JavaFX 21,
+**Not tried:** `./mvnw javafx:jlink` and the javafx-maven-plugin, Windows (the launcher is `bin/lunavera.bat` there), JavaFX 21,
 the MariaDB driver in the module path, MariaDB upgrade steps, a login and a sale in the packaged window (the screens were looked
 at, not clicked), an installer (none exists), the size with the real JavaFX jars (their natives are bundled, so larger).

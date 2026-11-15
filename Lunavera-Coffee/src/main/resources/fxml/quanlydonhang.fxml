@@ -90,14 +90,14 @@
 
             <!-- MENU 2 -->
             <VBox fx:id="adminMenuBox" spacing="6.0">
-                <Button fx:id="categoryMenuButton"
+                <Button
                         text="%nav.categories"
                         prefHeight="48.0"
                         maxWidth="1.7976931348623157E308"
                         styleClass="menu-button"
                         onAction="#openCategoryManagement"/>
 
-                <Button fx:id="accountMenuButton"
+                <Button
                         text="%nav.accounts"
                         prefHeight="48.0"
                         maxWidth="1.7976931348623157E308"
@@ -153,7 +153,7 @@
                            styleClass="page-description"/>
                 </VBox>
 
-                <Button fx:id="orderHistoryButton"
+                <Button
                         text="%pos.history"
                         prefHeight="42.0"
                         styleClass="secondary-button"
@@ -241,7 +241,7 @@
                         </HBox>
 
                         <HBox spacing="8.0" alignment="CENTER">
-                            <Button fx:id="startOrderButton"
+                            <Button
                                     text="%pos.start"
                                     prefHeight="36.0"
                                     HBox.hgrow="ALWAYS"
@@ -249,7 +249,7 @@
                                     onAction="#handleStartOrder"
                                     styleClass="primary-button"/>
 
-                            <Button fx:id="toggleStatusButton"
+                            <Button
                                     text="%pos.togglestatus"
                                     prefHeight="36.0"
                                     HBox.hgrow="ALWAYS"
@@ -257,7 +257,7 @@
                                     onAction="#handleToggleTableStatus"
                                     styleClass="secondary-button"/>
 
-                            <Button fx:id="tableDetailButton"
+                            <Button
                                     text="%pos.detail"
                                     prefHeight="36.0"
                                     onAction="#handleTableDetail"
@@ -440,7 +440,7 @@
 
                     <!-- ACTION BUTTONS -->
                     <HBox spacing="10.0" prefHeight="40.0">
-                        <Button fx:id="printOrderButton"
+                        <Button
                                 text="%pos.print"
                                 prefHeight="40.0"
                                 maxWidth="1.7976931348623157E308"
@@ -448,7 +448,7 @@
                                 onAction="#handlePrintInvoice"
                                 styleClass="secondary-button"/>
 
-                        <Button fx:id="editOrderButton"
+                        <Button
                                 text="%pos.pickcustomer"
                                 prefHeight="40.0"
                                 maxWidth="1.7976931348623157E308"
@@ -456,6 +456,7 @@
                                 onAction="#handleEditOrder"
                                 styleClass="secondary-button"/>
 
+                        <Button
                                 text="%pos.giveaway"
                                 prefHeight="40.0"
                                 maxWidth="1.7976931348623157E308"

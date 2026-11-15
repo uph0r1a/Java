@@ -30,10 +30,6 @@ public final class Thumbnails {
         return CACHE.computeIfAbsent(key, k -> new Image(file.toURI().toString(), size, size, true, true, true));
     }
 
-    static synchronized int cachedCount() {
-        return CACHE.size();
-    }
-
     static synchronized void clear() {
         CACHE.clear();
     }

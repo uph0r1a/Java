@@ -227,7 +227,7 @@ GRANT ALL PRIVILEGES ON lunavera_test.* TO 'lunavera_test'@'localhost';
 ```
 
 ```
-mvn test -Dlunavera.test.db=mariadb -Dlunavera.test.db.password=test-password
+./mvnw test -Dlunavera.test.db=mariadb -Dlunavera.test.db.password=test-password
 ```
 
 (`-Dlunavera.test.db.host / .port / .name / .user` change the other defaults.) The CI runs this on MariaDB 10.6, 10.11 and 11.4 and on MySQL 8.0 (TODO 6.85); MySQL 8.0 is allowed to fail there until it has been green once, so treat it as "should work, not yet proven". **Every table in that database is dropped first**, so the name must end with `_test`; anything else is refused. Tests about SQLite files and PRAGMAs skip themselves in this mode. The CI runs exactly this on every push, in the job `test-mariadb` of `.github/workflows/ci.yml` (a `mariadb:10.11` service container with the throw-away database above); the number of tests it prints is lower than on SQLite for that reason.

@@ -76,6 +76,8 @@ public class EmployeeDetailsTest {
 
     @Test
     public void aBadHireDateInTheDatabaseDoesNotBreakReading() throws Exception {
+        org.junit.Assume.assumeTrue("SQLite-only: a DATE column on MariaDB refuses the text '18/10/2026', so no bad value can be stored there",
+                com.coffeeshop.coffeeshopmanagement.config.DatabaseConfig.isSqlite());
         Employee e = new Employee();
         e.setFullName("test-emp-" + UUID.randomUUID());
         e.setActive(true);

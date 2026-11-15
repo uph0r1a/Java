@@ -30,16 +30,16 @@
         <!-- TODO 6.79: the moment every file inside the jar is stamped with, so two builds of the same source make a jar with the same
              bytes (maven-jar-plugin 3.4.2 reads this). Raise it by hand when a release is cut (docs/RELEASE.md); the release workflow
              overrides it with the time of the commit it builds. Only the jar is made reproducible: the jlink image and the zip of it are not. -->
-        <!-- TODO 6.81: the floor of line coverage per package (0 to 1), checked by the jacoco "check" goal at verify. PROVISIONAL: no JaCoCo
-             report existed when they were written, so they are low on purpose (they catch "the tests were deleted", not a slow slide).
-             After the first CI run, read the "Line coverage per package" table in its summary and raise each to the measured value minus
-             two points. A floor is raised by hand here AND in src/test/resources/coverage/floors-baseline.properties; it is lowered only
+        <!-- TODO 6.81: the floor of line coverage per package (0 to 1), checked by the jacoco "check" goal at verify. MEASURED 2026-11-13 (owner's machine,
+             first real reports): the lower of the SQLite run (the CI job) and the MariaDB run, minus five points, rounded down:
+             service 88.4%/84.4%, dao 90.5%/90.2%, util 60.8%/60.8%, config 80.0%/81.2%, model 90.2%/90.2%.
+             Re-measure after a big change and raise a floor when a package has grown. A floor is raised by hand here AND in src/test/resources/coverage/floors-baseline.properties; it is lowered only
              with a line in TODO.md saying why (CoverageFloorTest). The JavaFX controllers are not checked: their screens need JavaFX. -->
-        <coverage.min.service>0.30</coverage.min.service>
-        <coverage.min.dao>0.30</coverage.min.dao>
-        <coverage.min.util>0.30</coverage.min.util>
-        <coverage.min.config>0.30</coverage.min.config>
-        <coverage.min.model>0.30</coverage.min.model>
+        <coverage.min.service>0.79</coverage.min.service>
+        <coverage.min.dao>0.85</coverage.min.dao>
+        <coverage.min.util>0.55</coverage.min.util>
+        <coverage.min.config>0.75</coverage.min.config>
+        <coverage.min.model>0.85</coverage.min.model>
         <project.build.outputTimestamp>2026-11-06T00:00:00Z</project.build.outputTimestamp>
     </properties>
 
@@ -223,7 +223,7 @@
                 <configuration>
                     <!-- FontBundleTest reads the bundled fonts with java.awt.Font; the app itself never uses java.desktop
                          directly, so the test JVM (only) is allowed to read that module. -->
-                    <argLine>@{argLine} --add-reads com.coffeeshop.coffeeshopmanagement=java.desktop -Duser.language=${test.locale.language} -Duser.country=${test.locale.country}</argLine>
+                    <argLine>@{argLine} --add-modules java.compiler,jdk.compiler --add-reads com.coffeeshop.coffeeshopmanagement=java.desktop,java.compiler -Duser.language=${test.locale.language} -Duser.country=${test.locale.country}</argLine>
                     <systemPropertyVariables>
                         <lunavera.dataDir>${project.build.directory}/test-data</lunavera.dataDir>
                         <user.home>${project.build.directory}/test-home</user.home>
@@ -359,6 +359,17 @@
                         <goals>
                             <goal>testCompile</goal>
                         </goals>
+                        <configuration>
+                            <!-- ModuleCheckTest and NoJavaFxInRulesTest start the JDK's own compiler (javax.tools, module java.compiler),
+                                 which the program's module-info does not require; only the TESTS may read it. -->
+                            <compilerArgs>
+                                <arg>-Xlint:all</arg>
+                                <arg>--add-modules</arg>
+                                <arg>java.compiler</arg>
+                                <arg>--add-reads</arg>
+                                <arg>com.coffeeshop.coffeeshopmanagement=java.compiler</arg>
+                            </compilerArgs>
+                        </configuration>
                     </execution>
                 </executions>
                 <configuration>

@@ -90,9 +90,13 @@ public class StockTakerTest {
         return item;
     }
 
+    /** A day of this class's own (TODO 6.77): the first day of the year 3000 is what {@code TestDatabaseSupport.freshDay()} hands out first, to some other test. */
+    private static final String DAY = TestDatabaseSupport.freshDay() + " 10:00:00";
+
     private static int newOrder(Connection c) throws SQLException {
-        try (PreparedStatement st = c.prepareStatement("INSERT INTO orders (order_date, status, subtotal, discount, total) VALUES ('3000-01-01 10:00:00', 'PAID', 0, 0, 0)",
+        try (PreparedStatement st = c.prepareStatement("INSERT INTO orders (order_date, status, subtotal, discount, total) VALUES (?, 'PAID', 0, 0, 0)",
                 Statement.RETURN_GENERATED_KEYS)) {
+            st.setString(1, DAY);
             st.executeUpdate();
             try (ResultSet keys = st.getGeneratedKeys()) {
                 keys.next();

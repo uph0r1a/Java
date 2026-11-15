@@ -25,8 +25,4 @@ public record ProductOption(int id, int productId, OptionKind kind, String name,
     public boolean isSize() {
         return kind == OptionKind.SIZE;
     }
-
-    public boolean isExtra() {
-        return kind == OptionKind.EXTRA;
-    }
 }

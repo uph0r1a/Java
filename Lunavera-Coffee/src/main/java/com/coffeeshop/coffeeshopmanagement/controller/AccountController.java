@@ -312,7 +312,7 @@ public class AccountController extends AdminScreen {
         grid.addRow(0, new Label(I18n.t("customers.label.name")), fullNameField);
         grid.addRow(1, new Label(I18n.t("customers.label.phone")), phoneField);
         grid.addRow(2, new Label(I18n.t("accounts.label.username")), usernameField);
-        grid.addRow(3, new Label(I18n.t("accounts.label.password")), passwordField);
+        grid.addRow(3, new Label(I18n.t("accounts.label.password")), com.coffeeshop.coffeeshopmanagement.util.PasswordReveal.boxed(passwordField));
         grid.addRow(4, new Label(I18n.t("accounts.label.role")), roleBox);
         grid.addRow(5, new Label(""), activeBox);
         grid.addRow(6, new Label(I18n.t("accounts.label.position")), positionField);

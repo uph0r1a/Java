@@ -45,6 +45,7 @@ public class DatabaseOffTheScreenThreadTest {
             Map.entry("BackupService", Set.of("cancelPendingRestore", "createBackup", "createBeforeCleanupBackup", "createEncryptedBackup", "inspect", "isEncryptedBackup", "pendingSince", "scheduleRestore")),
             Map.entry("CategoryService", Set.of("countProductsByCategory", "delete", "findAll", "move", "productCount", "save")),
             Map.entry("CheckoutService", Set.of("pay", "paySplit")),
+            Map.entry("ComplimentaryService", Set.of("cupsGivenToday", "staffToChoose")),
             Map.entry("CustomerMergeService", Set.of("anonymise", "impact", "merge")),
             Map.entry("CustomerService", Set.of("currentPoints", "figures", "findAll", "findById", "findByPhone", "save", "search")),
             Map.entry("ExpenseService", Set.of("add", "delete", "find")),
@@ -83,6 +84,7 @@ public class DatabaseOffTheScreenThreadTest {
             Map.entry("AccountController", 2),
             Map.entry("AdminScreen", 1),
             Map.entry("CategoryDialog", 1),
+            Map.entry("ComplimentaryDialog", 2), // the count of cups given, in the OK-button filter (it must decide at once) and in the hint under the choice
             Map.entry("CustomerController", 1),
             Map.entry("ExpenseDialog", 2),
             Map.entry("FirstRunDialog", 1),

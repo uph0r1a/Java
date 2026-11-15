@@ -83,7 +83,7 @@ The SQLite restore code is covered by `BackupServiceTest`; this step proves it o
 
 ## 4. Release
 
-- `./mvnw -B clean test` passes on Windows and Linux (the CI runs both). The project holds 1632 `@Test` methods in 231 classes; the
+- `./mvnw -B clean test` passes on Windows and Linux (the CI runs both). The project holds 3232 `@Test` methods in 448 classes (counted 2026-11-12); the
   SQLite-only tests are skipped on MariaDB, so the number Maven prints can be lower. Write the number you see in the
   "Release status" block of `progress.md`.
   Known until TODO 3.42 is fixed: `DashboardStatsServiceTest.theLastSevenDaysIncludeTodayAndNoNegativeRevenue` can fail

@@ -115,4 +115,21 @@ public class TestYearsAreOwnedTest {
         }
         assertTrue("fresh days start in the year 3000, after the latest year a test writes by hand (" + latest + ")", latest < 3000);
     }
+
+    /**
+     * The days {@code freshDays} hands out are in the years 3000 and after, so a class that writes a date there by hand is writing on
+     * somebody else's day: {@code StockTakerTest} put PAID orders on 3000-01-01, the first fresh day, and a test that was given it
+     * counted them when the classes ran in another order. The check above looks only below 2900.
+     */
+    @Test
+    public void noTestWritesAHandMadeDateInTheYearsOfTheFreshDays() throws IOException {
+        Pattern date = Pattern.compile("(?:Local(?:Date|DateTime)\\.of\\(\\s*3\\d{3}\\b|\\b3\\d{3}-\\d{2}-\\d{2}\\b)");
+        List<String> problems = new ArrayList<>();
+        for (Path file : tests()) {
+            String name = file.getFileName().toString().replace(".java", "");
+            if (name.equals("TestDatabaseSupport") || name.equals("TestYearsAreOwnedTest")) continue;
+            if (date.matcher(Files.readString(file, StandardCharsets.UTF_8)).find()) problems.add(name);
+        }
+        assertTrue("Write on TestDatabaseSupport.freshDay() instead of a date of your own in the year 3000 or later: " + problems, problems.isEmpty());
+    }
 }

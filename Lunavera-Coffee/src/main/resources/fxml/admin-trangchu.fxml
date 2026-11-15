@@ -157,7 +157,7 @@
                         onAction="#handleRestoreData"/>
                 <Region prefWidth="10.0"/>
 
-                <Button fx:id="transferQrButton"
+                <Button
                         text="%admin.qr"
                         prefHeight="42.0"
                         styleClass="secondary-button"
@@ -166,7 +166,7 @@
 
                 <!-- Shown only when the shop's database is MariaDB/MySQL (set in AdminDashboardController.initialize). -->
                 <HBox fx:id="phpMyAdminBox" visible="false" managed="false" alignment="CENTER_LEFT">
-                    <Button fx:id="phpMyAdminButton"
+                    <Button
                             text="%admin.phpmyadmin"
                             prefHeight="42.0"
                             styleClass="secondary-button"
@@ -174,10 +174,9 @@
                     <Region prefWidth="10.0"/>
                 </HBox>
 
-                <Button fx:id="reportButton"
+                <Button
                         text="%admin.report"
                         prefHeight="42.0"
-                        styleClass="primary-button"
                         onAction="#handleShowReports"/>
                 <Region prefWidth="16.0"/>
 
@@ -304,12 +303,12 @@
                                    VBox.vgrow="ALWAYS">
 
                             <xAxis>
-                                <CategoryAxis fx:id="revenueXAxis"
+                                <CategoryAxis
                                               label="%chart.axis.date"/>
                             </xAxis>
 
                             <yAxis>
-                                <NumberAxis fx:id="revenueYAxis"
+                                <NumberAxis
                                             label="%report.col.revenue"/>
                             </yAxis>
                         </LineChart>

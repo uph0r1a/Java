@@ -26,6 +26,18 @@ public class SecurityLogReaderTest {
         return dir;
     }
 
+    /** TODO 5.41: the version line at the top of a file is not an entry, and does not change what is read. */
+    @Test
+    public void theVersionLineAtTheTopOfAFileIsNotAnEntry() throws Exception {
+        String head = AppVersion.logLine() + System.lineSeparator();
+        Path dir = logs("security-2026-10.log", head + line(1) + line(2));
+        List<Entry> entries = SecurityLogReader.recent(dir, OCT, 50, SecurityLogReader.MAX_BYTES);
+        assertEquals(2, entries.size());
+        assertEquals("event number 2", entries.get(0).text());
+        assertEquals("event number 1", entries.get(1).text());
+        assertTrue("a file with only the head has no entries", SecurityLogReader.recent(logs("security-2026-10.log", head), OCT, 50, SecurityLogReader.MAX_BYTES).isEmpty());
+    }
+
     @Test
     public void aFileWithFewerLinesThanAskedGivesAllOfThemNewestFirst() throws Exception {
         Path dir = logs("security-2026-10.log", line(1) + line(2) + line(3));

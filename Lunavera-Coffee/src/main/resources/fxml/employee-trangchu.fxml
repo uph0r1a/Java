@@ -179,8 +179,7 @@
                         <VBox spacing="3.0">
                             <Label text="%tables.map.title"
                                    styleClass="section-title"/>
-                            <Label text="%tables.map.subtitle"
-                                   styleClass="section-subtitle"/>
+                            <Label text="%tables.map.subtitle"/>
                         </VBox>
 
                         <Region HBox.hgrow="ALWAYS"/>

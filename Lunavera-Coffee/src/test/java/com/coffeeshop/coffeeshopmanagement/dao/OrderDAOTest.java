@@ -373,8 +373,9 @@ public class OrderDAOTest {
     @Test
     public void aCancelledOrderCannotBePaid() {
         Product product = newProduct(10, new BigDecimal("50000"));
-        Order open = openOrderOnTable(8, null);
-        new TableDAO().setEmpty(8); // cancels the OPEN order
+        int table = TestDatabaseSupport.ownTable(); // a table of its own: the starter tables are shared with other classes
+        Order open = openOrderOnTable(table, null);
+        new TableDAO().setEmpty(table); // cancels the OPEN order
 
         try {
             orderDAO.payExistingOrder(open.getId(), null, PaymentMethod.CASH,
@@ -384,6 +385,7 @@ public class OrderDAOTest {
             // expected
         }
         assertEquals(OrderStatus.CANCELLED, orderDAO.findById(open.getId()).orElseThrow().getStatus());
+        TestDatabaseSupport.dropTable(table);
     }
 
     @Test
@@ -407,7 +409,8 @@ public class OrderDAOTest {
     @Test
     public void aLateAutosaveCannotTouchAnOrderThatWasAlreadyPaid() {
         Product product = newProduct(10, new BigDecimal("50000"));
-        Order open = openOrderOnTable(9, null);
+        int table = TestDatabaseSupport.ownTable(); // a table of its own: the starter tables are shared with other classes
+        Order open = openOrderOnTable(table, null);
         orderDAO.payExistingOrder(open.getId(), null, PaymentMethod.CASH,
                 BigDecimal.ZERO, new BigDecimal("50000"), List.of(lineFor(product, 1)));
 
@@ -418,6 +421,7 @@ public class OrderDAOTest {
         assertEquals(OrderStatus.PAID, reloaded.getStatus());
         assertEquals("the paid total must survive", 0, new BigDecimal("50000").compareTo(reloaded.getTotal()));
         assertEquals("the paid items must survive", 1, orderDAO.findItemsByOrderId(open.getId()).size());
+        TestDatabaseSupport.dropTable(table);
     }
 
     @Test

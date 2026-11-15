@@ -147,9 +147,13 @@ public final class MariaDbRestore {
         try (Connection lock = cx.live()) {
             takeLock(lock);
             try {
-                return checkUnderLock(cx, lock, scratch, sqlFile);
+                prepareScratch(lock, scratch); // refuses a database that is not ours, before anything can drop it
+                try {
+                    return checkUnderLock(cx, scratch, sqlFile);
+                } finally {
+                    dropScratchQuietly(lock, scratch); // ours: prepareScratch made it just now
+                }
             } finally {
-                dropScratchQuietly(lock, scratch);
                 ServerLock.release(lock, DatabaseConfig.MIGRATION_LOCK);
             }
         } catch (SQLException e) {
@@ -162,18 +166,22 @@ public final class MariaDbRestore {
         try (Connection lock = cx.live()) {
             takeLock(lock);
             try {
-                Checked checked = checkUnderLock(cx, lock, scratch, sqlFile);
+                prepareScratch(lock, scratch); // refuses a database that is not ours, before anything can drop it
                 try {
-                    hooks.afterCheck();
-                } catch (IOException e) {
-                    throw e;
-                } catch (Exception e) {
-                    throw new IOException(I18n.t("backup.restore.maria.safety.failed", String.valueOf(e.getMessage())), e);
+                    Checked checked = checkUnderLock(cx, scratch, sqlFile);
+                    try {
+                        hooks.afterCheck();
+                    } catch (IOException e) {
+                        throw e;
+                    } catch (Exception e) {
+                        throw new IOException(I18n.t("backup.restore.maria.safety.failed", String.valueOf(e.getMessage())), e);
+                    }
+                    swap(cx, checked, scratch, hooks);
+                    return new Result(checked.schemaVersion(), checked.rows());
+                } finally {
+                    dropScratchQuietly(lock, scratch); // ours: prepareScratch made it just now
                 }
-                swap(cx, checked, scratch, hooks);
-                return new Result(checked.schemaVersion(), checked.rows());
             } finally {
-                dropScratchQuietly(lock, scratch);
                 ServerLock.release(lock, DatabaseConfig.MIGRATION_LOCK);
             }
         } catch (SQLException e) {
@@ -189,9 +197,8 @@ public final class MariaDbRestore {
 
     // ------------------------------------------------------------------ the scratch check
 
-    /** Makes the scratch database, runs the dump into it and applies the rules; the caller drops the scratch database. */
-    private static Checked checkUnderLock(Connections cx, Connection admin, String scratch, Path sqlFile) throws IOException, SQLException {
-        prepareScratch(admin, scratch);
+    /** Runs the dump into the scratch database {@link #prepareScratch} made and applies the rules; the caller drops the scratch database. */
+    private static Checked checkUnderLock(Connections cx, String scratch, Path sqlFile) throws IOException, SQLException {
         loadInto(cx, scratch, sqlFile);
         return inspect(cx, scratch);
     }
@@ -211,7 +218,12 @@ public final class MariaDbRestore {
         try (Statement statement = admin.createStatement()) {
             statement.execute("DROP DATABASE IF EXISTS `" + scratch + "`");
             statement.execute("CREATE DATABASE `" + scratch + "` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-            statement.execute("CREATE TABLE `" + scratch + "`.`" + MARKER_TABLE + "` (id TINYINT NOT NULL PRIMARY KEY)");
+            try {
+                statement.execute("CREATE TABLE `" + scratch + "`.`" + MARKER_TABLE + "` (id TINYINT NOT NULL PRIMARY KEY)");
+            } catch (SQLException e) {
+                dropScratchQuietly(admin, scratch); // made a moment ago by this call, so it is ours to remove
+                throw e;
+            }
         } catch (SQLException e) {
             if (isAccessDenied(e)) {
                 LOGGER.log(Level.WARNING, "The database user may not create the scratch database " + scratch, e);
@@ -232,12 +244,39 @@ public final class MariaDbRestore {
         }
     }
 
+    /**
+     * The {@code sql_mode} of the scratch session: the server's own, without the strict modes, plus {@code NO_AUTO_VALUE_ON_ZERO}.
+     * {@code mariadb-dump} writes the value of a stored generated column (such as {@code orders.open_table_key}) into the {@code INSERT};
+     * a strict server refuses that ("The value specified for generated column ... has been ignored"), a lenient one ignores the value.
+     * Only the scratch copy is loaded this way; the rows go into the live tables later, one column list at a time, without the generated
+     * columns and under the live session's own (strict) mode.
+     */
+    static String scratchSqlMode(String serverMode) {
+        List<String> modes = new ArrayList<>();
+        if (serverMode != null) {
+            for (String mode : serverMode.split(",")) {
+                String name = mode.trim();
+                if (!name.isEmpty() && !name.startsWith("STRICT_") && !name.equals("NO_AUTO_VALUE_ON_ZERO")) {
+                    modes.add(name);
+                }
+            }
+        }
+        modes.add("NO_AUTO_VALUE_ON_ZERO");
+        return String.join(",", modes);
+    }
+
     /** Runs the structure and the rows of the dump in the scratch database, refusing a table this program does not have. */
     private static void loadInto(Connections cx, String scratch, Path sqlFile) throws IOException, SQLException {
         try (Connection connection = cx.scratch(scratch); Statement statement = connection.createStatement();
              Reader reader = Files.newBufferedReader(sqlFile, StandardCharsets.UTF_8)) {
             statement.execute("SET FOREIGN_KEY_CHECKS = 0"); // a dump creates a table before the tables it points at
-            statement.execute("SET SESSION sql_mode = CONCAT(@@sql_mode, ',NO_AUTO_VALUE_ON_ZERO')"); // an id of 0 stays 0
+            String serverMode = "";
+            try (ResultSet mode = statement.executeQuery("SELECT @@sql_mode")) {
+                if (mode.next()) {
+                    serverMode = mode.getString(1);
+                }
+            }
+            statement.execute("SET SESSION sql_mode = '" + scratchSqlMode(serverMode) + "'"); // an id of 0 stays 0; generated columns take the value the dump holds without an error
             SqlDumpReader.read(reader, dumped -> {
                 switch (dumped.kind()) {
                     case CREATE_TABLE, INSERT -> {

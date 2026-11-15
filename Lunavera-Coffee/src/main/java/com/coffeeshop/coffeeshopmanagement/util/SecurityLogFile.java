@@ -26,6 +26,9 @@ import java.util.regex.Pattern;
  *       {@code MAX_PARTS}; after that lines of that month are dropped (the disk is never filled by a log).</li>
  *   <li>One line per record: {@code 2026-10-18 14:03:11 WARNING  message}; line breaks inside the message become spaces,
  *       so a typed text cannot forge a second line.</li>
+ *   <li>Every file, a numbered part and a new month's file too, starts with one line, {@link AppVersion#logLine()}, so a file that
+ *       reaches whoever looks after the program says which version wrote it (TODO 5.41, as in the normal log). It is not a log line (it
+ *       does not start with a date), so {@link SecurityLogReader} leaves it out.</li>
  *   <li>A failure to write is reported once through the handler's error manager and never thrown at the caller.</li>
  * </ul>
  */
@@ -90,13 +93,18 @@ public final class SecurityLogFile extends Handler {
         String line = LocalDateTime.now(clock).format(STAMP) + " " + String.format(java.util.Locale.ROOT, "%-7s", record.getLevel().getName())
                 + " " + message + System.lineSeparator();
         try {
-            Files.writeString(file, line, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            String head = isNewOrEmpty(file) ? AppVersion.logLine().replaceAll("[\\r\\n]+", " ") + System.lineSeparator() : "";
+            Files.writeString(file, head + line, StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND); // one write: the head and the first line go in together
         } catch (IOException e) {
             if (!reportedFailure) {
                 reportedFailure = true;
                 reportError("Cannot write the security log " + file, e, java.util.logging.ErrorManager.WRITE_FAILURE);
             }
         }
+    }
+
+    private static boolean isNewOrEmpty(Path file) throws IOException {
+        return !Files.exists(file) || Files.size(file) == 0;
     }
 
     @Override

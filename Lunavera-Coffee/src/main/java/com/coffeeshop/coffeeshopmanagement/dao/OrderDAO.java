@@ -1326,7 +1326,7 @@ public class OrderDAO {
         try (Connection connection = DatabaseConfig.getConnection();
              PreparedStatement statement = connection.prepareStatement(historySelect(filterSql, effective))) {
             if (DatabaseConfig.dialect() == com.coffeeshop.coffeeshopmanagement.config.SqlDialect.MARIADB) {
-                statement.setFetchSize(Integer.MIN_VALUE); // MariaDB Connector/J: one row at a time
+                statement.setFetchSize(500); // MariaDB Connector/J 3: rows come in batches of 500 (a negative size, the old MySQL way, is refused: "invalid fetch size")
             }
             filterSql.bind(statement);
             try (ResultSet rs = statement.executeQuery()) {
