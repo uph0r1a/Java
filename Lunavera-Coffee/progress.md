@@ -15,8 +15,8 @@ Each file starts with a list of its sections. Session numbers in `COMPLETE.md`, 
 
 ## Release status (updated 2026-11-12, after Session 273)
 - **Reading order:** this file holds this block, the architecture notes, "Next recommended step" and the **last 20 session sections, oldest first; add a new session at the bottom**. Every older session is in `docs/history/` (see the index above; TODO 6.86).
-- **Last restore tested on the shop's real files:** not yet (see `docs/RELEASE.md` step 3). Write the date here when done.
-- **Last `mvn clean test` seen by the owner:** write the date and the number here. The project holds 3232 `@Test` methods in 448 classes (counted 2026-11-12; SQLite-only tests are skipped on MariaDB). Session 60 ran the 98 test files that need no JavaFX once with a stand-in runner, when there were 578 tests: 542 passed, 2 skipped, 1 failed (TODO 3.42); the 9 JavaFX/AWT test files (36 tests) were not run. The 33 tests added by Session 66 are not in that run.
+- **Last restore tested:** 2026-11-16, on a copy of test data (SQLite, the owner's Linux machine; `docs/RELEASE.md` step 3): the numbers, the product pictures and the "Đã khôi phục" message of the accounts all came back as in the backup. **Not yet on the shop's real files** (see `docs/RELEASE.md` step 3); write that date here when done.
+- **Last `mvn clean test` seen by the owner:** 2026-11-13, `BUILD SUCCESS` on SQLite (3,239 tests run, 16 skipped) and on MariaDB 10.4.32 (3,239 run, 103 skipped), with the coverage floors met (`./mvnw -B clean verify`). The project holds 3232 `@Test` methods in 448 classes (counted 2026-11-12; SQLite-only tests are skipped on MariaDB). Session 60 ran the 98 test files that need no JavaFX once with a stand-in runner, when there were 578 tests: 542 passed, 2 skipped, 1 failed (TODO 3.42); the 9 JavaFX/AWT test files (36 tests) were not run. The 33 tests added by Session 66 are not in that run.
 - **State of the work:** `COMPLETE.md` holds 382 ticked numbered items and `TODO.md` 8 open numbered items and 49 marked `[~]` (done in code, waiting for a person); everything open that needs a person (Windows, printer, phone scan, MariaDB server, restore test) is in its section 0. The open code work is listed under "Next recommended step" (below, near the end of the file).
 - Older notes (in `docs/history/`) still use the pre-rename names `org.example.controller` and `HelloApplication`; they are now `com.coffeeshop.coffeeshopmanagement.controller` and `LunaveraApplication` (TODO 6.17).
 
@@ -206,3 +206,36 @@ The to-do list lives in `TODO.md` (open items, decisions and human checks in its
 - **Checked here:** the main sources compiled with every JavaFX type missing, before and after: 4,854 error lines both times and the same set of errors, so no call to a deleted method was left (this cannot see a wrong JavaFX call). The first-paragraph counts of `TODO.md` (175 = 148 + 8 + 8 + 11, 49 `[~]`) and the "Still open needs a dated check" rule of `NotesConsistencyTest` were re-checked with a script that reads the files the way the test does; the JUnit jar is not on this machine, so the test itself was not run.
 - **Found, not changed:** `ControllerSizeTest` gives `OrderController` a ceiling of 877 lines and the file has 895, so `everyControllerIsWithinItsCeiling` should fail until 18 lines move out of the controller (the test says to split, not to raise the number). Counted, not run. Noted in 6.54.
 - **Not run:** `./mvnw`, any test, JavaFX, MariaDB. No test was added or changed; the `@Test` count of the release status is unchanged.
+
+## Session 274 - the `pit-db` run prepared (2026-11-21, notes and one small tool; no Maven, no test run)
+- **Asked:** continue with the mutation sweep (item 27): the `pit-db` run, then tests only for what still survives.
+- **Found:** `pit-reports.7z` holds the two reports of 2026-11-16 (`pit-first`, `pit`) and no `pit-reports-db`, so the `pit-db` run has not been done. This session had no Maven and no network, so it could not run PIT either. Nothing in `src` was changed.
+- **Added:** `tools/pit-survivors.py` (standard library only; tried on the 2026-11-16 `mutations.csv`) lists the survivors and the unreached changes of chosen classes with line, method and kind of change. `docs/TESTING-MUTATION.md` now has the numbers of the 16 November run for the six `pit-db` classes (the profile also covers `OrderService` and `RefundService`) as the figure to compare with.
+- **Next:** the owner runs `pit-db` (command in `Lunavera Coffee what I need from you and what to run.md`) and sends `pit-db.log` and `mutations.csv`.
+
+## Session 275 - the `pit-db` numbers and the full test run read (2026-11-21, notes only; nothing run here)
+- **Asked:** the owner sent `pit-db.log` and `clean_test.log`. **`pit-db`:** `BUILD SUCCESS`, 635 mutations in the six classes, 502 killed (79%), 56 no test reaches, test strength 87%, 17 min 52 s (profile runs; the three `SQLITE_NOTADB` and "Bản sao lưu không có lunavera.db" lines in the log are tests that feed bad files on purpose). **`clean test` (SQLite):** 3,360 tests, 0 failures, 0 errors, 16 skipped, `BUILD SUCCESS` (so the 45 tests of `QrCode`, `ProductCsv` and `JpegMetadata` pass).
+- **Not possible yet:** naming the survivors. `mutations.csv` is not in the upload, and could not be: `clean test` ran at 14:59 after `pit-db` finished at 14:44 and deleted `target/`. The run has to be done again and the report copied out before any `clean`.
+- **Changed:** `docs/TESTING-MUTATION.md` (the numbers), the owner's status document (copy command added). No code or test.
+
+## Session 276 - tests for what survived in `pit-db` (2026-11-21, tests and notes; nothing compiled or run here: no JDK compiler, no Maven)
+- **Asked:** write tests only for what still survives in the second `pit-db` run (`mutations.csv`, 637 changes, 505 killed, 76 survived, 56 unreached).
+- **Done:** read the survivors of `ProductService`, `AccountService.update` and `CheckoutService.pay` against the source; judged the permission calls, `setSubtotal` and the early voucher check equivalent (reasons in `docs/TESTING-MUTATION.md`); wrote three test classes: `ProductServiceFieldsTest` (12 tests), `AccountServiceFieldsTest` (4), `CheckoutServicePaidFieldsTest` (2). Every method they call was checked in the source, but **they have not been compiled**: a compile error would stop the whole `./mvnw test`, so run them first (command in the owner's status document).
+- **Not done:** `BackupService` (45 survivors, 20 unreached), `payComplimentary`, `RefundService`, `OrderService`, the rest of `AccountService`. Listed in `docs/TESTING-MUTATION.md`.
+
+## Session 277 - the three new test classes run (2026-11-21, one test fixed)
+- **Result of the owner's run:** 21 of the 23 tests passed; 2 failed (`saveWritesEveryFieldOfANewProduct` and `...OfAnExistingProduct`) because the service saves a product code in capitals and the test had made it in lower case. The program is right; the test now makes capitals. `ProductServiceSaveTest` of this session is renamed `ProductServiceFieldsTest`, because `dao.ProductServiceSaveTest` already exists (5 tests, passed). Still not re-run: the owner runs the three classes again.
+
+## Session 278 - third `pit-db` run read, two tests widened (2026-11-21, tests and notes; nothing run here)
+- **Read:** the third run (`mutations_1.csv`): 531 of 637 killed (83%, was 79%), 62 survived, 44 unreached; `ProductService` 37 of 38. The owner's rerun of the three classes (the old command, so it ran the 5 older tests of `dao.ProductServiceSaveTest` and not the renamed `ProductServiceFieldsTest`) passed 11 of 11; the third PIT run shows `ProductServiceFieldsTest` killing 18 changes, so its fixed form works.
+- **Found:** my first list of `AccountService.update` survivors was one line off: the two left are `setPhone` and `setHireDate`. The test now saves a changed phone and a hire date. Added a `paySplit` test (an order with id 0). `pay` line 288 is equivalent (`OrderDAO.insert` frees the table).
+- **Not done:** `BackupService`, `payComplimentary`, `RefundService`, `OrderService`, the rest of `AccountService`. Tests of this session were written without a compiler.
+
+## Session 279 - the fourth `pit-db` run read (2026-11-21, notes only)
+- **Owner's run:** `ProductServiceFieldsTest` 12, `AccountServiceFieldsTest` 4, `CheckoutServicePaidFieldsTest` 3: 19 tests, 0 failures. **Fourth run:** 539 of 637 killed (85%), 54 survived, 44 unreached; `AccountService` has no survivor left; the `paySplit` boundary is killed.
+- **Open:** `BackupService` (42 survived, 20 unreached), `payComplimentary`, `RefundService`, `OrderService`. No code or test changed this session.
+
+## Session 280 - `BackupService` survivors (2026-11-21, tests and notes; nothing compiled or run here)
+- **Done:** read every survivor and unreached change of `BackupService` in the fourth `pit-db` run against the source; wrote `BackupDueAndPruneEdgesTest` (9), `BackupServiceRestoreEdgesTest` (15) and `BackupServiceApplyRestoreEdgesTest` (7); sorted the rest into "equivalent" or "needs a full disk or a damaged file" in `docs/TESTING-MUTATION.md`.
+- **Careful:** the two background-thread tests (`theBackgroundStartMakesTheBackupOnItsOwnThread`, `theStartOnLeavingWaitsForTheBackup`) wait up to 20 s for a real automatic backup; if one is ever flaky, say so.
+- **Not done:** `payComplimentary`, `RefundService`, `OrderService`.

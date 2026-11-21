@@ -452,6 +452,120 @@
                 </plugins>
             </build>
         </profile>
+        <!-- TODO 6.78 / owner's choice D4: the first batch of the mutation sweep, the money, date and security classes that the six
+             hand-swept classes did not cover (RefundMath, LoyaltyPolicy, DiscountPolicy, MoneyParser, VoucherRules, GiftCardRules are done):
+             ./mvnw -B clean -Ppit-first test-compile org.pitest:pitest-maven:mutationCoverage
+             The report is in target/pit-reports-first/. The rest of service and util is the profile "pit" above. -->
+        <profile>
+            <id>pit-first</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.pitest</groupId>
+                        <artifactId>pitest-maven</artifactId>
+                        <version>1.17.4</version>
+                        <configuration>
+                            <targetClasses>
+                                <param>com.coffeeshop.coffeeshopmanagement.service.PaymentRules*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.service.PaymentFlowRules*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.service.SplitBillRules*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.service.SplitPaymentRules*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.service.RefundSplit*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.service.RefundDefaults*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.service.ReceiptCost*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.service.ShiftCash*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.service.EarningsRules*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.service.ExpenseRules*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.service.TimeClockRules*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.service.ClockCheck*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.service.TableAge*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.service.BirthdayRules*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.service.PinRules*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.service.LoginThrottle*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.service.BackupCrypto*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.service.GiftCardLookupGuard*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.service.TillPinCounter*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.service.QuantityInput*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.service.WholeNumber*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.service.PasswordUtil*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.util.Money*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.util.CurrencyUtil*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.util.DateTextConverter*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.util.DateLimits*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.util.DatePresets*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.util.BusinessDay*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.util.DbTime*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.util.ShopZone*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.util.PasswordStrength*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.util.TransferQrGuard*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.util.SessionGuard*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.util.Permissions*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.util.IdleLogout*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.util.ValidationUtil*</param>
+                            </targetClasses>
+                            <targetTests>
+                                <param>com.coffeeshop.coffeeshopmanagement.service.*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.util.*</param>
+                            </targetTests>
+                            <excludedTestClasses>
+                                <param>com.coffeeshop.coffeeshopmanagement.dao.*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.controller.*</param>
+                            </excludedTestClasses>
+                            <outputFormats>
+                                <param>HTML</param>
+                                <param>CSV</param>
+                            </outputFormats>
+                            <reportsDirectory>${project.build.directory}/pit-reports-first</reportsDirectory>
+                            <timestampedReports>false</timestampedReports>
+                            <threads>2</threads>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <!-- TODO 6.78, the third part of the mutation sweep (2026-11-17): the service classes whose checks live in database tests of the
+             package dao, which the profiles "pit" and "pit-first" leave out. Every test JVM that PIT starts makes its own temporary SQLite
+             database, so the dao tests can run here:
+             ./mvnw -B clean -Ppit-db test-compile org.pitest:pitest-maven:mutationCoverage
+             The report is in target/pit-reports-db/. Slower than the others (every changed line runs the database tests that touch it). -->
+        <profile>
+            <id>pit-db</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.pitest</groupId>
+                        <artifactId>pitest-maven</artifactId>
+                        <version>1.17.4</version>
+                        <configuration>
+                            <targetClasses>
+                                <param>com.coffeeshop.coffeeshopmanagement.service.AccountService*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.service.BackupService*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.service.CheckoutService*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.service.ProductService*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.service.OrderService*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.service.RefundService*</param>
+                            </targetClasses>
+                            <targetTests>
+                                <param>com.coffeeshop.coffeeshopmanagement.service.*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.dao.*</param>
+                                <param>com.coffeeshop.coffeeshopmanagement.util.*</param>
+                            </targetTests>
+                            <excludedTestClasses>
+                                <param>com.coffeeshop.coffeeshopmanagement.controller.*</param>
+                            </excludedTestClasses>
+                            <outputFormats>
+                                <param>HTML</param>
+                                <param>CSV</param>
+                            </outputFormats>
+                            <reportsDirectory>${project.build.directory}/pit-reports-db</reportsDirectory>
+                            <timestampedReports>false</timestampedReports>
+                            <threads>2</threads>
+                            <timeoutConstant>8000</timeoutConstant>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
         <!-- TODO 6.15: the program folder (a private Java runtime plus the launcher) made with moditect instead of javafx:jlink:
              ./mvnw -B -DskipTests -Pmodular-image clean package        (the folder target/lunavera/ and the zip target/lunavera.zip)
              Why: jlink only links real modules, and mariadb-java-client is expected to be an automatic module (it only names itself in
